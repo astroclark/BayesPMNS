@@ -1,0 +1,4 @@
+hybrid_secderivqpoles_16384Hz_apr_135135_lessvisc_0.05df_0.5ini.dat
+hybrid_secderivqpoles_16384Hz_apr_135135_lessvisc_0df_0.5ini.dat
+secderivqpoles_16384Hz_apr_135135_lessvisc.dat
+secderivqpoles_16384Hz_dd2_165165_lessvisc.dat
