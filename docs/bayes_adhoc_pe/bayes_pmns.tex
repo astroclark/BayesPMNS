@@ -234,6 +234,21 @@ waveforms.  I still need to check how to get to $f_p$ from the parameters of the
 chirping waveforms (critical for the Bayesian implementation later).  This
 approach should work fine for studying the performance of our templates.
 
+\begin{figure}
+\scalebox{0.5}{\includegraphics{bb_match.eps}}
+\caption{Broadband matches for different templates}
+\end{figure}
+
+\begin{figure}
+\scalebox{0.5}{\includegraphics{nb_match.eps}}
+\caption{Narrow-band matches for different templates}
+\end{figure}
+
+\begin{figure}
+\scalebox{0.5}{\includegraphics{freq_bias.eps}}
+\caption{Expected Frequency biases for different templates}
+\end{figure}
+
 \begin{table}
 \centering
 \begin{tabular}{l | cccc | cccc | cccc}
@@ -361,38 +376,55 @@ being conservative and I'm curious to see what happens if we search for
 $f_2\in[1.5,~4]$\,kHz.\label{fig:freq_pdf_surfs}}
 \end{figure}
 
+\begin{figure}
+%\centering
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-5.00.eps}}\label{fig:freqpdflines5Mpc}}
+\end{subfigure}
+%
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-10.00.eps}}\label{fig:freqpdflines10Mpc}} 
+\end{subfigure}
+%                                                
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-15.00.eps}}\label{fig:freqpdflines15Mpc}}
+\end{subfigure}
+%                                               % 
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-20.00.eps}}\label{fig:freqpdflines20Mpc}}
+\end{subfigure}
+\caption{Frequency posterior PDFs using a single detector for optimally oriented
+injections at 5, 10, 15 and 20\,Mpc.  \label{fig:freq_pdf_lines}}
+\end{figure}
+
+\begin{figure}
+%\centering
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-5.00_logB-0.00.eps}}\label{fig:freqpdflines5MpcFound}}
+\end{subfigure}
+%
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-10.00_logB-0.00.eps}}\label{fig:freqpdflines10MpcFound}} 
+\end{subfigure}
+%                                                
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-15.00_logB-0.00.eps}}\label{fig:freqpdflines15MpcFound}}
+\end{subfigure}
+%                                               % 
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{freqpdflines_dist-20.00_logB-0.00.eps}}\label{fig:freqpdflines20MpcFound}}
+\end{subfigure}
+\caption{Frequency posterior PDFs using a single detector for optimally oriented
+injections at 5, 10, 15 and 20\,Mpc.  \label{fig:freq_pdf_lines_found}}
+\end{figure}
 
 \begin{figure}
 \begin{subfigure}{0.45\textwidth}
 {\scalebox{0.4}{\includegraphics{freqerr.eps}}}
-\caption{Box-plot of the error in the estimated frequency using the Gauss-down
-template and taking the maximum of the marginal posterior on frequency as the
-point estimate.  The boxes show the interquartile range, the red lines in the
-boxes are the median values and the whiskers show 1.5$\times$ the interquartile
-range.  For reference, we also show as red horizontal lines the result one would
-expect to get by `guessing': this is the result we should expect if we made no
-measurement at all and simply estimated the peak frequency from our prior; the
-solid horizontal red line is the median value of the frequency prior and the
-dashed horizontal red lines show the interquartile range.  We therefore confirm
-that the measurement of the sources at 20\,Mpc are indeed significantly better
-than simply guessing.\label{fig:freqerr}}
+\caption{The error in the estimated frequency using the Gauss-down template and
+taking the maximum of the marginal posterior on frequency as the point estimate.
+Error bars indicate 90\% frequentist confidence intervals. \label{fig:freqerr}}
 \end{subfigure}
-\begin{subfigure}{0.45\textwidth}
-{\scalebox{0.4}{\includegraphics{freqwidth.eps}}}
-\caption{Box-plot of the 68\% confidence interval about the maximum of the
-frequency using the Gauss-down template and taking the maximum of the marginal
-posterior on frequency as the point estimate.  Symbols have the same meaning as
-before.  We now see that the confidence interval for the frequency estimate is
-extremely wide for quiet signals (as expected) and consistent with the
-uncertainty in the measurement one would get from `guessing'.  This does
-\emph{not} mean we cannot measure the peak frequency at large distance; it
-simply means that the uncertainty in the measurement is large but we can have
-some confidence in its \emph{accuracy} from the first panel.\label{fig:freqwidth}\\~\\~\\}
-\end{subfigure}
-\caption{Frequency recovery assuming signal is present.\label{fig:freqrecovery}}
-\end{figure}
-
-\begin{figure}
 \begin{subfigure}{0.45\textwidth}
 {\scalebox{0.4}{\includegraphics{freqerr_logB-0.00.eps}}}
 \caption{As figure~\ref{fig:freqerr} but with the constraint that the posterior
@@ -400,20 +432,58 @@ odds ratio (Bayes factor) is greater than unity (i.e., there's a better than
 50/50 chance there's a signal there).  We see that this dramatically improves
 the accuracy of the frequency measurement.~\\~\\~\\~\\~\\~\\}
 \end{subfigure}
-\begin{subfigure}{0.45\textwidth}
-{\scalebox{0.4}{\includegraphics{freqwidth_logB-0.00.eps}}}
-\caption{Again, as figure~\ref{fig:freqwidth} with the constraint that $\log
-B_{S,N}>0$ (better than 50/50 odds of signal vs noise).  This time, we see
-remarkably little change from the previous figure with no constraint.  Given
-that the point estimate of the frequency at large distance with the constraint
-is so closely clustered around zero error, it is surprising that the posterior
-width is so large.  This may point to a trivial code bug or problems in the
-kernel density estimation used to smooth the posteriors - I don't yet believe
-this result.}
-\end{subfigure}
-\caption{Frequency recovery with the constraint that there is a better than
-50/50 chance we think there's a signal there.\label{fig:constrained_freqrecovery}}
+\caption{Frequentist confidence intervals for the error in the frequency
+recovery.\label{fig:freqrecovery}}
 \end{figure}
+
+\begin{figure}
+%\centering
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{ensemble_results_dist-5_ROC.eps}}\label{fig:freqroc5Mpc}}
+\end{subfigure}
+%
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{ensemble_results_dist-10_ROC.eps}}\label{fig:freqroc10Mpc}} 
+\end{subfigure}
+%                                 
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{ensemble_results_dist-15_ROC.eps}}\label{fig:freqroc15Mpc}}
+\end{subfigure}
+%                                 
+\begin{subfigure}{.4\textwidth}
+{\scalebox{0.35}{\includegraphics{ensemble_results_dist-20_ROC.eps}}\label{fig:freqroc20Mpc}}
+\end{subfigure}
+\caption{Frequency performance and dismissal fraction for  single detector for
+optimally oriented injections at 5, 10, 15 and 20\,Mpc.
+\label{fig:freqroc}}
+\end{figure}
+
+%\begin{figure}
+%\begin{subfigure}{0.45\textwidth}
+%{\scalebox{0.4}{\includegraphics{freqcredwidth.eps}}}
+%\caption{Box-plot of the 68\% confidence interval about the maximum of the
+%frequency using the Gauss-down template and taking the maximum of the marginal
+%posterior on frequency as the point estimate.  Symbols have the same meaning as
+%before.  We now see that the confidence interval for the frequency estimate is
+%extremely wide for quiet signals (as expected) and consistent with the
+%uncertainty in the measurement one would get from `guessing'.  This does
+%\emph{not} mean we cannot measure the peak frequency at large distance; it
+%simply means that the uncertainty in the measurement is large but we can have
+%some confidence in its \emph{accuracy} from the first panel.\label{fig:freqcredwidth}\\~\\~\\}
+%\end{subfigure}
+%\begin{subfigure}{0.45\textwidth}
+%{\scalebox{0.4}{\includegraphics{freqcredwidth_logB-0.00.eps}}}
+%\caption{Again, as figure~\ref{fig:freqcredwidth} with the constraint that $\log
+%B_{S,N}>0$ (better than 50/50 odds of signal vs noise).  This time, we see
+%remarkably little change from the previous figure with no constraint.  Given
+%that the point estimate of the frequency at large distance with the constraint
+%is so closely clustered around zero error, it is surprising that the posterior
+%width is so large.  This may point to a trivial code bug or problems in the
+%kernel density estimation used to smooth the posteriors - I don't yet believe
+%this result.}
+%\end{subfigure}
+%\caption{The Bayesian credible intervals\label{fig:credible_intervals}}
+%\end{figure}
 
 \begin{figure}
 \begin{subfigure}{0.45\textwidth}
