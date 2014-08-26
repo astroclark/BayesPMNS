@@ -354,15 +354,13 @@ def fmin_wrap(det_data, int_params0, ext_params):
             pos0[i, :, :] = draw_init_samp(nwalkers)
 
         print 'burning...'
-        #for pos, lnprob, lnlike in sampler.sample(pos0, iterations=100):
-        for pos, lnprob, lnlike in sampler.sample(pos0, iterations=1):
+        for pos, lnprob, lnlike in sampler.sample(pos0, iterations=100):
             pass
         sampler.reset()
 
         print 'sampling...'
         for pos, lnprob, lnlike in sampler.sample(pos, lnprob0=lnprob,
-                lnlike0=lnlike, iterations=10):
-                #lnlike0=lnlike, iterations=100):
+                lnlike0=lnlike, iterations=100):
         #for pos, lnprob, lnlike in sampler.sample(pos0, iterations=10):
             pass
 

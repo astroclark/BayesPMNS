@@ -344,7 +344,7 @@ def fmin_wrap(det_data, int_params0, ext_params):
     else:
         ndim, nwalkers, ntemps = 4, 100, 10
         sampler = emcee.PTSampler(ntemps=ntemps, nwalkers=nwalkers, dim=ndim,
-                logl=logl, logp=lnprior, loglargs=(fixed_args), threads=4,
+                logl=logl, logp=lnprior, loglargs=(fixed_args), threads=2,
                 a=1.5)#, betas=np.logspace(0,np.log(1e-2), base=np.e, num=ntemps))
 
         pos0 = np.zeros(shape=(ntemps, nwalkers, ndim))
@@ -354,15 +354,13 @@ def fmin_wrap(det_data, int_params0, ext_params):
             pos0[i, :, :] = draw_init_samp(nwalkers)
 
         print 'burning...'
-        #for pos, lnprob, lnlike in sampler.sample(pos0, iterations=100):
-        for pos, lnprob, lnlike in sampler.sample(pos0, iterations=1):
+        for pos, lnprob, lnlike in sampler.sample(pos0, iterations=10):
             pass
         sampler.reset()
 
         print 'sampling...'
         for pos, lnprob, lnlike in sampler.sample(pos, lnprob0=lnprob,
                 lnlike0=lnlike, iterations=10):
-                #lnlike0=lnlike, iterations=100):
         #for pos, lnprob, lnlike in sampler.sample(pos0, iterations=10):
             pass
 
