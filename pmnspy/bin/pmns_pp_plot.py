@@ -25,23 +25,17 @@ import matplotlib
 from matplotlib import pyplot as pl
 #matplotlib.use("Agg")
 
+import cPickle as pickle
+import glob
+
 #from scipy import signal, optimize, special, stats
 from scipy import optimize,stats
 from scipy.stats.mstats import mquantiles
 
 import pmns_utils
-#import pmns_simsig as simsig
 
-#import lal
-#import lalsimulation as lalsim
-#import pycbc.filter
+#import triangle
 
-import triangle
-
-import cPickle as pickle
-
-
-import glob
 
 def compute_efficiency(k,N,b=True):
 
@@ -96,12 +90,14 @@ def freq_prior_points(a=1500, b=4000, N=1e4):
 # -------------------------------
 # Load results
 
-datafiles = sys.argv[1]
+
+waveform_name=sys.argv[1]
+datafiles=sys.argv[2]
 
 # XXX: Hardcoding
-distances=np.array([5, 7.5, 12.5, 15, 20, 25])
-#distances=np.array([5, 10, 15, 20])
-wf = pmns_utils.Waveform('dd2_135135_lessvisc')
+distances=np.array([5, 7.5, 10])
+
+wf = pmns_utils.Waveform(waveform_name+'_lessvisc')
 wf.compute_characteristics()
 
 logBs = []
@@ -118,31 +114,31 @@ for d,datafile in enumerate(datafiles.split(',')):
 
     # --- Data extraction
     print >> sys.stdout, "loading %s..."%datafile
-    freq_axis, freq_pdfs_tmp, freq_estimates, all_sig_evs, all_noise_evs =\
-            pickle.load(open(datafile))
+
+    (this_logBs, this_netSNRs, this_freq_pdfs, freq_axis, this_freq_maxL,
+            this_freq_low, this_freq_upp, this_freq_area) = \
+                    pickle.load(open(datafile))
 
     # Bayes factors at each distance
-    logBs.append(all_sig_evs - all_noise_evs)
+    logBs.append(this_logBs)
 
     # Frequency recovery at each distance
-    freq_pdfs.append(freq_pdfs_tmp)
+    freq_pdfs.append(this_freq_pdfs)
 
     # Compute freq. expectation value
-    mf=np.zeros(shape=np.shape(freq_pdfs_tmp)[1])
-    for m in xrange(np.shape(freq_pdfs_tmp)[1]):
-        mf[m] = np.trapz(freq_pdfs_tmp[:,m]*freq_axis, freq_axis)
-    meanfreqs.append(mf)
+    #mf=np.zeros(shape=np.shape(freq_pdfs_tmp)[1])
+    #for m in xrange(np.shape(freq_pdfs_tmp)[1]):
+    #    mf[m] = np.trapz(freq_pdfs_tmp[:,m]*freq_axis, freq_axis)
+    #meanfreqs.append(mf)
 
     # Bayesian credible intervals and MAP estimate
-    maxfreqs.append(freq_estimates[0])
-    credintvals.append(np.array([freq_estimates[1], freq_estimates[2]]))
-    credintwidths.append(freq_estimates[2] - freq_estimates[1])
-
+    maxfreqs.append(this_freq_maxL)
+    credintvals.append(np.array([this_freq_low, this_freq_upp]))
+    credintwidths.append(this_freq_upp - this_freq_low)
 
     # 1-sigma Frequentist confidence intervals for MAP estimate
-    confintvals.append(stats.scoreatpercentile(maxfreqs[d], [10,90]))
+    confintvals.append(stats.scoreatpercentile(maxfreqs[d], [15.87,84.13]))
     confintwidths.append(confintvals[d][1]-confintvals[d][0])
-
 
 # -------------------------------
 # Computation & plots

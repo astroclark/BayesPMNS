@@ -35,13 +35,6 @@ filepattern='LIB-PMNS_waveform-%s'%waveform_name
 # XXX: Hardcoding
 distance=float(sys.argv[2])
 
-#wf = pmns_utils.Waveform('%s_lessvisc'%waveform_name)
-#wf.compute_characteristics()
-
-#confintvals=np.zeros(len(distances))
-#confintwidths=np.zeros(len(distances))
-
-
 # Identify files
 globpattern = filepattern+'*_distance-%.1f*'%distance
 datafiles = glob.glob(globpattern)
@@ -68,6 +61,7 @@ for d, datafile in enumerate(datafiles):
     freq_maxL[d] = this_freq_maxL
     freq_low[d] = this_freq_low
     freq_upp[d] = this_freq_upp
+    freq_area[d] = this_freq_area
 
 pickle.dump((logBs, netSNRs, freq_pdfs, freq_axis, freq_maxL, freq_low,
     freq_upp, freq_area), open(filepattern+'_distance-%.1f.pickle'%distance, 'wb'))
