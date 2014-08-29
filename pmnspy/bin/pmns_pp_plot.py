@@ -101,6 +101,7 @@ wf = pmns_utils.Waveform(waveform_name+'_lessvisc')
 wf.compute_characteristics()
 
 logBs = []
+netSNRs = []
 freq_pdfs = []
 maxfreqs = []
 meanfreqs = []
@@ -121,6 +122,7 @@ for d,datafile in enumerate(datafiles.split(',')):
 
     # Bayes factors at each distance
     logBs.append(this_logBs)
+    netSNRs.append(this_netSNRs)
 
     # Frequency recovery at each distance
     freq_pdfs.append(this_freq_pdfs)
@@ -168,6 +170,8 @@ found_distances=[]
 # --- Efficiency/missed/found loop
 for b in xrange(len(distances)):
 
+    freq_pdfs_found_tmp = []
+
     # --- Efficiency Calculation
     #delta_f = abs(maxfreqs[b]-wf.fpeak)
     #k = sum(delta_f<10)
@@ -184,15 +188,19 @@ for b in xrange(len(distances)):
         found_indices=np.concatenate(np.argwhere(logBs[b]>logBthresh))
         freqerrs_found.append((maxfreqs[b][found_indices]-wf.fpeak))
         credintwidths_found.append(credintwidths[b][found_indices])
-        freq_pdfs_found.append(freq_pdfs[b][:,found_indices])
+
+        for i in found_indices:
+            freq_pdfs_found_tmp.append(freq_pdfs[b][i])
+        freq_pdfs_found.append(freq_pdfs_found_tmp)
+
         maxfreqs_found.append(maxfreqs[b][found_indices])
-        meanfreqs_found.append(meanfreqs[b][found_indices])
+        #meanfreqs_found.append(meanfreqs[b][found_indices])
 
         found_distances.append(distances[b])
 
         # 1-sigma Frequentist confidence intervals for MAP estimate
         confintvals_found.append(stats.scoreatpercentile(maxfreqs[b][found_indices],
-            [13.16,100-13.16]))
+            [15.87,100-15.87]))
         confintwidths_found.append(confintvals_found[b][1]-confintvals_found[b][0])
 
 
@@ -245,7 +253,7 @@ pl.savefig('efficiency_logB-%.2f.eps'%logBthresh)
 
 # --- Frequency recovery: all PDFs
 
-for i in xrange(len(distances)):
+for d in xrange(len(distances)):
 #   pdffig, pdfax = pl.subplots()
 #
 #   im=pdfax.imshow(np.transpose(freq_pdfs[i]), aspect='auto',
@@ -265,22 +273,23 @@ for i in xrange(len(distances)):
 #
 
     pdflines, pdflinesax = pl.subplots()
-    pdflinesax.plot(freq_axis,freq_pdfs[i], color='grey', linewidth=0.001)
+    for i in xrange(np.shape(freq_pdfs[d])[0]):
+        pdflinesax.plot(freq_axis,freq_pdfs[d][i], color='grey', linewidth=0.001)
     pdflinesax.set_yscale('log')
     pdflinesax.set_ylim(1e-5,1) 
     pdflinesax.set_xlabel('Frequency [Hz]')
     pdflinesax.set_ylabel('p(f|D)')
     pdflinesax.axvline(wf.fpeak, color='r', linestyle='--')
     pdflinesax.axhline(1.0/(4000-1500), color='k', linestyle='--')
-    pdflinesax.set_title('Distance = %.2f Mpc'%distances[i])
+    pdflinesax.set_title('Distance = %.2f Mpc'%distances[d])
  
-    pl.savefig('freqpdflines_dist-%.2f.png'%distances[i])
-    pl.savefig('freqpdflines_dist-%.2f.eps'%distances[i])
+    pl.savefig('freqpdflines_dist-%.2f.png'%distances[d])
+    pl.savefig('freqpdflines_dist-%.2f.eps'%distances[d])
  
-for i in xrange(len(freq_pdfs_found)):
 
     pdflines, pdflinesax = pl.subplots()
-    pdflinesax.plot(freq_axis,freq_pdfs_found[i], color='grey', linewidth=0.001)
+    for i in xrange(np.shape(freq_pdfs_found[d])[0]):
+        pdflinesax.plot(freq_axis,freq_pdfs_found[d][i], color='grey', linewidth=0.001)
     pdflinesax.set_yscale('log')
     pdflinesax.set_ylim(1e-5,1) 
     pdflinesax.set_xlabel('Frequency [Hz]')
@@ -288,10 +297,10 @@ for i in xrange(len(freq_pdfs_found)):
     pdflinesax.axvline(wf.fpeak, color='r', linestyle='--')
     pdflinesax.axhline(1.0/(4000-1500), color='k', linestyle='--')
     pdflinesax.set_title('log B > %.2f, Distance = %.2f Mpc'%(logBthresh,
-        distances[i]))
+        distances[d]))
 
-    pl.savefig('freqpdflines_dist-%.2f_logB-%.2f.png'%(distances[i], logBthresh))
-    pl.savefig('freqpdflines_dist-%.2f_logB-%.2f.eps'%(distances[i], logBthresh))
+    pl.savefig('freqpdflines_dist-%.2f_logB-%.2f.png'%(distances[d], logBthresh))
+    pl.savefig('freqpdflines_dist-%.2f_logB-%.2f.eps'%(distances[d], logBthresh))
 
 
 
