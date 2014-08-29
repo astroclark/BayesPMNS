@@ -29,12 +29,27 @@ ninject=10
 
 distances="5 7.5 10 12.5 15 17.5 20"
 
-bigname="dd2_135135-100_5-20"
+waveform=${1}
+
+bigname="LIB-PMNS_${waveform}_135135-${ninject}_5-20"
 
 # --- End Input
 
 dagfile="${bigname}.dag"
 subfile="${bigname}.sub"
+shellfile="${bigname}.sh"
+
+rm -rf ${dagfile} ${subfile} ${shellfile} condor_logs
+
+# Set up the shell file
+shelltext="\
+#!/bin/bash
+#########################
+# PMNS LIB: Shell  file #
+#########################
+"
+echo "${shelltext}" > ${shellfile}
+
 
 #
 # Set up the sub file
@@ -72,15 +87,26 @@ do
     for i in `seq 1 ${ninject}`
     do
 
+        # 
+        # Dag writing
+        #
+
         initseed=`python -c "import lal; import random; print random.randint(0,int(lal.GPSTimeNow()))"`
         jobname="${bigname}-${initseed}"
 
-        jobargs="--fixed-distance ${dist} --init-seed ${initseed} ${configfile}"
+        jobargs="--fixed-distance ${dist} --init-seed ${initseed} ${configfile} --waveform-name ${waveform}"
 
         echo "JOB ${jobname} ${subfile}" >> ${dagfile}
         echo "VARS ${jobname} macroid=\"${jobname}\" macroarguments=\"${jobargs}\"" >> ${dagfile}
         #echo "RETRY ${jobname} 3 " >> ${dagfile}
         echo "" >> ${dagfile}
+
+        #
+        # Shell writing
+        #
+        echo "`which pmns_lib_analysis.py` ${jobargs}" >> ${shellfile}
+
+
     done
 
 done

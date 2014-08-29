@@ -188,6 +188,7 @@ seed=opts.init_seed
 
 
 epoch=0.0
+trigtime=0.5*datalen+epoch
 
 if opts.output_dir is None:
     outdir=cp.get('program', 'output-dir')
@@ -262,6 +263,7 @@ for i in xrange( ninject ):
     inj_dec = -0.5*np.pi + np.arccos(-1.0 + 2.0*np.random.random())
     inj_pol = 2.0*np.pi*np.random.random()
     inj_inc = 0.5*(-1.0*np.pi + 2.0*np.pi*np.random.random())
+    inj_phase = 2.0*np.pi*random.random()
 
     # Antenna response
     det1_fp, det1_fc, det1_fav, det1_qval = antenna.response(
@@ -281,8 +283,8 @@ for i in xrange( ninject ):
     # --- Project waveform onto these extrinsic params
     # Extrinsic parameters
     ext_params = simsig.ExtParams(distance=inj_distance, ra=inj_ra, dec=inj_dec,
-            polarization=inj_pol, inclination=inj_inc, phase=0.0,
-            geocent_peak_time=0.5*datalen+epoch)
+            polarization=inj_pol, inclination=inj_inc, phase=inj_phase,
+            geocent_peak_time=trigtime)
 
     # Construct the time series for these params
     waveform.make_wf_timeseries(theta=ext_params.inclination,
@@ -331,7 +333,6 @@ for i in xrange( ninject ):
     {0}
     '''.format(lalinf_exec)
 
-    trigtime=0.5*datalen
     lib_outfile="LIB-PMNS_waveform-{0}_seed-{1}_distance-{2}".format(
             opts.waveform_name,
             seed, distance)
@@ -351,7 +352,7 @@ for i in xrange( ninject ):
         "--loghrssmin", cp.get('priors','loghrssmin'), 
         "--loghrssmax", cp.get('priors','loghrssmax'), 
         "--dt", str(time_prior_width), 
-        "--approx", "DampedSinusoidF",
+        "--approx", "SineGaussianF",
         "--nlive", cp.get('analysis','nlive'), "--nmcmc", cp.get('analysis','nmcmc'), 
         "--padding", cp.get('analysis','padding'), 
         "--randomseed", str(seed),  
