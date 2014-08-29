@@ -412,7 +412,7 @@ for i in xrange( ninject ):
     freq_axis = np.arange(cp.getfloat('priors','fmin'), cp.getfloat('priors','fmax'), 0.1)
 
     freq_pdf  = kde_sklearn(x=freq_samps, x_grid=freq_axis,
-            bandwidth=cp.getfloat('postproc','kde-bandwidth',
+            bandwidth=cp.getfloat('postproc','kde-bandwidth'),
                 algorithm='kd_tree') 
 
     # Get max-likelihood & confidence intervals
