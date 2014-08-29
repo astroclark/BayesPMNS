@@ -128,14 +128,14 @@ class DetData:
         tmp.data.data *= 20.0 / self.ext_params.distance
         waveform.hplus.data.data *= 20.0 / self.ext_params.distance
 
-        #self.td_signal = \
-        #        pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
-        #                delta_t=tmp.deltaT, epoch=tmp.epoch)
+        self.td_signal = \
+                pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
+                        delta_t=tmp.deltaT, epoch=tmp.epoch)
 
         # XXX: Placing overhead!
-        self.td_signal = \
-                pycbc.types.timeseries.TimeSeries(initial_array=np.copy(waveform.hplus.data.data),
-                        delta_t=tmp.deltaT, epoch=tmp.epoch)
+        #self.td_signal = \
+        #        pycbc.types.timeseries.TimeSeries(initial_array=np.copy(waveform.hplus.data.data),
+        #                delta_t=tmp.deltaT, epoch=tmp.epoch)
 
         # Remove extraneous data
         del tmp
@@ -165,7 +165,7 @@ class DetData:
             # XXX: minimum duration seems to be 1 second.  I'll hack around this by
             # reducing the 1 second to the desired duration
             tmplen=max(self.duration,1.0)/self.delta_t
-            self.td_noise = pycbc.noise.noise_from_psd(tmplen, self.delta_t,
+            self.td_noise = pycbc.noise.noise_from_psd(int(tmplen), self.delta_t,
                     self.psd, seed=self.seed)
 
             zeroidx=self.td_noise.sample_times.data>self.duration

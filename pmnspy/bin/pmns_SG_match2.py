@@ -61,12 +61,13 @@ class DampedChirpParams:
     """
     """
 
-    def __init__(self, tmplt_len=16384, Amp=1.0, f0=2000, tau=1e-3, df=0):
+    def __init__(self, tmplt_len=16384, Amp=1.0, f0=2000, tau=1e-3, df=0, phi0=0):
         self.tmplt_len=tmplt_len
         self.Amp=Amp
         self.f0=f0
         self.tau=tau
         self.df=df
+        self.phi0=phi0
 
 def damped_chirp_tmplt(det_data, int_params, ext_params):
     """
@@ -78,41 +79,20 @@ def damped_chirp_tmplt(det_data, int_params, ext_params):
     # Compute polarisations for damped chirp
     #
 
-#   _, hp = damped_chirp(int_params.tmplt_len,
-#           int_params.Amp, int_params.f0, int_params.tau, int_params.df)
-#
-#   _, hc = damped_chirp(int_params.tmplt_len,
-#           int_params.Amp, int_params.f0, int_params.tau, int_params.df,
-#           phi0=90.0)
 #
 #   # Get the epoch for the start of the time series
     epoch = ext_params.geocent_peak_time# - \
 #           #np.argmax(hp)*det_data.td_response.delta_t
 #           # XXX: why don't we need to subtract this bit...?
 #
+    # --- Put the polarisations into LAL TimeSeries
+#   _, hp = damped_chirp(int_params.tmplt_len,
+#          int_params.Amp, int_params.f0, int_params.tau, int_params.df)
 #
-#   # --- Put the polarisations into LAL TimeSeries
-    Q = 2.0*np.pi*int_params.tau*int_params.f0
-
-    hp, hc = lalsim.SimBurstSineGaussian(Q, int_params.f0,
-            int_params.Amp, 0, 0, 1.0/16384)
-
-    # zero-out...
-    #hp.data.data[0:hp.data.length/2] = 0.0
-    #hc.data.data[0:hp.data.length/2] = 0.0
-
-    hplus = lal.CreateREAL8TimeSeries('hplus', epoch, 0,
-            det_data.td_noise.delta_t, lal.StrainUnit, hp.data.length)
-    hplus.data.data=np.copy(hp.data.data)
-    del hp
- 
-    hcross = lal.CreateREAL8TimeSeries('hcross', epoch, 0,
-            det_data.td_noise.delta_t, lal.StrainUnit, hc.data.length)
-    hcross.data.data=np.copy(hc.data.data)
-    del hc
-
+#   _, hc = damped_chirp(int_params.tmplt_len,
+#          int_params.Amp, int_params.f0, int_params.tau, int_params.df,
+#          phi0=90.0)
 #
-#   # --- Put the polarisations into LAL TimeSeries
 #   hplus = lal.CreateREAL8TimeSeries('hplus', epoch, 0,
 #           det_data.td_noise.delta_t, lal.StrainUnit, len(hp))
 #   hplus.data.data=np.copy(hp)
@@ -123,6 +103,27 @@ def damped_chirp_tmplt(det_data, int_params, ext_params):
 #   hcross.data.data=np.copy(hc)
 #   del hc
 
+#   # --- lalsimulation version
+    Q = 2.0*np.pi*int_params.tau*int_params.f0
+ 
+    hp, hc = lalsim.SimBurstSineGaussian(Q, int_params.f0,
+            int_params.Amp, 0, 0, 1.0/16384)
+ 
+    # zero-out...
+    #hp.data.data[0:hp.data.length/2] = 0.0
+    #hc.data.data[0:hp.data.length/2] = 0.0
+ 
+    hplus = lal.CreateREAL8TimeSeries('hplus', epoch, 0,
+            det_data.td_noise.delta_t, lal.StrainUnit, hp.data.length)
+    hplus.data.data=np.copy(hp.data.data)
+    del hp
+ 
+    hcross = lal.CreateREAL8TimeSeries('hcross', epoch, 0,
+            det_data.td_noise.delta_t, lal.StrainUnit, hc.data.length)
+    hcross.data.data=np.copy(hc.data.data)
+    del hc
+
+ 
 
     #
     # Project polarisations down to detector
@@ -172,9 +173,9 @@ def mismatch(vary_args, *fixed_args):
 
         try:
             match = pycbc.filter.match(tmplt_td,det1_data.td_signal,det1_data.psd,
-                    low_frequency_cutoff=1000, high_frequency_cutoff=5000)[0]
+                    low_frequency_cutoff=2000, high_frequency_cutoff=5000)[0]
             #match = pycbc.filter.match(tmplt_td,det1_data.td_signal,det1_data.psd,
-            #        low_frequency_cutoff=1000, high_frequency_cutoff=5000,
+            #        low_frequency_cutoff=2000, high_frequency_cutoff=5000,
             #        v1_norm=1.0, v2_norm=1.0)[0]
         except ZeroDivisionError:
             match = 0
@@ -196,7 +197,6 @@ def match(int_params, ext_params):
         match = 0
 
     return match
-
 
 def fmin_wrap(det_data, int_params0, ext_params):
 
@@ -237,7 +237,7 @@ waveform = pmns_utils.Waveform('%s'%sys.argv[1])
 waveform.compute_characteristics()
 
 # Extrinsic parameters
-ext_params = simsig.ExtParams(20.0, ra=0.0, dec=0.0,
+ext_params = simsig.ExtParams(5.0, ra=0.0, dec=0.0,
         polarization=0.0, inclination=0.0, phase=0.0, geocent_peak_time=0.25)
 
 # Frequency range for SNR around f2 peak - we'll go between 1, 5 kHz for the
@@ -262,25 +262,20 @@ det1_data = simsig.DetData(det_site="H1", noise_curve='aLIGO',
 
 # --------------------------------------------------------------------
 
-#print 'broad band pre-conditioning snr: ', \
-#        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,1000,5000)
-#print 'f2 pre-conditioning snr: ', \
-#        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,flow,fupp)
-
 
 # --- high-pass
 high_pass=1
-knee=1000
+knee=2000
 if high_pass:
     #print >> sys.stdout, "applying high pass filter..."
     # Signal-only
     det1_data.td_signal = pycbc.filter.highpass(det1_data.td_signal, knee,
             filter_order=20, attenuation=0.9)
 
-#print 'broad band high-passed snr: ', \
-#        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,1000, 5000)
-#print 'f2 high-passed snr: ', \
-#        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,flow,fupp)
+print 'broad band high-passed snr: ', \
+        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,2000, 5000)
+print 'f2 high-passed snr: ', \
+        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,flow,fupp)
 
 # --------------------------------------------------------------------
 #
@@ -288,7 +283,8 @@ if high_pass:
 #
 
 # Initial guesses for intrinsic params for the max-match calculation
-int_params0=DampedChirpParams(tau=.005, f0=waveform.fpeak)
+int_params0=DampedChirpParams(tau=.005, f0=waveform.fpeak,
+        Amp=max(abs(waveform.hplus.data.data)))
 
 #print >> sys.stdout, "Attempting to maximise overlap..."
 
@@ -297,7 +293,7 @@ int_params0=DampedChirpParams(tau=.005, f0=waveform.fpeak)
 result_theory = fmin_wrap(det1_data, int_params0, ext_params)
 
 # --- resulting waveform:
-int_params=DampedChirpParams(f0=result_theory['x'][0],
+int_params=DampedChirpParams( f0=result_theory['x'][0],
         tau=result_theory['x'][1])
 
 result_wave=damped_chirp_tmplt(det1_data, int_params, ext_params)
@@ -326,17 +322,63 @@ f.writelines("%.2f %.2f %.2f %.2f %.2f %.2f %.2e %.2f\n"%(
     int_params.f0, int_params.df, int_params.tau, Q))
 f.close()
 
+result_wave=damped_chirp_tmplt(det1_data, int_params, ext_params)
+
 # --------------------------------------------------------------------
 #
 # Frequency error estimation
 #
 
-result_wave=damped_chirp_tmplt(det1_data, int_params, ext_params)
+#
+# Find MaxL Time
+#
+
+# We need the correct time-offset to line the templates up.  We can get this
+# from the SNR timeseries:
+snr=pycbc.filter.matched_filter(result_wave, det1_data. td_signal,
+        det1_data.psd, low_frequency_cutoff=2000, high_frequency_cutoff=5000)
+tstart_idx=abs(snr).max_loc()[1]
+
+# Now realign the template time-series
+maxL_tmplt=pycbc.types.TimeSeries(initial_array=np.zeros(len(result_wave.data)),
+      delta_t=result_wave.delta_t,
+      epoch=result_wave.start_time)
+maxL_tmplt.data[tstart_idx:]=result_wave.data[0:-tstart_idx]
+
+#
+# Find MaxL Amplitude
+#
+
+# Finally, just get the amplitude by fitting this model signal
+# (and divide by 1e-40 to handle small numbers)
+idx=np.concatenate(np.argwhere((det1_data.fd_signal.sample_frequencies.data>2000) *
+        (det1_data.fd_signal.sample_frequencies.data<5000)))
+residsq = lambda Amp: 100*sum(abs(det1_data.fd_signal.data[idx] -
+    Amp*maxL_tmplt.to_frequencyseries().data[idx])**2 / det1_data.psd.data[idx])
+
+x0=max(abs(det1_data.td_signal.data))
+result = optimize.minimize(residsq, x0=x0, method='nelder-mead')
+print result
+maxL_tmplt.data *= result['x']
 
 
-#error_overlap = det1_data.td_signal
+#
+# Compute Fisher error estimate
+#
 
-deltafsq = (waveform.fpeak - int_params.f0)**2
+waveform_residuals = pycbc.types.TimeSeries(initial_array=det1_data.td_signal.data -
+        maxL_tmplt.data, delta_t = det1_data.delta_t)
+
+residuals_snrsq = pycbc.filter.sigmasq(waveform_residuals, psd=det1_data.psd,
+        low_frequency_cutoff=2000, high_frequency_cutoff=5000)
+
+deltafsq = (waveform.fpeak - int_params.f0)**2 / residuals_snrsq
+print 'deltaF = %.2f'%np.sqrt(deltafsq)
+
+pl.figure()
+pl.plot(det1_data.td_signal.data)
+pl.plot(maxL_tmplt)
+pl.show()
 
 sys.exit()
 # --------------------------------------------------------------------
@@ -366,4 +408,32 @@ a[1].plot(result_wave.to_frequencyseries().sample_frequencies,
 a[0].set_ylim(-1,1)
 a[1].set_ylim(-1,1)
 pl.show()
+
+#sys.exit()
+#def amp_mismatch(Amp, vec1, vec2):
+#    """
+#    vec2 is time series to rescale, vec1 is the target
+#    """
+#
+#    vec2_scaled=pycbc.types.TimeSeries(initial_array=Amp*vec2.data,
+#            delta_t=vec2.delta_t)
+#
+#    overlap=pycbc.filter.overlap(vec1, vec2_scaled,
+#                psd=det1_data.psd, low_frequency_cutoff=2000,
+#                high_frequency_cutoff=5000, normalized=False)
+#    optimal_overlap=pycbc.filter.overlap(vec1, vec1,
+#                psd=det1_data.psd, low_frequency_cutoff=2000,
+#                high_frequency_cutoff=5000, normalized=False)
+#
+#    amp_mm=1-overlap/optimal_overlap
+#    print optimal_overlap
+#
+#    print amp_mm
+#
+#    return amp_mm
+#
+#result = optimize.minimize(amp_mismatch, x0=max(abs(det1_data.td_signal.data)),
+#        args=(det1_data.td_signal, maxL_tmplt), method='nelder-mead')
+#
+#print result
 
