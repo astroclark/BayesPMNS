@@ -36,7 +36,7 @@ filepattern='LIB-PMNS_waveform-%s'%waveform_name
 distance=float(sys.argv[2])
 
 # Identify files
-globpattern = filepattern+'*_distance-%.1f*'%distance
+globpattern = filepattern+'*seed*distance-%.1f*pickle'%distance
 datafiles = glob.glob(globpattern)
 
 logBs   = np.zeros(len(datafiles))
@@ -51,9 +51,12 @@ freq_area = np.zeros(len(datafiles))
 for d, datafile in enumerate(datafiles):
     print >> sys.stdout, "Loading %d of %d (%s)"%(d, len(datafiles), datafile)
 
-    (this_logB, _, _, _, this_netSNR, _, _, freq_axis, this_freq_pdf,
-            this_freq_maxL, this_freq_low, this_freq_upp, this_freq_area) = \
-                    pickle.load(open(datafile))
+    try:
+        (this_logB, _, _, _, this_netSNR, _, _, freq_axis, this_freq_pdf,
+                this_freq_maxL, this_freq_low, this_freq_upp, this_freq_area) = \
+                        pickle.load(open(datafile))
+    except pickle.UnpicklingError:
+        continue
 
     logBs[d] = this_logB
     netSNRs[d] = this_netSNR
