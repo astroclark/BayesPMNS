@@ -69,6 +69,7 @@ for d, datafile in enumerate(datafiles):
 pickle.dump((logBs, netSNRs, freq_pdfs, freq_axis, freq_maxL, freq_low,
     freq_upp, freq_area), open(filepattern+'_distance-%.1f.pickle'%distance, 'wb'))
 
+print >> sys.stdout, "written: %s"%filepattern+'_distance-%.1f.pickle'%distance
 print >> sys.stdout, "DONE."
 
 
