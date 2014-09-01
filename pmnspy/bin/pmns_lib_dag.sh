@@ -35,9 +35,10 @@ bigname="LIB-PMNS_${waveform}_135135-${ninject}_5-20"
 
 # --- End Input
 
-dagfile="${bigname}.dag"
-subfile="${bigname}.sub"
-shellfile="${bigname}.sh"
+dagseed=`python -c "import lal; import random; print random.randint(0,int(lal.GPSTimeNow()))"`
+dagfile="${bigname}_${dagseed}.dag"
+subfile="${bigname}_${dagseed}.sub"
+shellfile="${bigname}_${dagseed}_${dagseed}.sh"
 
 rm -rf ${dagfile} ${subfile} ${shellfile} condor_logs
 
