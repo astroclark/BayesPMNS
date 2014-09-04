@@ -61,12 +61,8 @@ def damped_chirp_tmplt(det_data, int_params, ext_params):
     # Compute polarisations for damped chirp
     #
 
-#
 #   # Get the epoch for the start of the time series
     epoch = ext_params.geocent_peak_time# - \
-#           #np.argmax(hp)*det_data.td_response.delta_t
-#           # XXX: why don't we need to subtract this bit...?
-
 
     # --- lalsimulation version
     Q = 2.0*np.pi*int_params.tau*int_params.f0
@@ -192,11 +188,11 @@ def fmin_wrap(det_data, int_params0, ext_params):
 print ''
 print '--- %s ---'%sys.argv[1]
 #waveform = pmns_utils.Waveform('%s_lessvisc'%sys.argv[1])
-waveform = pmns_utils.Waveform('%s'%sys.argv[1])
+waveform = pmns_utils.Waveform('%s_lessvisc'%sys.argv[1])
 waveform.compute_characteristics()
 
 # Extrinsic parameters
-ext_params = simsig.ExtParams(5.0, ra=0.0, dec=0.0,
+ext_params = simsig.ExtParams(float(sys.argv[2]), ra=0.0, dec=0.0,
         polarization=0.0, inclination=0.0, phase=0.0, geocent_peak_time=0.25)
 
 # Frequency range for SNR around f2 peak - we'll go between 1, 5 kHz for the
@@ -214,27 +210,30 @@ waveform.make_wf_timeseries(theta=ext_params.inclination,
 
 #print >> sys.stdout, "generating detector data objects..."
 
-det1_data = simsig.DetData(det_site="H1", noise_curve='aLIGO',
+#noise_curve='aLIGO'
+#noise_curve='ligo3_basePSD'
+noise_curve=sys.argv[3]
+det1_data = simsig.DetData(det_site="H1", noise_curve=noise_curve,
         waveform=waveform, ext_params=ext_params, duration=0.5, seed=0,
-        epoch=0.0, f_low=10.0)
+        epoch=0.0, f_low=10.0, taper=True)
 
 
 # --------------------------------------------------------------------
 
 
 # --- high-pass
-high_pass=1
-knee=2000
+high_pass=0
+knee=1000
 if high_pass:
     #print >> sys.stdout, "applying high pass filter..."
     # Signal-only
     det1_data.td_signal = pycbc.filter.highpass(det1_data.td_signal, knee,
             filter_order=20, attenuation=0.9)
 
-print 'broad band high-passed snr: ', \
-        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,2000, 5000)
-print 'f2 high-passed snr: ', \
-        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,flow,fupp)
+#print 'broad band high-passed snr: ', \
+#        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,1000, 5000)
+#print 'f2 high-passed snr: ', \
+#        pycbc.filter.sigma(det1_data.td_signal,det1_data.psd,flow,fupp)
 
 # --------------------------------------------------------------------
 #
@@ -260,6 +259,7 @@ result_wave=damped_chirp_tmplt(det1_data, int_params, ext_params)
 #print result_theory
 #print ''
 print 'maximal match (broadband): ', 1-result_theory['fun']
+sys.exit()
 p = result_wave.to_frequencyseries()
 print 'maximal match (narrowband): ', match(int_params, ext_params)
 print ''
@@ -295,7 +295,7 @@ result_wave=damped_chirp_tmplt(det1_data, int_params, ext_params)
 # We need the correct time-offset to line the templates up.  We can get this
 # from the SNR timeseries:
 snr=pycbc.filter.matched_filter(result_wave, det1_data. td_signal,
-        det1_data.psd, low_frequency_cutoff=2000, high_frequency_cutoff=5000)
+        det1_data.psd, low_frequency_cutoff=1000, high_frequency_cutoff=5000)
 tstart_idx=abs(snr).max_loc()[1]
 
 # Now realign the template time-series
@@ -309,7 +309,7 @@ maxL_tmplt.data[tstart_idx:]=result_wave.data[0:-tstart_idx]
 
 # Finally, just get the amplitude by fitting this model signal
 # (and divide by 1e-40 to handle small numbers)
-idx=np.concatenate(np.argwhere((det1_data.fd_signal.sample_frequencies.data>2000) *
+idx=np.concatenate(np.argwhere((det1_data.fd_signal.sample_frequencies.data>1000) *
         (det1_data.fd_signal.sample_frequencies.data<5000)))
 residsq = lambda Amp: 100*sum(abs(det1_data.fd_signal.data[idx] -
     Amp*maxL_tmplt.to_frequencyseries().data[idx])**2 / det1_data.psd.data[idx])
@@ -330,9 +330,10 @@ waveform_residuals = pycbc.types.TimeSeries(initial_array=det1_data.td_signal -
 #        maxL_tmplt.to_frequencyseries(), delta_f = det1_data.fd_signal.delta_f)
 
 residuals_snrsq = pycbc.filter.sigmasq(waveform_residuals, psd=det1_data.psd,
-        low_frequency_cutoff=2000, high_frequency_cutoff=5000)
+        low_frequency_cutoff=1000, high_frequency_cutoff=5000)
 
 deltafsq = (waveform.fpeak - int_params.f0)**2 / residuals_snrsq
+print 'innner product delta = %.2f'%residuals_snrsq
 print 'deltaF = %.2f'%np.sqrt(deltafsq)
 
 pl.figure()

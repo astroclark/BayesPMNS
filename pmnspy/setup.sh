@@ -11,10 +11,13 @@ test -d "${PMNSPY_PREFIX}/etc" || mkdir "${PMNSPY_PREFIX}/etc"
 
 # define a variable to point to the NINJA ascii data.  This is useful for waveform generation scripts.
 NINJA_ASCII="${PMNSPY_PREFIX}/../waveform_data/ninja_ascii"
+SECDERIVS="${PMNSPY_PREFIX}/../waveform_data/secderivqpoles"
 
 echo "# add script directory to path" > "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "export PATH=$PMNSPY_PREFIX/bin:\$PATH" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "export PYTHONPATH=$PMNSPY_PREFIX/bin:$PMNSPY_PREFIX/pmns_utils:\${PYTHONPATH}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "# define variable for location of ninja ascii files" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "export NINJA_ASCII=${NINJA_ASCII}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
+echo "export SECDERIVS=${SECDERIVS}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
+echo "export PMNSPY_PREFIX=${PMNSPY_PREFIX}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 

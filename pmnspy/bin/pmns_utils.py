@@ -37,7 +37,7 @@ class Waveform:
 
         # waveform labels and directory setup
         self.waveform_name  = waveform_name
-        self.get_data_path(data_path)
+        self.get_data_path()
         self.set_tex_label(waveform_name)
         self.set_R16(waveform_name)
         self.allowed_radii()
@@ -64,6 +64,9 @@ class Waveform:
         #self.hrss_plus /= np.real(sYlm2p2)
         #self.hrss_cross /= np.real(sYlm2p2)
         self.hrss = np.sqrt(self.hrss_plus**2 + self.hrss_cross**2)
+
+        # Angle-averaged SNR:
+        self.angle_av_snr = self.compute_angle_averaged_snr()
 
         if not hasattr(self, 'PSD_plus'):
             self.make_wf_freqseries()
@@ -137,21 +140,23 @@ class Waveform:
         self.PSD_cross = 2*abs(self.Hcross.data.data)**2
 
 
-    def get_data_path(self, data_path):
+    def get_data_path(self):
         """
         Attempts to retrieve the location of the waveform data from environment
-        variable NINJA_ASCII
+        variables NINJA_ASCII and SECDERIVS
         """
-        if data_path is None:
-            # try to get it from the environment
-            try:
-                self.waveform_path = os.environ['NINJA_ASCII']
-            except KeyError:
-                print >> sys.stderr, "NINJA_ASCII environment variable not" \
-                        " set, please specify waveform location in Waveform()" \
-                        " instantiation"
-        else:
-            self.waveform_path = data_path
+        # try to get it from the environment
+        try:
+            self.waveform_path = os.environ['NINJA_ASCII']
+        except KeyError:
+            print >> sys.stderr, "NINJA_ASCII environment variable not" \
+                    " set, please check env"
+
+        try:
+            self.secderivs_path = os.environ['SECDERIVS']
+        except KeyError:
+            print >> sys.stderr, "SECDERIVS environment variable not" \
+                    " set, please checenv"
 
     def set_tex_label(self,waveform_name):
         """
@@ -295,9 +300,114 @@ class Waveform:
 
 
 
+    def compute_angle_averaged_snr(self, flow=1000.0, fupp=4000.0, psddata=None,
+            taper=False, distance=20):
+        """
+        Flanagan & Hughes eqn 2.30: angle-averaged SNR @ 20 Mpc
+        """
+
+        distance*=1e6*lal.PC_SI
+
+        times, Ixxtmp, Ixytmp, Ixztmp, Iyytmp, Iyztmp, Izztmp = \
+                get_quadrupole_data(self.secderivs_path, self.waveform_name)
+
+        # Pad the Is to 1 second
+        Ixx = np.zeros(16384)
+        Ixy = np.zeros(16384)
+        Ixz = np.zeros(16384)
+        Iyy = np.zeros(16384)
+        Iyz = np.zeros(16384)
+        Izz = np.zeros(16384)
+
+        Ixx[len(Ixx)/2-0.5*len(Ixxtmp):len(Ixx)/2+0.5*len(Ixxtmp)] = Ixxtmp
+        Ixy[len(Ixy)/2-0.5*len(Ixytmp):len(Ixy)/2+0.5*len(Ixytmp)] = Ixytmp
+        Ixz[len(Ixz)/2-0.5*len(Ixztmp):len(Ixz)/2+0.5*len(Ixztmp)] = Ixztmp
+        Iyy[len(Iyy)/2-0.5*len(Iyytmp):len(Iyy)/2+0.5*len(Iyytmp)] = Iyytmp
+        Iyz[len(Iyz)/2-0.5*len(Iyztmp):len(Iyz)/2+0.5*len(Iyztmp)] = Iyztmp
+        Izz[len(Izz)/2-0.5*len(Izztmp):len(Izz)/2+0.5*len(Izztmp)] = Izztmp
+
+        if taper:
+            # window out inspiral
+            Ixx = window_inspiral(Ixx)
+            Ixy = window_inspiral(Ixy)
+            Ixz = window_inspiral(Ixz)
+            Iyy = window_inspiral(Iyy)
+            Iyz = window_inspiral(Iyz)
+            Izz = window_inspiral(Izz)
+
+        # Now Fourier transform
+        dt = 1.0/16384
+        IxxTilde = np.abs(dt*np.fft.fft(Ixx))
+        IyyTilde = np.abs(dt*np.fft.fft(Iyy))
+        IxyTilde = np.abs(dt*np.fft.fft(Ixy))
+
+        # Energy spectrum
+        dEdf_term = IxxTilde**2 + IyyTilde**2 - IxxTilde*IyyTilde + \
+                3.*IxyTilde**2
+
+        #fac = 32.*lal.G_SI**2/(75.*lal.C_SI**8*distance**2)
+        fac = 32.*lal.G_SI**2/(75.*lal.C_SI**8*distance**2)
+
+        # Compute SNR
+        freq = np.fft.fftfreq(len(Ixx), d=dt)
+        dEdf_term = dEdf_term[freq>=0]
+        freq = freq[freq>=0]
+        df = np.diff(freq)[0]
+
+        if psddata is None:
+            # Use lalsim aLIGO psd
+
+            psd=np.zeros(len(freq))
+            for i in range(len(freq)):
+                psd[i]=lalsim.SimNoisePSDaLIGOZeroDetHighPower(freq[i])
+
+        else:
+            # Use the data supplied in psddata and interpolate to the waveform
+            # frequencies
+            psd = np.interp(freq, psddata[:,0], psddata[:,1])
+
+
+        idxlow = np.argmin(abs(flow-freq))
+        idxupp = np.argmin(abs(fupp-freq))
+
+
+        return (
+                1.4*np.sqrt(fac*df*np.trapz(dEdf_term[idxlow:idxupp]/psd[idxlow:idxupp],dx=df))
+                )
+
+
+
 #
 # general use functions
 #
+
+def get_quadrupole_data(secderivs_path, waveform_name):
+    """
+    Retrieve the original secderive quadruopole data and scale into SI units
+    """
+
+    # Load data
+    times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz = sim_data = \
+            np.loadtxt("{0}/secderivqpoles_16384Hz_{1}.dat".format(
+                secderivs_path, waveform_name), unpack=True)
+
+
+    # Convert to SI
+    times *= lal.MTSUN_SI
+
+    fac = lal.MRSUN_SI * 1/(lal.G_SI / lal.C_SI**4)
+
+    Ixx *= fac
+    Ixy *= fac
+    Ixz *= fac
+    Iyy *= fac
+    Iyz *= fac
+    Izz *= fac
+
+
+    return times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz
+
+    
 
 def get_waveform_data(waveform_path, waveform_name):
     """
@@ -428,7 +538,7 @@ def lal_fft(timeseries,seglen=5,fs=16384):
 #
 #       return freqseries,freqs
 
-def optimal_snr(tSeries,freqmin=1500,freqmax=4096):
+def optimal_snr(tSeries,freqmin=1000,freqmax=4096):
     """
     Compute optimal snr, characteristic frequency and peak time (see
     xoptimalsnr.m)
@@ -459,7 +569,8 @@ def optimal_snr(tSeries,freqmin=1500,freqmax=4096):
     rho2f = 2.0*p_FD/psd;
 
     # Get peak frequency
-    fPeak = freq[np.argmax(p_FD)]
+    idx = np.argwhere(freq>1500)
+    fPeak = freq[idx][np.argmax(p_FD[idx])]
 
     # Characteristic frequency.
     fChar = np.trapz(freq*rho2f,x=freq)/np.trapz(rho2f,x=freq);
@@ -749,6 +860,26 @@ def CL_vs_HorzDist():
            [61.14537831239096,1562.9295196511955]]
 
     return np.array(data)
+
+def window_inspiral(input_data, delay=0.0):
+    """
+    Window out the inspiral (everything prior to the biggest peak)
+    """
+
+    timeseries = lal.CreateREAL8TimeSeries('blah', 0.0, 0,
+            1.0/16384, lal.StrainUnit, int(len(input_data)))
+    timeseries.data.data = input_data
+
+    idx = np.argmax(input_data) + np.ceil(delay/(1.0/16384))
+    timeseries.data.data[0:idx] = 0.0
+
+    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
+        lalsim.SIM_INSPIRAL_TAPER_START)
+    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
+        lalsim.SIM_INSPIRAL_TAPER_START)
+
+    return timeseries.data.data
+
 
 
 def main():

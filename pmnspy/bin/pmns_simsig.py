@@ -43,7 +43,7 @@ class DetData:
     #def __init__(self, det_site="H1", noise_curve='aLIGO', epoch=1087670331.0,
     def __init__(self, det_site="H1", noise_curve='aLIGO', epoch=0.0,
             duration=10.0, f_low=10.0, delta_t=1./16384, waveform=None,
-            ext_params=None, seed=0, signal_only=False):
+            ext_params=None, seed=0, signal_only=False, taper=False):
 
         # dictionary of detector locations
         det_sites = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR], 
@@ -56,6 +56,7 @@ class DetData:
 
         # Preliminaries
         self.seed = seed
+        self.taper = taper
         self.noise_curve = noise_curve
         self.det_site = det_sites[det_site]
         self.epoch = lal.LIGOTimeGPS(epoch)
@@ -118,6 +119,19 @@ class DetData:
 
         waveform.hplus.epoch  = self.ext_params.geocent_peak_time - idx*self.delta_t
         waveform.hcross.epoch = self.ext_params.geocent_peak_time - idx*self.delta_t
+
+        # XXX: TAPER
+        if self.taper:
+            print >> sys.stderr, "Warning: tapering out inspiral (not a realistic strategy)"
+            delay = 0.0e-3
+            idx = np.argmax(waveform.hplus.data.data) + \
+                    np.ceil(delay/self.delta_t)
+            waveform.hplus.data.data[0:idx]=0.0
+            waveform.hcross.data.data[0:idx]=0.0
+            lalsim.SimInspiralREAL8WaveTaper(waveform.hplus.data,
+                    lalsim.SIM_INSPIRAL_TAPER_START)
+            lalsim.SimInspiralREAL8WaveTaper(waveform.hcross.data,
+                    lalsim.SIM_INSPIRAL_TAPER_START)
 
         # Project waveform onto these extrinsic parameters
         tmp = lalsim.SimDetectorStrainREAL8TimeSeries(waveform.hplus,
@@ -185,6 +199,59 @@ class DetData:
         elif self.noise_curve=='adVirgo':
             from pycbc.psd import AdvVirgo
             self.psd = AdvVirgo(self.flen, self.delta_f, self.f_low) 
+        elif self.noise_curve=='ligo3_basePSD':
+
+            # Load from ascii
+            pmnspy_path=os.getenv('PMNSPY_PREFIX')
+            psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_basePSD_20140822.txt'
+            psd_data=np.loadtxt(psd_path)
+
+            target_freqs = np.arange(0.0, self.flen*self.delta_f,
+                    self.delta_f)
+            target_psd = np.zeros(len(target_freqs))
+
+            # Interpolate existing psd data to target frequencies
+            existing = \
+                    np.concatenate(np.argwhere(
+                        (target_freqs<=psd_data[-1,0]) *
+                        (target_freqs>=psd_data[0,0])
+                        ))
+
+            target_psd[existing] = \
+                    np.interp(target_freqs[existing], psd_data[:,0],
+                            psd_data[:,1])
+
+            # Extrapolate to higher frequencies assuming f^2 for QN
+            fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
+                    (psd_data[:,0]<=psd_data[-1,0])))
+
+            p = np.polyfit(x=psd_data[fit_idx,0], \
+                    y=psd_data[fit_idx,1], deg=2)
+
+            target_psd[existing[-1]+1:] = \
+                    p[0]*target_freqs[existing[-1]+1:]**2 +  \
+                    p[1]*target_freqs[existing[-1]+1:] + \
+                    p[2]
+
+            # After all that, reset everything below f_low to zero (this saves
+            # significant time in noise generation if we only care about high
+            # frequencies)
+            target_psd[target_freqs<self.f_low] = 0.0
+
+            # Debug:
+           #import matplotlib
+           #from matplotlib import pyplot as pl
+           #pl.figure()
+           #pl.plot(target_freqs,target_psd)
+           #pl.plot(psd_data[:,0],psd_data[:,1],'r')
+           ##pl.ylim(0,5e-47)
+           ##pl.xlim(4000,4100)
+           #pl.show()
+
+            # Create psd as standard frequency series object
+            self.psd = pycbc.types.FrequencySeries(
+                    initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
+
         else:
             print >> sys.stderr, "error: noise curve (%s) not"\
                 " supported"%self.noise_curve
