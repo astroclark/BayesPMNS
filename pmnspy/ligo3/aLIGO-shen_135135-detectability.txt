@@ -1,0 +1,2 @@
+# PSD Waveform fpeak OptSNR avSNR detRate Dhor SGMatch
+aLIGO shen_135135 2263.20 8.28 2.64 6.43e-03 13.80 0.71

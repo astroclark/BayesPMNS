@@ -1,0 +1,2 @@
+# PSD Waveform fpeak OptSNR avSNR detRate Dhor SGMatch
+ligo3_basePSD apr_135135 3405.40 18.67 5.68 4.38e-02 31.12 0.66
