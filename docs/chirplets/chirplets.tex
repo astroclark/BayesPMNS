@@ -14,6 +14,7 @@
 \usepackage{psfrag}
 \usepackage{comment}
 \usepackage{float}
+\usepackage{listings}
 \begin{document}
 
 %\pdfgraphics
@@ -37,6 +38,7 @@
 
 \tableofcontents
 \newpage
+\lstset{language=Python}
 \section{Introduction}
 This document describes a proposed chirplet waveform for use in {\tt
 LALSimulation} and integration into {\tt LALInference}.  The proposed waveform
@@ -81,14 +83,18 @@ evolution\footnote{see e.g.,
 With the basis waveform $\psi(t)$ thus defined, the polarisations for a
 time-domain linear chirplet in {\tt LALSimulation} are,
 \begin{eqnarray}
-h_+(t|h_{\mathrm{rss}},\alpha,f_0,t_0,\phi_0,Q,\mathcal{D}) & = & h_{\mathrm{rss}} \cos (\alpha) \psi(t|f_0,t_0,\phi_0,Q,\mathcal{D}) \\
-h_{\times}(t|h_{\mathrm{rss}},\alpha,f_0,t_0,\phi_0,Q,\mathcal{D}) & = &
-h_{\mathrm{rss}} \sin (\alpha) \psi(t|f_0,t_0,\phi_0+\pi/2,Q,\mathcal{D}) 
+h_+(t|h_{\mathrm{rss}},\alpha,f_0,t_0,\phi_0,Q,\mathcal{D}) & = &
+\Re\left[h_{\mathrm{rss}} \cos (\alpha)
+\psi(t|f_0,t_0,\phi_0,Q,\mathcal{D})\right] \\
+h_{\times}(t|h_{\mathrm{rss}},\alpha,f_0,t_0,\phi_0,Q,\mathcal{D}) & = & \Im
+\left[h_{\mathrm{rss}} \sin (\alpha) \psi(t|f_0,t_0,\phi_0,Q,\mathcal{D})
+\right]
 \end{eqnarray}
 %
 where $\alpha$ is a polarisation angle to control the ellipticity of the
 waveform and $h_{\mathrm{rss}}$ is the root-sum-squared amplitude,
 \begin{equation}
+\label{eq:hrss}
 h_{\mathrm{rss}} = \sqrt{\int_T |h_+(t)|^2 + |h_{\times}(t)|^2~\mathrm{d}t}.
 \end{equation}
 %
@@ -122,6 +128,66 @@ h_{\mathrm{rss}} \sin (\alpha)
 \tilde{\psi}(f|h_{\mathrm{rss}},\alpha,f_0,\phi_0+\pi/2,Q,\mathcal{D}) 
 \end{eqnarray}
 
+\section{Examples}
+Figures~\ref{fig:linpol} and~\ref{fig:circpol} show linearly- and
+circularly-polarised waveforms, respectively,  generated in the time-domain with
+the following call in python:% (see appendix~\ref{sec:waveform_examples} for a
+%full demonstration):
+\begin{lstlisting}
+hp, hc = lalsim.SimBurstChirplet(Q, centre_frequency, 
+    chirp_rate, hrss, alpha, phi0, delta_t)
+\end{lstlisting}
+%
+The right panels of the figures also show the PSDs.  The epochs are computed
+such that the middle sample of the waveform is $t=0$, as per the sine-Gaussian
+convention.  We also confirm that the root-sum-squared strain (see
+equation~\ref{eq:hrss}) is unity as requested.  This is computed using:
+\begin{lstlisting}
+hrss=lalsim.MeasureHrss(hp,hc).
+\end{lstlisting}
+%
+Finally, figure~\ref{fig:fdomlinpol} shows the analytic Fourier domain waveform
+returned by,
+\begin{lstlisting}
+hp, hc = lalsim.SimBurstChirpletF(Q, centre_frequency, 
+    chirp_rate, hrss, alpha, phi0, delta_f, delta_t),
+\end{lstlisting}
+as well as the FFT of the time-domain waveform from {\tt SimBurstChirplet()}.
+We plot the real parts of the complex Fourier spectra in the left panel and the
+imaginary parts in the right panel.  We confirm that the F-domain analytic waveform
+does indeed match the FFT of the T-domain waveform (ignoring the high-frequency
+phase-shift oscillations in the numerical waveform).
+
+
+\begin{figure}
+\centering
+\scalebox{0.7}{\includegraphics{LinearPol.eps}}
+\caption{Linearly polarised chirplet with $h_{\mathrm{rss}}=1$, $\alpha=0$,
+$Q=50$, $f_0=350$\,Hz, $\mathcal{D}=-5000$\,Hz\,s$^{-1}$.\label{fig:linpol}}
+\end{figure}
+
+\begin{figure}
+\centering
+\scalebox{0.7}{\includegraphics{CircPol.eps}}
+\caption{Circularly polarised chirplet with $h_{\mathrm{rss}}=1$, $\alpha=\pi/4$,
+$Q=50$, $f_0=350$\,Hz, $\mathcal{D}=-5000$\,Hz\,s$^{-1}$.\label{fig:circpol}}
+\end{figure}
+
+\begin{figure}
+\centering
+\scalebox{0.7}{\includegraphics{FdomainLin.eps}}
+\caption{Plus-polarised chirplet with $h_{\mathrm{rss}}=1$, $\alpha=\pi/4$,
+$Q=50$, $f_0=350$\,Hz, $\mathcal{D}=-5000$\,Hz\,s$^{-1}$.\label{fig:fdomlinpol}.
+ Left panel shows the real part of the Fourier transform, right panel shows the
+ imaginary part of the Fourier transform; blue trace is the analytic Fourier
+ transform, using {\tt SimBurstChirpletF()}, green trace is the FFT of the
+ time-domain chirplet {\tt SimBurstChirplet()}.}
+\end{figure}
+
+%\appendix
+%\section{Waveform Example Code}
+%\label{sec:waveform_examples}
+%\lstinputlisting[language=Python]{chirplet_demo.py}
 
 \bibliographystyle{plain}
 \bibliography{chirplets}
