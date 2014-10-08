@@ -119,13 +119,16 @@ waveform_name=sys.argv[1]
 
 # XXX: Hardcoding
 #distances=np.array([5, 7.5, 10, 12.5, 15, 17.5, 20])
-distances=np.array([5, 7.5, 10, 12.5, 15, 17.5])#, 20])
+distances=np.array([20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100])
 
 odds2pos = lambda logB: 1.0/(1.0+1.0/np.exp(logB))
 #logBthresh=np.interp(0.9, odds2pos(np.arange(0, 10, 1e-4)), np.arange(0, 10,
 #    1e-4))
-logBthresh=np.log(2)
-netSNRthresh=5
+
+found_criterion=sys.argv[2]
+
+logBthresh=np.log(float(sys.argv[3]))
+netSNRthresh=float(sys.argv[3])
 
 wf = pmns_utils.Waveform(waveform_name+'_lessvisc')
 wf.compute_characteristics()
@@ -201,6 +204,7 @@ confintwidths_found=[]
 found_distances=[]
 
 # --- Efficiency/missed/found loop
+c=0
 for b in xrange(len(distances)):
 
     freq_pdfs_found_tmp = []
@@ -208,8 +212,11 @@ for b in xrange(len(distances)):
     # --- Efficiency Calculation
     #delta_f = abs(maxfreqs[b]-wf.fpeak)
     #k = sum(delta_f<10)
-    #k = sum(logBs[b]>logBthresh)
-    k = sum(netSNRs[b]>netSNRthresh)
+    if found_criterion=='snr':
+        k = sum(netSNRs[b]>netSNRthresh)
+    elif found_criterion=='logB':
+        k = sum(logBs[b]>logBthresh)
+
     N = len(logBs[b])
     eps[b], delta_eps[b] = compute_efficiency(k,N)
 
@@ -232,7 +239,7 @@ for b in xrange(len(distances)):
         maxfreqs_found.append(maxfreqs[b][found_indices])
         meanfreqs_found.append(meanfreqs[b][found_indices])
 
-        k = sum(abs(wf.fpeak-maxfreqs_found[b])<50.0)
+        k = sum(abs(wf.fpeak-maxfreqs_found[c])<50.0)
         N = sum(netSNRs[b]>netSNRthresh)
         e, d = compute_efficiency(k,N)
         eps_freq_found.append(e)
@@ -241,72 +248,244 @@ for b in xrange(len(distances)):
         found_distances.append(distances[b])
 
         # 1-sigma Frequentist confidence intervals for MAP estimate
-        confintvals_found.append(stats.scoreatpercentile(maxfreqs_found[b],
+        confintvals_found.append(stats.scoreatpercentile(maxfreqs_found[c],
             [15.87,100-15.87]))
 
-        confintwidths_found.append(confintvals_found[b][1]-confintvals_found[b][0])
+        confintwidths_found.append(confintvals_found[c][1]-confintvals_found[c][0])
+
+        c+=1
 
 
-# XXX: testing
+# Averaged results
+all_maxfreqs = np.concatenate(maxfreqs)
+all_maxfreqs_int = stats.scoreatpercentile(all_maxfreqs, [25.0,100-25.0])
+all_maxfreqs_std = np.std(all_maxfreqs)
+
+all_maxfreqs_found = np.concatenate(maxfreqs_found)
+all_maxfreqs_found_int = stats.scoreatpercentile(all_maxfreqs_found,
+        [25.0,100-25.0])
+all_maxfreqs_found_std = np.diff(all_maxfreqs_found_int)#np.std(all_maxfreqs_found)
+
+all_freqerrs = wf.fpeak-all_maxfreqs
+all_freqerrs_int = stats.scoreatpercentile(all_freqerrs, [25.0,100-25.0])
+all_freqerrs_std = np.std(all_freqerrs)
+
+all_freqerrs_found = wf.fpeak-all_maxfreqs_found
+all_freqerrs_found_int = stats.scoreatpercentile(all_freqerrs_found,
+        [25.0,100-25.0])
+all_freqerrs_found_std = np.diff(all_freqerrs_found_int)#np.std(all_freqerrs_found)
+
+all_absfreqerrs = abs(wf.fpeak-all_maxfreqs)
+all_absfreqerrs_int = stats.scoreatpercentile(all_absfreqerrs, [25.0,100-25.0])
+all_absfreqerrs_std = np.diff(all_absfreqerrs_int)#np.std(all_absfreqerrs)
+
+all_absfreqerrs_found = abs(wf.fpeak-all_maxfreqs_found)
+all_absfreqerrs_found_int = stats.scoreatpercentile(all_absfreqerrs_found,
+        [25.0,100-25.0])
+all_absfreqerrs_found_std = np.diff(all_absfreqerrs_found_int)#np.std(all_absfreqerrs_found)
+
+f=open('frequency_recovery.txt', 'w')
+f.writelines('# All frequencies\n')
+f.writelines('# median_fpeak 25th 75th std\n')
+f.writelines('%.2f %.2f %.2f %.2f\n\n'%(np.median(all_maxfreqs),
+    all_maxfreqs_int[0], all_maxfreqs_int[1], all_maxfreqs_std))
+
+f.writelines('# Found frequencies\n')
+f.writelines('# median_fpeak 25th 75th std\n')
+f.writelines('%.2f %.2f %.2f %.2f\n\n'%(np.median(all_maxfreqs_found),
+    all_maxfreqs_found_int[0], all_maxfreqs_found_int[1],
+    all_maxfreqs_found_std))
+
+f.writelines('# All frequencies ERRORS\n')
+f.writelines('# median_fpeak 25th 75th std\n')
+f.writelines('%.2f %.2f %.2f %.2f\n\n'%(np.median(all_freqerrs),
+    all_freqerrs_int[0], all_freqerrs_int[1], all_freqerrs_std))
+
+f.writelines('# Found frequencies ERRORS\n')
+f.writelines('# median_fpeak 25th 75th std\n')
+f.writelines('%.2f %.2f %.2f %.2f\n\n'%(np.median(all_freqerrs_found),
+    all_freqerrs_found_int[0], all_freqerrs_found_int[1],
+    all_freqerrs_found_std))
+
+f.close()
+#sys.exit()
+
+# XXX: TODO: add abs values
 
 # -------------------------------
 # Plots
 
-"""
-Plots to make:
+# --- Distance Averaged Frequency Measurements
+ffig, fax = pl.subplots(figsize=(10,5),ncols=2)
 
-1) logB vs Distance (box plot)
-2) 'efficiency' vs Distance (efficiency: logB>thresh)
-3) frequency error vs distance, error bars with 1-sigma cred interval
-"""
+bins = np.arange(min(all_maxfreqs), max(all_maxfreqs), 5)
+fax[0].hist(all_maxfreqs, bins=bins, normed=True, histtype='stepfilled', alpha=0.5)
+fax[0].set_xlim(min(bins),max(bins))
+fax[0].axvline(wf.fpeak,color='r',label='Target')
+fax[0].axvline(all_maxfreqs_int[0],linestyle='--',
+        color='k',label='%.2f'%all_maxfreqs_int[0])
+fax[0].axvline(all_maxfreqs_int[1],linestyle='--',
+        color='k',label='%.2f'%all_maxfreqs_int[1])
+fax[0].axvline(np.median(all_maxfreqs),linestyle='-',
+        color='k',label='%.2f'%np.median(all_maxfreqs))
+fax[0].set_xlabel('Frequency [Hz]')
+fax[0].set_ylabel('Normalised Count')
+fax[0].set_title('All Injections')
+fax[0].legend()
+
+fax[1].hist(all_maxfreqs_found, bins=bins, normed=True, histtype='stepfilled',
+        alpha=0.5)
+fax[1].set_xlim(min(bins),max(bins))
+fax[1].axvline(wf.fpeak,color='r',label='Target')
+fax[1].axvline(all_maxfreqs_found_int[0],linestyle='--',
+        color='k',label='%.2f'%all_maxfreqs_found_int[0])
+fax[1].axvline(all_maxfreqs_found_int[1],linestyle='--',
+        color='k',label='%.2f'%all_maxfreqs_found_int[1])
+fax[1].axvline(np.median(all_maxfreqs_found),linestyle='-',
+        color='k',label='%.2f'%np.median(all_maxfreqs_found))
+fax[1].set_xlabel('Frequency [Hz]')
+#fax[1].set_ylabel('Normalised Count')
+fax[1].set_title('Found Injections')
+fax[1].legend()
+
+ffig.savefig('recovered_freqs.eps')
+ffig.savefig('recovered_freqs.png')
+
+#ffig.tight_layout()
+
+# --- Distance Averaged Frequency Measurements: errors
+ffig, fax = pl.subplots(figsize=(10,5),ncols=2)
+
+bins = np.arange(min(all_freqerrs), max(all_freqerrs), 5)
+fax[0].hist(all_freqerrs, bins=bins, normed=True, histtype='stepfilled', alpha=0.5)
+fax[0].set_xlim(min(bins),max(bins))
+fax[0].axvline(0,color='r',label='Target')
+fax[0].axvline(all_freqerrs_int[0],linestyle='--',
+        color='k',label='%.2f'%all_freqerrs_int[0])
+fax[0].axvline(all_freqerrs_int[1],linestyle='--',
+        color='k',label='%.2f'%all_freqerrs_int[1])
+fax[0].axvline(np.median(all_freqerrs),linestyle='-',
+        color='k',label='%.2f'%np.median(all_freqerrs))
+fax[0].set_xlabel('Frequency Error [Hz]')
+fax[0].set_ylabel('Normalised Count')
+fax[0].set_title('All Injections')
+fax[0].legend(loc='upper left')
+
+fax[1].hist(all_freqerrs_found, bins=bins, normed=True, histtype='stepfilled',
+        alpha=0.5)
+fax[1].set_xlim(min(bins),max(bins))
+fax[1].axvline(0,color='r',label='Target')
+fax[1].axvline(all_freqerrs_found_int[0],linestyle='--',
+        color='k',label='%.2f'%all_freqerrs_found_int[0])
+fax[1].axvline(all_freqerrs_found_int[1],linestyle='--',
+        color='k',label='%.2f'%all_freqerrs_found_int[1])
+fax[1].axvline(np.median(all_freqerrs_found),linestyle='-',
+        color='k',label='%.2f'%np.median(all_freqerrs_found))
+fax[1].set_xlabel('Frequency Error [Hz]')
+#fax[1].set_ylabel('Normalised Count')
+fax[1].set_title('Found Injections')
+fax[1].legend(loc='upper left')
+
+ffig.savefig('recovered_freqs_errors.eps')
+ffig.savefig('recovered_freqs_errors.png')
+
+# --- Distance Averaged Frequency Measurements: errors
+ffig, fax = pl.subplots(figsize=(10,5),ncols=2)
+
+bins = np.arange(min(all_absfreqerrs), max(all_absfreqerrs), 5)
+fax[0].hist(all_absfreqerrs, bins=bins, normed=True, histtype='stepfilled', alpha=0.5)
+fax[0].set_xlim(min(bins),max(bins))
+fax[0].axvline(0,color='r',label='Target')
+fax[0].axvline(all_absfreqerrs_int[0],linestyle='--',
+        color='k',label='%.2f'%all_absfreqerrs_int[0])
+fax[0].axvline(all_absfreqerrs_int[1],linestyle='--',
+        color='k',label='%.2f'%all_absfreqerrs_int[1])
+fax[0].axvline(np.median(all_absfreqerrs),linestyle='-',
+        color='k',label='%.2f'%np.median(all_absfreqerrs))
+fax[0].set_xlabel('Frequency Error [Hz]')
+fax[0].set_ylabel('Normalised Count')
+fax[0].set_title('All Injections')
+fax[0].legend(loc='upper right')
+
+fax[1].hist(all_absfreqerrs_found, bins=bins, normed=True, histtype='stepfilled',
+        alpha=0.5)
+fax[1].set_xlim(min(bins),max(bins))
+fax[1].axvline(0,color='r',label='Target')
+fax[1].axvline(all_absfreqerrs_found_int[0],linestyle='--',
+        color='k',label='%.2f'%all_absfreqerrs_found_int[0])
+fax[1].axvline(all_absfreqerrs_found_int[1],linestyle='--',
+        color='k',label='%.2f'%all_absfreqerrs_found_int[1])
+fax[1].axvline(np.median(all_absfreqerrs_found),linestyle='-',
+        color='k',label='%.2f'%np.median(all_absfreqerrs_found))
+fax[1].set_xlabel('Frequency Error [Hz]')
+#fax[1].set_ylabel('Normalised Count')
+fax[1].set_title('Found Injections')
+fax[1].legend(loc='upper right')
+
+ffig.savefig('recovered_absfreqs_errors.eps')
+ffig.savefig('recovered_absfreqs_errors.png')
+
+#ffig.tight_layout()
 
 
 # --- Efficiency: signals above significance threshold
 epsfig, epsax = pl.subplots()
 
 sigparams = fit_sigmoid(distances[::-1], eps[::-1], delta_eps[::-1])
-dist_fit = np.arange(0, 20, 0.1)[::-1]
+dist_fit = np.arange(0, 200, 0.1)[::-1]
 eps_fit = sigmoid(dist_fit,*sigparams[0]) 
+
+# Get (APPROXIMATE) sensitive distance
+x=dist_fit[::-1]/2.26
+y=eps_fit[::-1]
+
+Vsens = np.trapz(4*np.pi*x*x*y, x=x)
+Dsens = ( 3/(4.*np.pi) * Vsens )**(1.0/3.0)
+print Vsens, Dsens
 
 epsp = pl.errorbar(distances, eps, yerr=delta_eps, ecolor='r', color='r',
         label='Above detection threshold',
         marker='^',mfc='r')
 #epsp = pl.errorbar(distances, eps, yerr=delta_eps, linestyle='none', color='r')
-#epsfitp = pl.plot(dist_fit, eps_fit, color='k')
+epsfitp = pl.plot(dist_fit, eps_fit, color='k', label='Dsens=%.2f'%Dsens)
 
 epsax.set_xlabel('Distance [Mpc]')
 epsax.set_ylabel('Fraction Statistically Significant')
+epsax.legend(loc='upper right')
 epsax.minorticks_on()
 epsax.grid(linestyle='--')
 epsax.set_ylim(0,1)
-epsax.set_xlim(0,25)
+epsax.set_xlim(0,100)
 
-pl.savefig('efficiency.png'%logBthresh)
-pl.savefig('efficiency.eps'%logBthresh)
+pl.savefig('efficiency.png')
+pl.savefig('efficiency.eps')
 
-# --- Efficiency: frequency accuracy
-#epsfig, epsax = pl.subplots()
+if 0:
+    # --- Efficiency: frequency accuracy
+    #epsfig, epsax = pl.subplots()
 
-epsp = pl.errorbar(distances, eps_freq, yerr=delta_eps_freq, ecolor='m',
-        color='m', label='within 50 Hz (no threshold)', linestyle=':',
-        marker='^',mfc='m')
-epsp = pl.errorbar(found_distances, eps_freq_found, yerr=delta_eps_freq_found,
-        ecolor='g', color='g', linestyle='--', label='Fraction of found events which are within 50 Hz',
-        marker='^',mfc='g')
-#epsp = pl.errorbar(distances, eps, yerr=delta_eps, linestyle='none', color='r')
-#epsfitp = pl.plot(dist_fit, eps_fit, color='k')
-epsax.legend(loc='lower left')
+    epsp = pl.errorbar(distances, eps_freq, yerr=delta_eps_freq, ecolor='m',
+            color='m', label='within 50 Hz (no threshold)', linestyle=':',
+            marker='^',mfc='m')
+    epsp = pl.errorbar(found_distances, eps_freq_found, yerr=delta_eps_freq_found,
+            ecolor='g', color='g', linestyle='--', label='Fraction of found events which are within 50 Hz',
+            marker='^',mfc='g')
+    #epsp = pl.errorbar(distances, eps, yerr=delta_eps, linestyle='none', color='r')
+    #epsfitp = pl.plot(dist_fit, eps_fit, color='k')
+    epsax.legend(loc='lower left')
 
-epsax.set_xlabel('Distance [Mpc]')
-epsax.set_ylabel('Fraction Found')
-epsax.minorticks_on()
-epsax.grid(linestyle='--')
-epsax.set_ylim(0,1)
-epsax.set_xlim(0,25)
+    epsax.set_xlabel('Distance [Mpc]')
+    epsax.set_ylabel('Fraction Found')
+    epsax.minorticks_on()
+    epsax.grid(linestyle='--')
+    epsax.set_ylim(0,1)
+    epsax.set_xlim(0,25)
 
-pl.savefig('efficiency_accuracy.png')
-pl.savefig('efficiency_accuracy.eps')
+    pl.savefig('efficiency_accuracy.png')
+    pl.savefig('efficiency_accuracy.eps')
 
+print 'exiting after efficiency'
+sys.exit()
 # --------------------------------------------------------------------
 # --- Frequency recovery: errors in Distance
 
@@ -527,7 +706,7 @@ y=y[idx]
 p = np.polyfit(x,y,deg=2)
 yfit=p[0]*x**2 + p[1]*x + p[0]
 
-if 0:
+if 1:
     # --- Bayes factors
     bayesboxfig, bayesboxax = pl.subplots()
     bayesbp = pl.boxplot(logBs, notch=True)
@@ -535,7 +714,7 @@ if 0:
     pl.setp(bayesbp['whiskers'], color='black')
     bayesboxax.set_ylabel('log B')
     bayesboxax.set_xlabel('Distance [Mpc]')
-    pl.axhline(logBthresh,color='r')
+    #pl.axhline(logBthresh,color='r')
     pl.setp(bayesboxax, xticklabels=distances)
 
     pl.savefig('bayes-boxes.png')
@@ -572,8 +751,7 @@ if 0:
         pdflinesax.set_ylabel('p(f|D)')
         pdflinesax.axvline(wf.fpeak, color='r', linestyle='--')
         pdflinesax.axhline(1.0/(4000-1500), color='k', linestyle='--')
-        pdflinesax.set_title('log B > %.2f, Distance = %.2f Mpc'%(logBthresh,
-            distances[d]))
+        pdflinesax.set_title('Found, Distance = %.2f Mpc'%found_distances[d])
 
         pl.savefig('freqpdflines_dist-%.2f_found.png'%(distances[d]))
         pl.savefig('freqpdflines_dist-%.2f_found.eps'%(distances[d]))
@@ -610,12 +788,12 @@ if 0:
     freqwidthboxax.set_ylim(0, 3000)
     pl.setp(freqwidthbp['boxes'], color='black')
     pl.setp(freqwidthbp['whiskers'], color='black')
-    freqwidthboxax.set_title('Injections with log B>%.2f'%logBthresh)
+    freqwidthboxax.set_title('Found Injections')
     freqwidthboxax.set_ylabel('Frequency width [Hz]')
     freqwidthboxax.set_xlabel('Distance [Mpc]')
     pl.setp(freqwidthboxax, xticklabels=distances)
 
-    pl.savefig('freqcredwidth_logB-%.2f.png'%logBthresh)
-    pl.savefig('freqcredwidth_logB-%.2f.eps'%logBthresh)
+    pl.savefig('freqcredwidth_found.png')
+    pl.savefig('freqcredwidth_found.eps')
 
 

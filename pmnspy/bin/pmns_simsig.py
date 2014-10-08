@@ -43,7 +43,8 @@ class DetData:
     #def __init__(self, det_site="H1", noise_curve='aLIGO', epoch=1087670331.0,
     def __init__(self, det_site="H1", noise_curve='aLIGO', epoch=0.0,
             duration=10.0, f_low=10.0, delta_t=1./16384, waveform=None,
-            ext_params=None, seed=0, signal_only=False, taper=False):
+            ext_params=None, seed=0, signal_only=False, taper=False,
+            optimal_injection=False):
 
         # dictionary of detector locations
         det_sites = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR], 
@@ -57,6 +58,7 @@ class DetData:
         # Preliminaries
         self.seed = seed
         self.taper = taper
+        self.optimal_injection=optimal_injection
         self.noise_curve = noise_curve
         self.det_site = det_sites[det_site]
         self.epoch = lal.LIGOTimeGPS(epoch)
@@ -122,6 +124,7 @@ class DetData:
 
         # XXX: TAPER
         if self.taper:
+
             print >> sys.stderr, "Warning: tapering out inspiral (not a realistic strategy)"
             delay = 0.0e-3
             idx = np.argmax(waveform.hplus.data.data) + \
@@ -133,26 +136,33 @@ class DetData:
             lalsim.SimInspiralREAL8WaveTaper(waveform.hcross.data,
                     lalsim.SIM_INSPIRAL_TAPER_START)
 
-        # Project waveform onto these extrinsic parameters
-        tmp = lalsim.SimDetectorStrainREAL8TimeSeries(waveform.hplus,
-                waveform.hcross, self.ext_params.ra, self.ext_params.dec,
-                self.ext_params.polarization, self.det_site) 
 
         # Scale for distance (waveforms extracted at 20 Mpc)
-        tmp.data.data *= 20.0 / self.ext_params.distance
         waveform.hplus.data.data *= 20.0 / self.ext_params.distance
+        waveform.hcross.data.data *= 20.0 / self.ext_params.distance
 
-        self.td_signal = \
-                pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
-                        delta_t=tmp.deltaT, epoch=tmp.epoch)
 
-        # XXX: Placing overhead!
-        #self.td_signal = \
-        #        pycbc.types.timeseries.TimeSeries(initial_array=np.copy(waveform.hplus.data.data),
-        #                delta_t=tmp.deltaT, epoch=tmp.epoch)
+        if not self.optimal_injection:
+
+            tmp = lalsim.SimDetectorStrainREAL8TimeSeries(waveform.hplus,
+                    waveform.hcross, self.ext_params.ra, self.ext_params.dec,
+                    self.ext_params.polarization, self.det_site) 
+
+            # Project waveform onto these extrinsic parameters
+            self.td_signal = \
+                    pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
+                            delta_t=tmp.deltaT, epoch=tmp.epoch)
+            del tmp
+
+        else:
+
+            # XXX: Placing optimally!
+            print 'injection optimally'
+            self.td_signal = \
+                    pycbc.types.timeseries.TimeSeries(initial_array=np.copy(waveform.hplus.data.data),
+                            delta_t=waveform.hplus.deltaT, epoch=waveform.hplus.epoch)
 
         # Remove extraneous data
-        del tmp
         self.td_signal = self.td_signal.trim_zeros()
 
 
@@ -193,17 +203,78 @@ class DetData:
 
     def assign_noise_curve(self):
 
+        ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
+                'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
+                'lowNN', 'lowSPOT', 'lowST', 'lowSei']
+
         if self.noise_curve=='aLIGO': 
             from pycbc.psd import aLIGOZeroDetHighPower
             self.psd = aLIGOZeroDetHighPower(self.flen, self.delta_f, self.f_low) 
         elif self.noise_curve=='adVirgo':
             from pycbc.psd import AdvVirgo
             self.psd = AdvVirgo(self.flen, self.delta_f, self.f_low) 
-        elif self.noise_curve=='ligo3_basePSD':
+        elif self.noise_curve=='Green' or self.noise_curve=='Red':
 
             # Load from ascii
             pmnspy_path=os.getenv('PMNSPY_PREFIX')
-            psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_basePSD_20140822.txt'
+
+            psd_path=pmnspy_path+'/ligo3/PSD/%sPSD.txt'%self.noise_curve
+
+            psd_data=np.loadtxt(psd_path)
+
+            target_freqs = np.arange(0.0, self.flen*self.delta_f,
+                    self.delta_f)
+            target_psd = np.zeros(len(target_freqs))
+
+            # Interpolate existing psd data to target frequencies
+            existing = \
+                    np.concatenate(np.argwhere(
+                        (target_freqs<=psd_data[-1,0]) *
+                        (target_freqs>=psd_data[0,0])
+                        ))
+
+            target_psd[existing] = \
+                    np.interp(target_freqs[existing], psd_data[:,0],
+                            psd_data[:,1])
+
+            # Extrapolate to higher frequencies assuming f^2 for QN
+            fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
+                    (psd_data[:,0]<=psd_data[-1,0])))
+
+            p = np.polyfit(x=psd_data[fit_idx,0], \
+                    y=psd_data[fit_idx,1], deg=2)
+
+            target_psd[existing[-1]+1:] = \
+                    p[0]*target_freqs[existing[-1]+1:]**2 +  \
+                    p[1]*target_freqs[existing[-1]+1:] + \
+                    p[2]
+
+            # After all that, reset everything below f_low to zero (this saves
+            # significant time in noise generation if we only care about high
+            # frequencies)
+            target_psd[target_freqs<self.f_low] = 0.0
+
+            # Debug:
+           #import matplotlib
+           #from matplotlib import pyplot as pl
+           #pl.figure()
+           #pl.plot(target_freqs,target_psd)
+           #pl.plot(psd_data[:,0],psd_data[:,1],'r')
+           ##pl.ylim(0,5e-47)
+           ##pl.xlim(4000,4100)
+           #pl.show()
+
+            # Create psd as standard frequency series object
+            self.psd = pycbc.types.FrequencySeries(
+                    initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
+
+        elif self.noise_curve in ligo3_curves:
+
+            # Load from ascii
+            pmnspy_path=os.getenv('PMNSPY_PREFIX')
+
+            psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_%s-PSD_20140904.txt'%self.noise_curve
+
             psd_data=np.loadtxt(psd_path)
 
             target_freqs = np.arange(0.0, self.flen*self.delta_f,
