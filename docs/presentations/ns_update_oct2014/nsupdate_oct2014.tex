@@ -86,37 +86,34 @@
             $<1$\,s, \emph{within our Galaxy}
 
         \item An event of this nature would generate significant astrophysical
-            interest and may excite various \ns{} oscillation modes; we
-            should be prepared to say something
+            interest (i.e., headlines) and may excite various \ns{} oscillation
+            modes; we should be prepared to say something
     \end{itemize}
 \end{frame}
 
 \begin{frame}
     \frametitle{Galactic Hyperflares: search method}
     \begin{itemize}
-        \item Magnetar hyperflares are similar to short-GRBs.  Seems likely that
-            this would already trigger the low-latency GRB analyses.
-        \item Propose: analysis with SNEWS-like configuration of
-            \textsc{X-Pipeline} (but Swift-like sky-grid)
-        \item Minimises development requirements, extends to higher frequencies
+        \item Propose: immediate examination of burst online triggers + analysis
+            with SNEWS-\emph{like} configuration of \textsc{X-Pipeline} (but Swift-like
+            sky-grid)
+        \item Minimal development requirements, extends to higher frequencies
             than standard GRB analysis, shorter on-source window
-        \item Only a small chance ($\sim 1\%$) of occurrence \& standard GRB
-            analysis would very likely run anyway! 
+        \item Only a small chance ($\sim 1\%$) of occurrence
         \item Development required: automatic selection of appropriate
             \textsc{X-Pipeline} configuration for SGR triggers
-        \item Alternatively: maximum of 1 re-analysis after automated GRB
-            analysis with SNEWS-configuration
+        \item Alternatively: manual re-analysis after automated GRB analysis
+            with SNEWS-configuration (possible we won't \emph{know} it's a
+            galactic hyperflare until after the automated analysis launches)
     \end{itemize}
 \end{frame}
 
 \begin{frame}
     \frametitle{Galactic Hyperflares: Publication Plan}
     \begin{itemize}
-        \item {\bf Confident Detection} ($>3\sigma$): report detection \&
+        \item {\bf Confident or Marginal Detection}: report detection \&
             spectral analysis of waveform as reconstructed by (e.g.,)
             \textsc{BayesWave}
-        \item {\bf Marginal Detection} (2--3$\sigma$): report candidate \&
-            present waveform reconstruction / spectrum with less emphasis
         \item {\bf No Detection}: only publish if ratio of \gw{} energy U.L. to
             isotropic EM energy is \emph{significantly} lower (better) than all
             past magnetar analyses.  Otherwise, non-detection statement in e.g.,
@@ -200,6 +197,40 @@
 
 \subsection{Magnetar QPOs}
 \begin{frame}\frametitle{Magnetar QPOs} 
+    \begin{itemize}
+        \item Quasi-periodic oscillations (QPOs) observed in X-rays from SGR
+            hyperflares
+        \item Possible association with \ns{} torsional modes; conceivable \gw{}
+            emission at QPO frequencies (see e.g., SGR 1806-20 hyperflare
+            \gw{} LIGO analysis)
+        \item Plans exist for an archival proof-of-concept search for QPOs in
+            S6/VSR2 data using \textsc{STAMP} (Quitzow-James thesis)
+\end{itemize}
+\end{frame}
+\begin{frame}
+    \begin{itemize}
+        \item Studies are underway for testing and characterizing \textsc{STAMP}
+            performance with non-stationary, long-duration (O(100)s) bursts
+    \end{itemize}
+
+    \begin{columns}[]
+        \column{0.5\textwidth}
+        \begin{center}
+        \begin{figure}
+            \vspace*{-0.5cm}
+            \includegraphics[scale=0.3]{qpo_tf.png} 
+        \end{figure}
+        \end{center}
+
+        \column{0.5\textwidth}
+        \begin{center}
+        \begin{figure}
+            \vspace*{-0.5cm}
+            \includegraphics[scale=0.3]{qpo_tf.png} 
+        \end{figure}
+        \end{center}
+    \end{columns}
+
 \end{frame}
 
 
@@ -285,10 +316,12 @@
     Main news:
     \begin{itemize}
         \item NS search plan draft very nearly complete.  Discussion extremely welcome!
+        \item Volunteers to take lead on Galactic hyperflares?
     \end{itemize}
     Projects news:
     \begin{itemize}
-        \item Magnetar QPOs:
+        \item Magnetar QPOs: injection studies \& \textsc{stamp} deployment
+            continue
         \item Post-BNS bursts: injection infrastructure \& PE wrapper scripts
             under development; tuning and optimization of
             \textsc{BayesWave}/\textsc{LIB} now underway
