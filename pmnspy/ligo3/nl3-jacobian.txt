@@ -1,0 +1,9 @@
+# Noise-Curve Jacobian
+loss	-5.76e-05
+NN	0.00e+00
+sqz	8.06e-01
+pow	4.46e-01
+SPOT	1.15e-02
+ST	1.83e-08
+mass	-5.93e-05
+Sei	0.00e+00

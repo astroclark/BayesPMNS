@@ -1,0 +1,30 @@
+Given a figure of merit , S, dependent on the noise (the SNR, some effective
+distance, etc),
+
+we compute, for a given type of noise N
+
+d log S / dx = log(S_2 / S_1)/dx
+
+where S_2 is the value of S in the regime where N is reduced, and S_1 is either
+the value where N is increased, or the baseline.
+
+If the noise is quantum (mass, pow, sqz, loss), then S_1 = baseline and dx = 0.2
+for the noise curves that Sarah computed. Otherwise, dx = 0.4 and S_1 is the
+increased noise.
+
+All of the noise curves are in CCSN/PSDs
+
+
+---
+
+For the non quantum curves, the Jacobian is 
+Log(FOMhigh/FOMlow)/0.4
+And for the quantum curves, do
+Log(FOMhigh/FOMbaseline)/0.2
+
+
+---
+
+NOTE:
+FCL = CTN = SPOT
+ST = Sus
