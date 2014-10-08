@@ -20,7 +20,7 @@
 from __future__ import division
 import os,sys
 import numpy as np
-#np.seterr(all="raise", under="ignore")
+np.seterr(all="raise", under="ignore")
 from optparse import OptionParser
 import ConfigParser
 import random
@@ -31,7 +31,7 @@ import subprocess
 import cPickle as pickle
 
 import matplotlib
-#matplotlib.use("Agg")
+matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 
 import lal
@@ -298,9 +298,10 @@ for i in xrange( ninject ):
     ts=time.time()
     print >> sys.stdout, "generating detector responses & noise..."
 
-    det1_data = simsig.DetData(det_site="H1", noise_curve='aLIGO', waveform=waveform,
+    det1_data = simsig.DetData(det_site="H1",
+            noise_curve=cp.get('analysis','noise-curve'), waveform=waveform,
             ext_params=ext_params, duration=datalen, seed=seed, epoch=epoch,
-            f_low=flow)
+            f_low=flow, taper=cp.getboolean('analysis','taper_inspiral'))
 
     # Compute optimal SNR for injection
     det1_optSNR=pycbc.filter.sigma(det1_data.td_signal, psd=det1_data.psd,
