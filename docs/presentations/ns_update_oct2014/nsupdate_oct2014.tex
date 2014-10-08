@@ -2,6 +2,7 @@
 \setbeamertemplate{navigation symbols}{}
 
 \usepackage{beamerthemeshadow}
+\setbeamertemplate{caption}[numbered]
 
 \hypersetup{colorlinks}
 
@@ -50,7 +51,7 @@
     \end{itemize}
 \end{frame}
 
-\section{NS Search Proposal}
+\section{NS Search Proposal Highlights}
 
 \begin{frame}
     \frametitle{NS Search Proposal}
@@ -221,7 +222,79 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{\textsc{LIB} for post-merger signals}
+    \frametitle{\textsc{LIB} templates for post-merger signals}
+
+    \begin{figure}
+        \includegraphics[scale=0.4]{nb_match.eps} 
+        \caption{Match for ad hoc burst templates for a collection of
+        post-merger waveforms.  Note that match calculation is restricted to frequency
+    band of dominant post-merger oscillation.}
+    \end{figure}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{\textsc{LIB} Post-merger Frequency Estimation}
+
+    \begin{figure}
+        \includegraphics[scale=0.35]{freqpdflines_dist-10_00.eps} 
+        \caption{\textsc{LIB} marginal frequency posteriors (sine-Gaussians) for
+        an ensemble of post-merger waveform (fixed EOS) at 10\,Mpc.}
+    \end{figure}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{\textsc{BayesWave} for post-merger signals}
+    Exploratory studies are also beginning in the use of \textsc{BayesWave}.
+    {\bf Preliminary} results pages for default BW configuration, single-IFO
+    injections:
+    \begin{itemize}
+        \item {\small
+    \href{https://ldas-jobs.ligo.caltech.edu/~francesco.pannarale/BayesWaveRuns/HMNS/}{https://ldas-jobs.ligo.caltech.edu/\textasciitilde{}francesco.pannarale/BayesWaveRuns/HMNS/}}
+    \end{itemize}
+
+    \begin{columns}[]
+        \column{0.5\textwidth}
+        \begin{figure}
+            \vspace*{-0.5cm}
+
+            \begin{center}
+                \includegraphics[scale=0.3]{signal_waveform_0.png} 
+                %\caption{Example \textsc{BayesWave} injection/reconstruction.
+                %Default BW configuration appears to have downsampled the
+%            injection and washed out the post-merger; tuning begins!}
+            \end{center}
+
+        \end{figure}
+
+        \column{0.5\textwidth}
+
+        \begin{block}{Example \textsc{BayesWave} injection/reconstruction}
+            Default BW configuration appears to have downsampled the
+            injection but overlap looks good; tuning begins!
+        \end{block}
+
+
+    \end{columns}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Summary}
+    Main news:
+    \begin{itemize}
+        \item NS search plan draft very nearly complete.  Discussion extremely welcome!
+    \end{itemize}
+    Projects news:
+    \begin{itemize}
+        \item Magnetar QPOs:
+        \item Post-BNS bursts: injection infrastructure \& PE wrapper scripts
+            under development; tuning and optimization of
+            \textsc{BayesWave}/\textsc{LIB} now underway
+    \end{itemize}
+    Again, new projects and additional effort very, very welcome!
+\end{frame}
 
 
 
