@@ -404,13 +404,93 @@ def get_quadrupole_data(secderivs_path, waveform_name):
     Iyz *= fac
     Izz *= fac
 
-
     return times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz
 
-    
+def construct_Hlm(Ixx, Ixy, Ixz, Iyy, Iyz, Izz, l=2, abs_m=2):
+    """
+    Construct the expansion parameters Hlm from T1000553.  Returns the expansion
+    parameters for l, m= +/- abs_m as a dictionary with key names for the
+    m-index
+    """
+
+    if l!=2:
+        print "l!=2 not supported"
+        sys.exit()
+    if abs_m>2:
+        print "Only l=2 supported, |m| must be <=2"
+        sys.exit()
+    if abs_m!=2:
+        print "Actually, only supporting |m|=2 for now, bye!"
+        sys.exit()
+
+    if abs_m==2:
+        H2n2 = np.sqrt(4.0*lal.PI/5.0) * lal.G_SI / lal.C_SI**4 * (Ixx - Iyy + 2*1j*Ixy)
+        H2p2 = np.sqrt(4.0*lal.PI/5.0) * lal.G_SI / lal.C_SI**4 * (Ixx - Iyy - 2*1j*Ixy)
+
+    return {'l=2, m=-2':H2n2,'l=2, m=2':H2p2}
+
+def project_waveform(Hlm, theta, phi, distance=20.0):
+    """
+    Project the expansion parameters in the dictionary Hlm onto the sky for
+    co-latitude theta, azimuth phi. 
+
+    Returns hplus, hcross for a given theta, phi
+
+    Note: Bauswein data is at 20 Mpc
+    """
+
+    colatitude_indices=[2]
+    azimuth_indices=[-2,2]
+
+    hplus=0.0
+    hcross=0.0
+
+    for l in colatitude_indices:
+        for m in azimuth_indices:
+
+            sYlm = lal.SpinWeightedSphericalHarmonic(theta, phi, -2, l, m)
+            hplus  += np.real( sYlm*Hlm['l=%i, m=%i'%(l, m)] )
+            hcross += -1.0*np.imag( sYlm*Hlm['l=%i, m=%i'%(l, m)] ) # Scale by distance
+    distance*=1e6*lal.PC_SI
+    hplus /= distance
+    hcross /= distance
+
+    # Scale up by 40% for quadrupole approximation
+    hplus*=1.4
+    hcross*=1.4
+
+    return hplus, hcross
+
+def make_wave_pols(secderivs_path, waveform_name, theta, phi, distance,
+        signal_len=1.0):
+    """
+    Return pycbc timeseries for hplus and hcross for inclination, azimuth
+    (theta, phi) for a source at distance 'distance' and set the duration of the
+    time series to signal_len seconds, centered on the peak time
+    """
+
+    # Retrieve quadrupole time derivatives for this waveform (i.e., simulation
+    # data)
+    times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz = get_quadrupole_data(secderivs_path,
+            waveform_name)
+
+    # Construct expansion coefficients Hlm (see T1000553)
+    Hlm = construct_Hlm(Ixx, Ixy, Ixz, Iyy, Iyz, Izz)
+
+    # Convolve Hlm with spin-weighted spherical harmonics to project the wave
+    # onto the sky and return hplus and hcross:
+    hp_tmp, hc_tmp = project_waveform(Hlm, theta, phi, distance)
+
+    hplus  = pycbc.types.TimeSeries(initial_array=hp_tmp, delta_t = 1.0/16384)
+    hcross = pycbc.types.TimeSeries(initial_array=hc_tmp, delta_t = 1.0/16384)
+
+    return hplus, hcross
+
 
 def get_waveform_data(waveform_path, waveform_name):
     """
+    XXX: DEPRECATED by get_quadrupole_data() and project_waveform() 
+
     Retrieve the l=m=2 spherical harmonics from the ascii file stored in the
     ninja data directory
     """
@@ -426,6 +506,8 @@ def get_waveform_data(waveform_path, waveform_name):
 
 def make_signal(mode2p2,mode2n2,skyav=False,theta=0.0,phi=0.0):
     """
+    XXX: DEPRECATED by get_quadrupole_data() and project_waveform() 
+
     Return the plus and cross polarisations for a source at the location defined
     by the current entry in the sim_inspiral table.
 

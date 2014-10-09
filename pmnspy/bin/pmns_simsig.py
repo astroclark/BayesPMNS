@@ -254,16 +254,6 @@ class DetData:
             # frequencies)
             target_psd[target_freqs<self.f_low] = 0.0
 
-            # Debug:
-           #import matplotlib
-           #from matplotlib import pyplot as pl
-           #pl.figure()
-           #pl.plot(target_freqs,target_psd)
-           #pl.plot(psd_data[:,0],psd_data[:,1],'r')
-           ##pl.ylim(0,5e-47)
-           ##pl.xlim(4000,4100)
-           #pl.show()
-
             # Create psd as standard frequency series object
             self.psd = pycbc.types.FrequencySeries(
                     initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
@@ -308,16 +298,6 @@ class DetData:
             # significant time in noise generation if we only care about high
             # frequencies)
             target_psd[target_freqs<self.f_low] = 0.0
-
-            # Debug:
-           #import matplotlib
-           #from matplotlib import pyplot as pl
-           #pl.figure()
-           #pl.plot(target_freqs,target_psd)
-           #pl.plot(psd_data[:,0],psd_data[:,1],'r')
-           ##pl.ylim(0,5e-47)
-           ##pl.xlim(4000,4100)
-           #pl.show()
 
             # Create psd as standard frequency series object
             self.psd = pycbc.types.FrequencySeries(
