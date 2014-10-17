@@ -42,7 +42,7 @@ import pmns_simsig as simsig
 from pylal import antenna, Fr
 from glue import lal as gluelal
 
-from sklearn.neighbors import KernelDensity
+from sklearn.neighbors.kde import KernelDensity
 
 def parser():
 
