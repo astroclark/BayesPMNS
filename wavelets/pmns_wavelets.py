@@ -101,6 +101,14 @@ wavelet = cwt.cwt(data, mother_wavelet)
 # --- Plotting
 freqs = 0.5 * sample_rate * wavelet.motherwavelet.fc / wavelet.motherwavelet.scales
 
+pl.figure()
+extent = [min(time), max(time), min(scales), max(scales)]
+pl.imshow(np.abs(wavelet.coefs)**2, origin='lower', aspect='auto',
+        interpolation='nearest', extent=extent, cmap=cm.gnuplot2)
+
+pl.show()
+sys.exit()
+
 collevs=np.linspace(0, max(map(max,abs(wavelet.coefs)**2)), 100)
 fig, ax_cont = pl.subplots(figsize=(10,5))
 #ax_cont.contourf(time,freqs,np.abs(wavelet.coefs)**2, levels=collevs,
