@@ -36,6 +36,27 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import pmns_utils
 import pmns_simsig as simsig
 
+import cwt
+
+def scale2hertz(motherf0, scale, sample_rate):
+    fNy=0.5*sample_rate
+    return 2*fNy * motherf0 / scale
+
+def freq2scale(freqHz, motherf0, sample_rate):
+    fNy  = 0.5*sample_rate
+    freq = freqHz / (2*fNy)
+    return motherf0/freq 
+
+def set_scales(sample_rate, motherf0, deltat=2, deltaj=.1):
+
+    s0 = freq2scale(0.5*sample_rate, 0.849, sample_rate)
+    N = len(data)
+    J = (1./deltaj) * np.log2(N*deltat/s0)
+
+    return s0*2**( (np.arange(J))*deltaj)
+
+
+
 # --------------------------------------------------------------------
 # Data Generation
 
@@ -65,57 +86,119 @@ waveform.make_wf_timeseries(theta=ext_params.inclination,
 
 det1_data = simsig.DetData(det_site="H1", noise_curve='aLIGO',
         waveform=waveform, ext_params=ext_params, duration=0.5, seed=0,
-        epoch=0.0, f_low=10.0, taper=True)
+        epoch=0.0, f_low=10.0, taper=False)
+        #epoch=0.0, f_low=10.0, taper=True)
 
 #det1_data.td_signal = pycbc.filter.highpass(det1_data.td_signal, knee,
 #        filter_order=20, attenuation=0.9)
 
-######################
-# Wavelets !
-
 # get data
 sigdat=det1_data.td_signal.trim_zeros()
+
+# highpass
+import pycbc.filter
+knee=1000
+#sigdat = pycbc.filter.highpass(sigdat, knee,
+#        filter_order=20, attenuation=0.9)
 
 data = np.copy(sigdat.data)
 time = sigdat.sample_times.data
 
-
 sample_rate = 1.0/np.diff(time)[0]
+
+########################
+# Wavelets Decomposition
 
 #
 # CWT from pyCWT
 #
 
-import cwt
+#scales = np.logspace(np.log2(1), np.log2(256), base=2)
 
-scales = 1+np.arange(256)
+motherfreq = 2
+scalerange = motherfreq/(np.array([10,0.5*sample_rate])*(1.0/sample_rate))
 
-#mother_wavelet = cwt.SDG(len_signal = len(data), scales = scales,
-#        normalize = True, fc = 'center')
+scales = np.arange(scalerange[1],scalerange[0])
 
 mother_wavelet = cwt.Morlet(len_signal = len(data), scales = scales,
-        sampf=sample_rate)
+        sampf=sample_rate, f0=motherfreq)
+
+#mother_wavelet = cwt.SDG(len_signal = len(data), scales = scales, normalize = True,
+#        fc = 'center')
 
 wavelet = cwt.cwt(data, mother_wavelet)
 
 # --- Plotting
-freqs = 0.5 * sample_rate * wavelet.motherwavelet.fc / wavelet.motherwavelet.scales
+
+# convert to pseudo frequency
+freqs = scale2hertz(mother_wavelet.fc, scales, sample_rate)
+
+#collevs=np.linspace(0, max(map(max,abs(wavelet.coefs)**2)), 100)
+
+fpeakmin=2000.0
+collevs=np.linspace(0, 5*max(wavelet.get_wps()[freqs>fpeakmin]), 100)
+
+fig, ax_cont = pl.subplots(figsize=(10,5))
+c=ax_cont.contourf(time,freqs,np.abs(wavelet.coefs)**2, levels=collevs,
+        cmap=cm.gnuplot2)
+
+
+ax_cont.set_xlim(min(time),max(time))
+ax_cont.set_ylim(1,0.5*sample_rate)
+ax_cont.set_xlabel('Time [s]')
+ax_cont.set_ylabel('Frequency [Hz]')
+
+#pl.show()
+#sys.exit()
+
+divider = make_axes_locatable(ax_cont)
+
+# time-series
+ax_ts = divider.append_axes("top", 1.2, sharex=ax_cont)
+ax_ts.plot(time, data)
+ax_cont.set_xlim(min(time),max(time))
+ax_ts.set_ylim(-1.1*max(abs(data)), 1.1*max(abs(data)))
+
+# fourier spectrum
+#freq_fourier, Pxx = signal.periodogram(data, fs=sample_rate)
+ax_fs = divider.append_axes("right", 1.2, sharey=ax_cont)
+#ax_fs.semilogx(Pxx,freq_fourier)
+ax_fs.semilogx(wavelet.get_wps(),freqs)
+ax_fs.set_ylim(1,0.5*sample_rate)
+#ax_fs.set_xlim(0.01*max(Pxx),1.1*max(Pxx))
+ax_fs.set_xlim(0.01*max(wavelet.get_wps()),1.1*max(wavelet.get_wps()))
+
+pl.setp(ax_ts.get_xticklabels()+ax_fs.get_yticklabels(),visible=False)
+
+pl.tight_layout()
+
+########################
+# Fourier Decomposition
+
+from matplotlib import mlab
 
 pl.figure()
-extent = [min(time), max(time), min(scales), max(scales)]
-pl.imshow(np.abs(wavelet.coefs)**2, origin='lower', aspect='auto',
-        interpolation='nearest', extent=extent, cmap=cm.gnuplot2)
+S, F, T = mlab.specgram(data, NFFT=int(0.1*len(data)), Fs=sample_rate,
+        window=mlab.window_hanning, noverlap=int(.5*0.1*len(data)))
+pl.close()
+Time=T+min(time)
 
-pl.show()
-sys.exit()
+#collevs=np.linspace(0, max(map(max,S)), 100)
+fpeakmin=2000.0
 
-collevs=np.linspace(0, max(map(max,abs(wavelet.coefs)**2)), 100)
+freq_fourier, Pxx = signal.periodogram(data, fs=sample_rate)
+collevs=np.linspace(0, 5*max(Pxx[freq_fourier>fpeakmin]), 100)
+
+
 fig, ax_cont = pl.subplots(figsize=(10,5))
-#ax_cont.contourf(time,freqs,np.abs(wavelet.coefs)**2, levels=collevs,
-ax_cont.contourf(time,freqs,np.abs(wavelet.coefs)**2, levels=collevs,
-        cmap=cm.gnuplot2)
-ax_cont.set_xlim(min(time),max(time))
-ax_cont.set_ylim(1000,0.5*sample_rate)
+
+#ax_cont.contourf(Time, F, S, levels=collevs, cmap=cm.gnuplot2)
+extent = [min(Time), max(Time), min(F), max(F)]
+ax_cont.imshow(S, extent=extent, aspect='auto', origin='lower',
+        cmap=cm.gnuplot2, interpolation='nearest')
+
+ax_cont.set_xlim(min(Time),max(Time))
+ax_cont.set_ylim(1,0.5*sample_rate)
 ax_cont.set_xlabel('Time [s]')
 ax_cont.set_ylabel('Frequency [Hz]')
 
@@ -131,16 +214,15 @@ ax_ts.set_ylim(-1.1*max(abs(data)), 1.1*max(abs(data)))
 freq_fourier, Pxx = signal.periodogram(data, fs=sample_rate)
 ax_fs = divider.append_axes("right", 1.2, sharey=ax_cont)
 ax_fs.semilogx(Pxx,freq_fourier)
-ax_fs.set_ylim(1000,0.5*sample_rate)
+ax_fs.set_ylim(1,0.5*sample_rate)
 ax_fs.set_xlim(0.01*max(Pxx),1.1*max(Pxx))
 
 pl.setp(ax_ts.get_xticklabels()+ax_fs.get_yticklabels(),visible=False)
 
 pl.tight_layout()
+
+
 pl.show()
-
-
-
 
 
 
