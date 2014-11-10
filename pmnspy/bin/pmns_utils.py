@@ -23,6 +23,8 @@ import numpy as np
 
 import lal
 import lalsimulation as lalsim
+import pycbc.types
+import pycbc.filter
 
 from scipy import optimize,stats,signal
 
@@ -30,133 +32,162 @@ __author__ = "James Clark <james.clark@ligo.org>"
 
 class Waveform:
     """
-    A class to store and compute useful attributes of each waveform
+    A class to store waveforms and compute attributes.  Loads
     """
 
-    def __init__(self, waveform_name, data_path=None):
+    def __init__(self, waveform_name, theta=0.0, phi=0.0,
+            distance=20.0, noise_curve='aLIGO'):
 
         # waveform labels and directory setup
         self.waveform_name  = waveform_name
-        self.get_data_path()
         self.set_tex_label(waveform_name)
         self.set_R16(waveform_name)
         self.allowed_radii()
+        self.theta = theta
+        self.phi = phi
+        self.noise_curve = noise_curve
 
-    def compute_characteristics(self,flow=1500,fupp=4096):
+        self.load_quadrupoles()
+
+
+    def reproject_waveform(self, theta=0.0, phi=0.0):
         """
-        Computes SNRs, peak and characteristic frequencies and hrss.  Assumes
-        ZDHP aLIGO.
+        Generate polarisations for these angles.  This is just an easy way to
+        carry around the polarisations
         """
-        # FIXME: noise curve to be optional
 
-        # check for existence of waveforms
-        if not hasattr(self, 'hplus'):
-            self.make_wf_timeseries()
+        self.hplus, self.hcross = project_waveform(self.Hlm, 
+                theta=theta, phi=phi)
 
-        # Compute xoptimal_snr measures for an optimally oriented source 
-        self.snr_plus, self.hrss_plus, self.fchar, self.fpeak, self.Egw = \
-                optimal_snr(self.hplus)
-        self.snr_cross, self.hrss_cross, _, _ , _ = optimal_snr(self.hcross)
 
-        # Correct hrss for sky average
-        #sYlm2p2 = lal.SpinWeightedSphericalHarmonic(0.0, 0.0, -2, 2, 2)
+    def compute_characteristics(self,flow=1000,fupp=8192):
+        """
+        Computes SNRs, peak and characteristic frequencies and hrss for an
+        optimally oriented signal.
+        """
+        # TODO: make this a general function to act on any timeseries and then
+        # call it here for the particular hplus, cross (maybe also skylocation)
+        # requested
 
-        #self.hrss_plus /= np.real(sYlm2p2)
-        #self.hrss_cross /= np.real(sYlm2p2)
+        # Generate optimally oriented signal
+        hplustmp, hcrosstmp = project_waveform(self.Hlm, theta=0.0, phi=0.0)
+
+        # Create zero-padded time series for better accuracy
+        nsamp = 16384
+        hplus = pycbc.types.TimeSeries(initial_array=np.zeros(nsamp),
+            delta_t = 1./nsamp)
+        hcross = pycbc.types.TimeSeries(initial_array=np.zeros(nsamp),
+            delta_t = 1./nsamp)
+
+        hplus.data[0.5*nsamp-0.5*len(hplustmp):0.5*nsamp+0.5*len(hplustmp)] = \
+                hplustmp.data
+        hcross.data[0.5*nsamp-0.5*len(hcrosstmp):0.5*nsamp+0.5*len(hcrosstmp)] = \
+                hcrosstmp.data
+
+        # Generate noise curve
+        Hplus  = hplus.to_frequencyseries()
+        Hcross = hcross.to_frequencyseries()
+        self.psd = create_noise_curve(self.noise_curve, flen=len(Hplus), delta_f=Hplus.delta_f)
+
+        #
+        # Compute loudness  measures
+        #
+        self.snr_plus = pycbc.filter.sigma(Hplus, psd=self.psd,
+                low_frequency_cutoff=flow, high_frequency_cutoff=fupp)
+        self.snr_cross = pycbc.filter.sigma(Hcross, psd=self.psd,
+                low_frequency_cutoff=flow, high_frequency_cutoff=fupp)
+
+        self.hrss_plus = pycbc.filter.sigma(Hplus)
+        self.hrss_cross = pycbc.filter.sigma(Hcross)
         self.hrss = np.sqrt(self.hrss_plus**2 + self.hrss_cross**2)
 
-        # Angle-averaged SNR:
-        self.angle_av_snr = self.compute_angle_averaged_snr()
+        # TODO: write a dedicated function for this to do it carefully
+#       # energy (assume elliptical polarisation)
+#       D = 20.0 * 1e6 * lal.PC_SI
+#       Egw = 8.0 * lal.PI**2 * lal.C_SI**3 * D*D * \
+#               np.trapz(freq*freq*self.hrss**2, x=freq)
+#       Egw /= 5*lal.G_SI
+#
+#       Egw /= lal.MSUN_SI * lal.C_SI * lal.C_SI
 
-        if not hasattr(self, 'PSD_plus'):
-            self.make_wf_freqseries()
+        # Angle-averaged SNR:
+        self.angle_av_snr = self.compute_angle_averaged_snr(flow=flow,
+                fupp=fupp, psddata=self.psd.data)
+
+        #
+        # Other characteristics
+        #
+        idx = (Hplus.sample_frequencies.data > flow) * \
+                (Hplus.sample_frequencies.data < fupp)
+
+        freq = Hplus.sample_frequencies.data[idx]
+        rho2f = abs(Hplus.data[idx])**2 / self.psd.data[idx]
+
+        self.fchar = float(np.trapz(freq*rho2f,x=freq)/np.trapz(rho2f,x=freq))
 
         # no more attributes if prompt collapse
         if self.waveform_name != 'sfho_1616': 
 
+            # Find peak frequency
+            self.fpeak = freq[np.argmax(abs(Hplus.data[idx]**2))]
 
-            # Get FWHM of peak
-            idx_inband = (self.freq_axis>flow) * (self.freq_axis<fupp) 
-            self.fwhm  = find_fwhm(self.freq_axis[idx_inband],
-                    self.PSD_plus[idx_inband])
 
-            # Get fitted values
-            self.amp_fit, self.fpeak_fit, self.fwhm_fit = fit_gaussian_peak(self)
+#           # Get FWHM of peak
+#           idx_inband = (self.freq_axis>flow) * (self.freq_axis<fupp) 
+#
+#           self.fwhm  = find_fwhm(self.freq_axis[idx_inband],
+#                   self.PSD_plus[idx_inband])
+#
+#           # Get fitted values
+#           self.amp_fit, self.fpeak_fit, self.fwhm_fit = fit_gaussian_peak(self)
+#
+#           self.gauss_fit = gauss_curve(self.freq_axis, self.amp_fit,
+#                   self.fpeak_fit, 0.5*self.fwhm_fit)
+#
+#           # compute xoptimal_snr measures at 2-sigma interval around peak
+#           flow = self.fpeak-self.fwhm
+#           fupp = self.fpeak+self.fwhm
+#
+#           self.snr_plus_peak, self.hrss_plus_peak, self.fchar_peak, \
+#                   self.fpeak_peak, self.Egw_peak = \
+#                   optimal_snr(self.hplus,freqmin=flow,freqmax=fupp)
+#
+#           self.snr_cross_peak, self.hrss_cross_peak, _, _ , _ = \
+#                   optimal_snr(self.hcross,freqmin=flow,freqmax=fupp)
+#
+#           self.hrss_peak = np.sqrt(self.hrss_plus_peak**2 +
+#                   self.hrss_cross_peak**2)
 
-            self.gauss_fit = gauss_curve(self.freq_axis, self.amp_fit,
-                    self.fpeak_fit, 0.5*self.fwhm_fit)
-
-            # compute xoptimal_snr measures at 2-sigma interval around peak
-            flow = self.fpeak-self.fwhm
-            fupp = self.fpeak+self.fwhm
-
-            self.snr_plus_peak, self.hrss_plus_peak, self.fchar_peak, \
-                    self.fpeak_peak, self.Egw_peak = \
-                    optimal_snr(self.hplus,freqmin=flow,freqmax=fupp)
-
-            self.snr_cross_peak, self.hrss_cross_peak, _, _ , _ = \
-                    optimal_snr(self.hcross,freqmin=flow,freqmax=fupp)
-
-            #self.hrss_plus_peak /= np.real(sYlm2p2)
-            #self.hrss_cross_peak /= np.real(sYlm2p2)
-            self.hrss_peak = np.sqrt(self.hrss_plus_peak**2 +
-                    self.hrss_cross_peak**2)
-
-            # expected frequency bias
-            self.delta_fpeak = abs(self.fpeak - self.fpeak_fit)
+#            # expected frequency bias
+#            self.delta_fpeak = abs(self.fpeak - self.fpeak_fit)
 
             # Expected R16 measurement
             self.set_R16_fpeak()
 
 
-    def make_wf_timeseries(self,theta=0,phi=0):
+
+    def load_quadrupoles(self):
         """
-        makes the waveform (from just the 2,2 modes for now)
+        Add the mode expansion coefficient data to the waveform object for later
+        manipulation
         """
-        #FIXME: data length, sample freq should be variable
-
-        # retrieve data
-        mode2p2_data, mode2n2_data = get_waveform_data(self.waveform_path,
-                self.waveform_name)
-
-        # make waveforms
-        self.hplus, self.hcross, self.time_axis = \
-                make_signal(mode2p2_data, mode2n2_data, theta=theta, phi=phi)
-
-    def make_wf_freqseries(self):
-        """
-        make complex Fourier spectra and PSDs for polarisations
-        """
-
-        # check for existence of waveforms
-        if not hasattr(self, 'hplus'): self.make_wf_timeseries()
-
-        # make freq series
-        self.Hplus, self.freq_axis = lal_fft(self.hplus)
-        self.Hcross, _             = lal_fft(self.hcross)
-
-        # assign PSD
-        self.PSD_plus  = 2*abs(self.Hplus.data.data)**2
-        self.PSD_cross = 2*abs(self.Hcross.data.data)**2
-
-
-    def get_data_path(self):
-        """
-        Attempts to retrieve the location of the waveform data from environment
-        variables NINJA_ASCII and SECDERIVS
-        """
-        # try to get it from the environment
-        try:
-            self.waveform_path = os.environ['NINJA_ASCII']
-        except KeyError:
-            print >> sys.stderr, "NINJA_ASCII environment variable not" \
-                    " set, please check env"
 
         try:
-            self.secderivs_path = os.environ['SECDERIVS']
+            secderivs_path = os.environ['SECDERIVS']
         except KeyError:
             print >> sys.stderr, "SECDERIVS environment variable not" \
                     " set, please checenv"
+
+        # Retrieve quadrupole time derivatives for this waveform (i.e., simulation
+        # data)
+        times, self.Ixx, self.Ixy, self.Ixz, self.Iyy, self.Iyz, self.Izz = \
+                get_quadrupole_data(secderivs_path, self.waveform_name)
+
+        # Construct expansion coefficients Hlm (see T1000553)
+        self.Hlm = construct_Hlm(self.Ixx, self.Ixy, self.Ixz, self.Iyy,
+                self.Iyz, self.Izz)
+
+
 
     def set_tex_label(self,waveform_name):
         """
@@ -308,8 +339,8 @@ class Waveform:
 
         distance*=1e6*lal.PC_SI
 
-        times, Ixxtmp, Ixytmp, Ixztmp, Iyytmp, Iyztmp, Izztmp = \
-                get_quadrupole_data(self.secderivs_path, self.waveform_name)
+        #times, Ixxtmp, Ixytmp, Ixztmp, Iyytmp, Iyztmp, Izztmp = \
+        #        get_quadrupole_data(self.secderivs_path, self.waveform_name)
 
         # Pad the Is to 1 second
         Ixx = np.zeros(16384)
@@ -319,12 +350,12 @@ class Waveform:
         Iyz = np.zeros(16384)
         Izz = np.zeros(16384)
 
-        Ixx[len(Ixx)/2-0.5*len(Ixxtmp):len(Ixx)/2+0.5*len(Ixxtmp)] = Ixxtmp
-        Ixy[len(Ixy)/2-0.5*len(Ixytmp):len(Ixy)/2+0.5*len(Ixytmp)] = Ixytmp
-        Ixz[len(Ixz)/2-0.5*len(Ixztmp):len(Ixz)/2+0.5*len(Ixztmp)] = Ixztmp
-        Iyy[len(Iyy)/2-0.5*len(Iyytmp):len(Iyy)/2+0.5*len(Iyytmp)] = Iyytmp
-        Iyz[len(Iyz)/2-0.5*len(Iyztmp):len(Iyz)/2+0.5*len(Iyztmp)] = Iyztmp
-        Izz[len(Izz)/2-0.5*len(Izztmp):len(Izz)/2+0.5*len(Izztmp)] = Izztmp
+        Ixx[len(Ixx)/2-0.5*len(self.Ixx):len(Ixx)/2+0.5*len(self.Ixx)] = self.Ixx
+        Ixy[len(Ixy)/2-0.5*len(self.Ixy):len(Ixy)/2+0.5*len(self.Ixy)] = self.Ixy
+        Ixz[len(Ixz)/2-0.5*len(self.Ixz):len(Ixz)/2+0.5*len(self.Ixz)] = self.Ixz
+        Iyy[len(Iyy)/2-0.5*len(self.Iyy):len(Iyy)/2+0.5*len(self.Iyy)] = self.Iyy
+        Iyz[len(Iyz)/2-0.5*len(self.Iyz):len(Iyz)/2+0.5*len(self.Iyz)] = self.Iyz
+        Izz[len(Izz)/2-0.5*len(self.Izz):len(Izz)/2+0.5*len(self.Izz)] = self.Izz
 
         if taper:
             # window out inspiral
@@ -364,7 +395,8 @@ class Waveform:
         else:
             # Use the data supplied in psddata and interpolate to the waveform
             # frequencies
-            psd = np.interp(freq, psddata[:,0], psddata[:,1])
+            #psd = np.interp(freq, psddata[:,0], psddata[:,1])
+            psd = np.interp(freq, psddata, psddata)
 
 
         idxlow = np.argmin(abs(flow-freq))
@@ -380,6 +412,127 @@ class Waveform:
 #
 # general use functions
 #
+
+def create_noise_curve(noise_curve, flen, f_low=10.0, delta_f=0.5, pmnspy_path=None):
+    """
+    Create a pycbc noise curve.
+
+    Valid curves: aLIGO, adVirgo, 
+
+    ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
+            'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
+            'lowNN', 'lowSPOT', 'lowST', 'lowSei']
+    """
+
+    ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
+            'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
+            'lowNN', 'lowSPOT', 'lowST', 'lowSei']
+
+#    flen = int( (f_upp-f_low) / delta_f ) + 1
+
+    if noise_curve=='aLIGO': 
+        from pycbc.psd import aLIGOZeroDetHighPower
+        psd = aLIGOZeroDetHighPower(flen, delta_f, f_low) 
+    elif noise_curve=='adVirgo':
+        from pycbc.psd import AdvVirgo
+        psd = AdvVirgo(flen, delta_f, f_low) 
+    elif noise_curve=='Green' or noise_curve=='Red':
+
+        # Load from ascii
+        #pmnspy_path=os.getenv('PMNSPY_PREFIX')
+
+        psd_path=pmnspy_path+'/ligo3/PSD/%sPSD.txt'%noise_curve
+
+        psd_data=np.loadtxt(psd_path)
+
+        target_freqs = np.arange(0.0, flen*delta_f,
+                delta_f)
+
+        target_psd = np.zeros(len(target_freqs))
+
+        # Interpolate existing psd data to target frequencies
+        existing = \
+                np.concatenate(np.argwhere(
+                    (target_freqs<=psd_data[-1,0]) *
+                    (target_freqs>=psd_data[0,0])
+                    ))
+
+        target_psd[existing] = \
+                np.interp(target_freqs[existing], psd_data[:,0],
+                        psd_data[:,1])
+
+        # Extrapolate to higher frequencies assuming f^2 for QN
+        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
+                (psd_data[:,0]<=psd_data[-1,0])))
+
+        p = np.polyfit(x=psd_data[fit_idx,0], \
+                y=psd_data[fit_idx,1], deg=2)
+
+        target_psd[existing[-1]+1:] = \
+                p[0]*target_freqs[existing[-1]+1:]**2 +  \
+                p[1]*target_freqs[existing[-1]+1:] + \
+                p[2]
+
+        # After all that, reset everything below f_low to zero (this saves
+        # significant time in noise generation if we only care about high
+        # frequencies)
+        target_psd[target_freqs<f_low] = 0.0
+
+        # Create psd as standard frequency series object
+        psd = pycbc.types.FrequencySeries(
+                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
+
+    elif noise_curve in ligo3_curves:
+
+        # Load from ascii
+        pmnspy_path=os.getenv('PMNSPY_PREFIX')
+
+        psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_%s-PSD_20140904.txt'%noise_curve
+
+        psd_data=np.loadtxt(psd_path)
+
+        target_freqs = np.arange(0.0, flen*delta_f,
+                delta_f)
+        target_psd = np.zeros(len(target_freqs))
+
+        # Interpolate existing psd data to target frequencies
+        existing = \
+                np.concatenate(np.argwhere(
+                    (target_freqs<=psd_data[-1,0]) *
+                    (target_freqs>=psd_data[0,0])
+                    ))
+
+        target_psd[existing] = \
+                np.interp(target_freqs[existing], psd_data[:,0],
+                        psd_data[:,1])
+
+        # Extrapolate to higher frequencies assuming f^2 for QN
+        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
+                (psd_data[:,0]<=psd_data[-1,0])))
+
+        p = np.polyfit(x=psd_data[fit_idx,0], \
+                y=psd_data[fit_idx,1], deg=2)
+
+        target_psd[existing[-1]+1:] = \
+                p[0]*target_freqs[existing[-1]+1:]**2 +  \
+                p[1]*target_freqs[existing[-1]+1:] + \
+                p[2]
+
+        # After all that, reset everything below f_low to zero (this saves
+        # significant time in noise generation if we only care about high
+        # frequencies)
+        target_psd[target_freqs<f_low] = 0.0
+
+        # Create psd as standard frequency series object
+        psd = pycbc.types.FrequencySeries(
+                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
+
+    else:
+        print >> sys.stderr, "error: noise curve (%s) not"\
+            " supported"%noise_curve
+        sys.exit(-1)
+
+    return psd
 
 def get_quadrupole_data(secderivs_path, waveform_name):
     """
@@ -451,6 +604,7 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
             sYlm = lal.SpinWeightedSphericalHarmonic(theta, phi, -2, l, m)
             hplus  += np.real( sYlm*Hlm['l=%i, m=%i'%(l, m)] )
             hcross += -1.0*np.imag( sYlm*Hlm['l=%i, m=%i'%(l, m)] ) # Scale by distance
+
     distance*=1e6*lal.PC_SI
     hplus /= distance
     hcross /= distance
@@ -459,166 +613,11 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
     hplus*=1.4
     hcross*=1.4
 
-    return hplus, hcross
-
-def make_wave_pols(secderivs_path, waveform_name, theta, phi, distance,
-        signal_len=1.0):
-    """
-    Return pycbc timeseries for hplus and hcross for inclination, azimuth
-    (theta, phi) for a source at distance 'distance' and set the duration of the
-    time series to signal_len seconds, centered on the peak time
-    """
-
-    # Retrieve quadrupole time derivatives for this waveform (i.e., simulation
-    # data)
-    times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz = get_quadrupole_data(secderivs_path,
-            waveform_name)
-
-    # Construct expansion coefficients Hlm (see T1000553)
-    Hlm = construct_Hlm(Ixx, Ixy, Ixz, Iyy, Iyz, Izz)
-
-    # Convolve Hlm with spin-weighted spherical harmonics to project the wave
-    # onto the sky and return hplus and hcross:
-    hp_tmp, hc_tmp = project_waveform(Hlm, theta, phi, distance)
-
-    hplus  = pycbc.types.TimeSeries(initial_array=hp_tmp, delta_t = 1.0/16384)
-    hcross = pycbc.types.TimeSeries(initial_array=hc_tmp, delta_t = 1.0/16384)
+    hplus  = pycbc.types.TimeSeries(initial_array=hplus,  delta_t = 1.0/16384)
+    hcross = pycbc.types.TimeSeries(initial_array=hcross, delta_t = 1.0/16384)
 
     return hplus, hcross
 
-
-def get_waveform_data(waveform_path, waveform_name):
-    """
-    XXX: DEPRECATED by get_quadrupole_data() and project_waveform() 
-
-    Retrieve the l=m=2 spherical harmonics from the ascii file stored in the
-    ninja data directory
-    """
-    mode2p2_data = np.loadtxt("{waveform_path}/"\
-            "{waveform_name}_l2m2.asc".format(waveform_path=waveform_path,
-                waveform_name=waveform_name))
-
-    mode2n2_data = np.loadtxt("{waveform_path}/"\
-            "{waveform_name}_l2m-2.asc".format(waveform_path=waveform_path,
-                waveform_name=waveform_name))
-
-    return mode2p2_data, mode2n2_data
-
-def make_signal(mode2p2,mode2n2,skyav=False,theta=0.0,phi=0.0):
-    """
-    XXX: DEPRECATED by get_quadrupole_data() and project_waveform() 
-
-    Return the plus and cross polarisations for a source at the location defined
-    by the current entry in the sim_inspiral table.
-
-    Note that the current usage of this function is to create optimally oriented
-    signals but it's easy to generalise in this form.
-    """
-
-    # Scaling for physical units (out of geometric units)
-    extraction_distance_MPC = 20.0
-    extraction_distance_SI = lal.PC_SI * 1e6 * extraction_distance_MPC
-    geom_fac = lal.MRSUN_SI / extraction_distance_SI
-
-    # Get plus,cross from mode arrays (keeps things readable)
-    mode2p2_plus=geom_fac*mode2p2[:,1]
-    mode2p2_cross=geom_fac*mode2p2[:,2]
-
-    mode2n2_plus=geom_fac*mode2n2[:,1]
-    mode2n2_cross=geom_fac*mode2n2[:,2]
-
-    # compute spherical harmonics
-
-    # --- In this situation, I want the sky-averaged sYlmn, which are 1 by
-    # makeion
-    if skyav:
-        sYlm2p2 = 1.0
-        sYlm2n2 = 1.0
-    else:
-        # Assume we're talking about a face on system
-        sYlm2p2 = lal.SpinWeightedSphericalHarmonic(theta, phi, -2, 2, 2)
-        sYlm2n2 = lal.SpinWeightedSphericalHarmonic(theta, phi, -2, 2, -2)
-
-    # Orient Waveforms
-    hplus2p2  = mode2p2_plus*np.real(sYlm2p2) + mode2p2_cross*np.imag(sYlm2p2)
-    hcross2p2 = mode2p2_cross*np.real(sYlm2p2) - mode2p2_plus*np.imag(sYlm2p2)
-
-    hplus2n2  = mode2n2_plus*np.real(sYlm2n2) + mode2n2_cross*np.imag(sYlm2n2)
-    hcross2n2 = mode2n2_cross*np.real(sYlm2n2) - mode2n2_plus*np.imag(sYlm2n2)
-
-    # Sum modes and add to the sky
-
-    hplus=lal.CreateREAL8TimeSeries('strain', lal.LIGOTimeGPS(), 0.0,
-            1./16384, lal.StrainUnit, len(hplus2p2))
-            #1./16384, lal.StrainUnit, 5*16384)
-    hcross=lal.CreateREAL8TimeSeries('strain', lal.LIGOTimeGPS(), 0.0,
-            1./16384, lal.StrainUnit, len(hcross2p2))
-            #1./16384, lal.StrainUnit, 5*16384)
-
-    hplus.data.data  = hplus2p2+hplus2n2
-    hcross.data.data = hcross2p2+hcross2n2
-
-    # Correction for quadrupole underestimate
-    hplus.data.data  *= 1.4
-    hcross.data.data *= 1.4
-
-    time=np.arange(0,len(hplus2p2)/16384.,1./16384)
-    # Zero the time axis at the peak of the plus polarisation
-    tPeak=time[abs(hplus.data.data)==max(abs(hplus.data.data))]
-    time-=tPeak
-
-    return hplus,hcross,time
-
-def lal_fft(timeseries,seglen=5,fs=16384):
-
-    N = int(np.floor(seglen * fs))
-
-    if N!=len(timeseries.data.data): lal.ResizeREAL8TimeSeries(timeseries, 0, N)
-
-    window=lal.CreateRectangularREAL8Window(timeseries.data.length)
-    timeseries.data.data*=window.data.data
-
-    freqseries = lal.CreateCOMPLEX16FrequencySeries("h(f)", timeseries.epoch,
-            timeseries.f0, 1./seglen, lal.HertzUnit, int(N/2 + 1)) 
-
-    fftplan = lal.CreateForwardREAL8FFTPlan(N, 0)
-    lal.REAL8TimeFreqFFT(freqseries, timeseries, fftplan)
-
-    norm=np.sqrt(window.sumofsquares / window.data.length)
-    freqseries.data.data/=norm
-
-    freqs=np.linspace(0,fs/2.,int(N/2 + 1))
-
-    return freqseries,freqs
-
-#   def lal_fft(timeseries,seglen=5,fs=16384):
-#
-#       # reduce to significant parts of signal
-#       idx = np.argwhere(abs(timeseries.data.data)>0)[0]
-#       N=len(timeseries.data.data[idx:])
-#       tmp = lal.CreateREAL8TimeSeries('strain', lal.LIGOTimeGPS(), 0.0,
-#               1./16384, lal.StrainUnit, N)
-#       tmp.data.data=timeseries.data.data[idx:]
-#
-#       #window=lal.CreateTukeyREAL8Window(N,0.1)
-#       #window.data.data[0:N/2]=np.ones(N/2)
-#       #tmp.data.data*=window.data.data
-#
-#       window=lal.CreateRectangularREAL8Window(N)
-#       tmp.data.data*=window.data.data
-#
-#       freqseries = lal.CreateCOMPLEX16FrequencySeries("h(f)", tmp.epoch,
-#               tmp.f0, 1./seglen, lal.HertzUnit, int(N/2 + 1)) 
-#
-#       fftplan = lal.CreateForwardREAL8FFTPlan(N, 0)
-#       lal.REAL8TimeFreqFFT(freqseries, tmp, fftplan)
-#
-#       norm=np.sqrt(window.sumofsquares / window.data.length)
-#       freqseries.data.data/=norm
-#
-#       freqs=np.linspace(0,fs/2.,int(N/2 + 1))
-#
-#       return freqseries,freqs
 
 def optimal_snr(tSeries,freqmin=1000,freqmax=4096):
     """

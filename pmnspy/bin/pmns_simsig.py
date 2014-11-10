@@ -112,55 +112,59 @@ class DetData:
 
         # index of the absolute maximum peak
         #idx = np.concatenate(np.argwhere(abs(waveform.hplus.data.data)>0))[0]
-        idx = np.argmax(abs(waveform.hplus.data.data))
+        idx = np.argmax(abs(waveform.hplus.data))
 
         # Epoch = GPS start of time series.  Want the peak time of the waveform
         # to be aligned to the geocenter, so set the epoch to the geocentric
         # peak time minus the time to the waveform peak.  In other words:
         # (waveform epoch) = (geocentric peak time) - (# of seconds to peak)
 
-        waveform.hplus.epoch  = self.ext_params.geocent_peak_time - idx*self.delta_t
-        waveform.hcross.epoch = self.ext_params.geocent_peak_time - idx*self.delta_t
+        hplus_epoch  = self.ext_params.geocent_peak_time - idx*waveform.hplus.delta_t
+        hcross_epoch = self.ext_params.geocent_peak_time - idx*waveform.hcross.delta_t
 
-        # XXX: TAPER
+        # XXX: create regular lal timeseries objects for this bit (may replace
+        # with pycbc injection routines later)
+
+        hplus = lal.CreateREAL8TimeSeries('hplus', hplus_epoch, 0,
+                waveform.hplus.delta_t, lal.StrainUnit,
+                int(waveform.hplus.duration / waveform.hplus.delta_t))
+        hplus.data.data = np.array(waveform.hplus.data)
+
+        hcross = lal.CreateREAL8TimeSeries('hcross', hcross_epoch, 0,
+                waveform.hcross.delta_t, lal.StrainUnit,
+                int(waveform.hcross.duration / waveform.hcross.delta_t))
+        hcross.data.data = np.array(waveform.hcross.data)
+
+
         if self.taper:
 
             print >> sys.stderr, "Warning: tapering out inspiral (not a realistic strategy)"
             delay = 0.0e-3
-            idx = np.argmax(waveform.hplus.data.data) + \
+            idx = np.argmax(hplus.data.data) + \
                     np.ceil(delay/self.delta_t)
-            waveform.hplus.data.data[0:idx]=0.0
-            waveform.hcross.data.data[0:idx]=0.0
-            lalsim.SimInspiralREAL8WaveTaper(waveform.hplus.data,
+            hplus.data.data[0:idx]=0.0
+            hcross.data.data[0:idx]=0.0
+            lalsim.SimInspiralREAL8WaveTaper(hplus.data,
                     lalsim.SIM_INSPIRAL_TAPER_START)
-            lalsim.SimInspiralREAL8WaveTaper(waveform.hcross.data,
+            lalsim.SimInspiralREAL8WaveTaper(hcross.data,
                     lalsim.SIM_INSPIRAL_TAPER_START)
 
 
         # Scale for distance (waveforms extracted at 20 Mpc)
-        waveform.hplus.data.data *= 20.0 / self.ext_params.distance
-        waveform.hcross.data.data *= 20.0 / self.ext_params.distance
+        hplus.data.data *= 20.0 / self.ext_params.distance
+        hcross.data.data *= 20.0 / self.ext_params.distance
 
 
-        if not self.optimal_injection:
+        tmp = lalsim.SimDetectorStrainREAL8TimeSeries(hplus, hcross,
+                self.ext_params.ra, self.ext_params.dec,
+                self.ext_params.polarization, self.det_site) 
 
-            tmp = lalsim.SimDetectorStrainREAL8TimeSeries(waveform.hplus,
-                    waveform.hcross, self.ext_params.ra, self.ext_params.dec,
-                    self.ext_params.polarization, self.det_site) 
+        # Project waveform onto these extrinsic parameters
+        self.td_signal = \
+                pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
+                        delta_t=tmp.deltaT, epoch=tmp.epoch)
+        del tmp
 
-            # Project waveform onto these extrinsic parameters
-            self.td_signal = \
-                    pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
-                            delta_t=tmp.deltaT, epoch=tmp.epoch)
-            del tmp
-
-        else:
-
-            # XXX: Placing optimally!
-            print 'injection optimally'
-            self.td_signal = \
-                    pycbc.types.timeseries.TimeSeries(initial_array=np.copy(waveform.hplus.data.data),
-                            delta_t=waveform.hplus.deltaT, epoch=waveform.hplus.epoch)
 
         # Remove extraneous data
         self.td_signal = self.td_signal.trim_zeros()

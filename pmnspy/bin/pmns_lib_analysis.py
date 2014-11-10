@@ -287,7 +287,7 @@ for i in xrange( ninject ):
             geocent_peak_time=trigtime)
 
     # Construct the time series for these params
-    waveform.make_wf_timeseries(theta=ext_params.inclination,
+    waveform.reproject_waveform(theta=ext_params.inclination,
             phi=ext_params.phase)
 
     # -----------------
