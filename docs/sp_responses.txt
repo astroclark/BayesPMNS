@@ -1,0 +1,131 @@
+VDB:
+
+1) Search Description: will the results of the low-latency search be used for rapid
+communication with EM partners?
+
+The following text has been added to the search description:
+
+There is no immediate plan or obvious requirement that the results of these
+low-latency need to be communicated to electromagnetic partner observatories:
+both Galactic magnetar hyper-flares and \gw{} detections from binary neutron
+star coalescence are rare and will be of sufficient intrinsic astrophysical
+importance that the results of the analyses proposed here will not contribute
+strongly to a decision to study the source further.
+
+2) Publication plan
+
+For magnetar hyper-flares, the plan is indeed to target PRL for significant
+non-detections, where significance will be judged on the basis of the GW energy
+upper limit as described.
+
+3) Overlaps with other searches
+
+All-sky bursts: we plan to study online burst triggers around the time of the
+event as a minimal first step in the analysis.  There is no conflict here and
+interest triggers arising from other less-targeted searches will simply provide
+an extra motivation for a speedy analysis.
+
+For the other triggered searches, this is a great question.  I raised this in
+the remaining time on the Oct 12th Burst call and, since it affects many
+searches, this is on the agenda to be discussed more widely on a future call.
+Here's my response for now:
+
+Other triggered searches: the most likely overlap is likely to be with the
+online GRB analyses.  It is quite possible, likely even, that a Galactic
+magnetar hyperflare may initially be identified as an exceptionally bright short
+GRB, thus launching the online GRB analyses.  The online GRB searches, however,
+do not target the full parameter space of interest for neutron star
+oscillations.  In particular, the online X-pipeline search only extends to 500
+Hz which is too low to make any statement about f-mode oscillations.  The STAMP
+GRB analysis, meanwhile, will be run at slightly higher latency and does not,
+therefore, seem likely to overlap significantly.  In neither case do we foresee
+a conflict in publication plans since a GRB which is later confirmed as a
+magnetar flare is likely to be excluded from the `final' GRB publication.
+
+If the event (galactic hyperflare or BNS detection) does turn out to be
+coincident with e.g., a neutrino trigger, it would seem prudent to allow both
+searches to run to completion since they do cover different parameter space.
+Again, we do not perceive a conflict in terms of publication policy and suggest
+that a reference should be made to the separate publications for each search in
+the event of a non-detection.  
+
+Of course, if a signal is detected very close coordination will be required
+between the individual sub-groups for each source.
+
+Added the following text to the proposal:
+
+--
+Finally, it is worth emphasising that we do not perceive any conflict or overlap
+with other externally triggered analyses.  While it is likely that a Galactic
+hyperflare will initially trigger the online GRB burst analysis, such an event
+is unlikely to be included in a final GRB-specific publication.  Furthermore,
+the analyses proposed here cover a wider and more appropriate signal space for 
+magnetar triggers.  Similarly, in the case of other related triggers arising
+from e.g., neutrino detectors or radio observatories, we do not propose any 
+modifications to the search plans in order to maximise the signal space
+coverage.  
+---
+
+
+4) Resources: difference between a 3- and 4-sigma statement?
+
+The externally triggered detection analyses typically estimate background down
+to 3-sigma in order to make a detection statement.  There is not an explicit
+plan to make a 4-sigma statement (just >3-sigma) and so the computational costs
+remain similar to those for the online GRB \& SNEWS analyses.
+
+5) Technical requirements: waveform simulations
+
+Good point!
+
+For the short merger/post-merger bursts, we're currently using those we have
+from Bauswein et al.  I've checked and there is no problem here, but we should
+of course cite them out of courtesy where appropriate.  It's possible that other
+groups may make waveforms publicly available - see, for example:
+http://www.brunogiacomazzo.org/data.html
+
+The NS group is also studying STAMP and X-pipeline sensitivity to
+longer-duration signals based on astrophysically-motivated anti-chirps (e.g.,
+spinning-down magnetars with a quadrupole deformation), bar-modes (similar but
+stationary), plus a variety of more ad hoc waveforms with interesting frequency
+content.   That section of the proposal now reads as follows:
+
+---
+The bulk of development work is expected to be the development and use of
+appropriate waveform simulation infrastruture.  For the short-duration
+post-merger bursts (where the detector antenna patter does not change
+significantly over the duration of the signal), the codes and infrastructure
+developed for the \textsc{NINJA} analyses should prove sufficient for assessing
+the performance of the analysis.  The set of short-duration merger/post-merger
+waveform simulations used in the study in~\cite{Clark:14} is available for use
+in these studies and further simulations from other groups and collaborators may
+become available in the coming months.  Longer duration signals where the
+antenna pattern changes significantly over the course of the signal will require
+some additional development and validation.   Simulations of these longer
+duration signals will be based on astrophysically motivated analytic models such
+as those described in~\cite{dallOsso14} and~\cite{barmodes}, as well as more ad
+hoc simulations to explore and characterize the sensitivity to non-stationary
+frequency content and signals whose frequency content tracks observed QPOs.
+---
+
+6) DetChar \& Calibration Requirements
+
+Nothing above that which is required for the all-sky high-frequency search.
+Adding the following text so that the requirement for high-frequency (up to at
+least 4kHz) calibration is explicit:
+
+---
+Neither of these proposed searches has any specific detector characterization /
+quality requirements above those of other triggered burst searches.  It should
+be noted, however, that we do expect to analyze frequencies up to at least
+4 kHz; we therefore make the explicity request for calibrated data up to
+4096 Hz.  These searches are not expected to run at low-latency so this
+calibration requirement does not seem likely to pose additional overhead to the
+planned all-sky high-frequency analysis (which extends up to 6 kHz).
+---
+
+(I also took this opportunity to reorganise / add a new section: "Detector
+Characterization, Calibration Requirements & Other Common Search Aspects" which
+gathers together several miscellaneous points)
+
+
