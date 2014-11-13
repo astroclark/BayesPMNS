@@ -136,7 +136,7 @@ class DetData:
         hcross.data.data = np.array(waveform.hcross.data)
 
 
-        if self.taper:
+        if self.taper is True:
 
             print >> sys.stderr, "Warning: tapering out inspiral (not a realistic strategy)"
             delay = 0.0e-3
