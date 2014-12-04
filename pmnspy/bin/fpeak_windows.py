@@ -166,18 +166,24 @@ def top_peaks(PSD, npeaks=3, min_separation=500):
     Returns their indices
     """
     #peakidx = signal.find_peaks_cwt(PSD, widths)
+
+    PSD=np.copy(PSD)
+    PSD[PSD<0.01*max(PSD)]=0.0
+
     peakidx = detect_peaks(PSD, mpd=min_separation)
 
+    return peakidx
+
     
-    PSD_peaks = np.sort(PSD[peakidx])[::-1]
-
-    n=1
-    peakidx=[]
-    for peak in PSD_peaks:
-        peakidx.append(np.concatenate(np.argwhere(PSD==peak))[0])
-        if n==npeaks: return peakidx
-        n+=1
-
+#   PSD_peaks = np.sort(PSD[peakidx])[::-1]
+#
+#   n=1
+#   peakidx=[]
+#   for peak in PSD_peaks:
+#       peakidx.append(np.concatenate(np.argwhere(PSD==peak))[0])
+#       if n==npeaks: return peakidx
+#       n+=1
+#
 
 
 # --------------------------------------------------------------------
@@ -193,6 +199,7 @@ print '--- %s ---'%sys.argv[1]
 waveform = pmns_utils.Waveform('%s_lessvisc'%sys.argv[1])
 waveform.reproject_waveform()
 flow=1000
+fupp=4000
 
 #
 # Condition time series and get spectrum
@@ -202,8 +209,8 @@ H = abs(h.to_frequencyseries())**2
 freqs = h.to_frequencyseries().sample_frequencies.data
 
 # reduce
-H=H[freqs>=flow]
-freqs=freqs[freqs>=flow]
+H=H[(freqs>=flow)*(freqs<=fupp)]
+freqs=freqs[(freqs>=flow)*(freqs<=fupp)]
 
 # Find top 3 peaks
 peakidx=top_peaks(H)
@@ -240,6 +247,8 @@ for d, delay in enumerate(delays):
     hnew.data[:tzero_idx]=0.0
     hnew = apply_taper(hnew)
 
+    #sys.exit()
+
     #
     # Recover peak frequencies
     #
@@ -248,8 +257,8 @@ for d, delay in enumerate(delays):
     Hnew = abs(hnew.to_frequencyseries())**2
     freqsnew = hnew.to_frequencyseries().sample_frequencies.data
 
-    Hnew=Hnew[freqs>=flow]
-    freqsnew=freqsnew[freqs>=flow]
+    Hnew=Hnew[(freqsnew>=flow)*(freqsnew<=fupp)]
+    freqsnew=freqsnew[(freqsnew>=flow)*(freqsnew<=fupp)]
 
     # Find top 3 peaks
     peakidxnew=top_peaks(Hnew)
@@ -268,24 +277,57 @@ for d, delay in enumerate(delays):
 
 
     f, ax = pl.subplots(nrows=2)
-    ax[0].plot(h.sample_times*1e3, h)
-    ax[0].plot(hnew.sample_times*1e3, hnew, color='r')
-    ax[0].set_xlim(0,30)
+    ax[0].plot((h.sample_times-h.sample_times[h.max_loc()[1]])*1e3, h)
+    ax[0].plot((h.sample_times-h.sample_times[h.max_loc()[1]])*1e3, hnew, color='r')
+    ax[0].set_xlim(-5,25)
+    ax[0].set_xlabel('Time [s]')
+    ax[0].set_ylabel('h$_+$(t) @ 20 Mpc')
+    ax[0].set_title('Delay=%.2f ms'%(1e3*delay))
 
-    ax[1].plot(freqs,H)
-    ax[1].plot(freqs[peakidx],H[peakidx], 'b^')
+    ax[1].semilogy(freqs,H)
+    ax[1].semilogy(freqs[peakidx],H[peakidx], 'b^')
+    for f in freqs[peakidx]:
+        ax[1].axvline(f, color='b')
 
-    ax[1].plot(freqsnew,Hnew, color='r')
-    ax[1].plot(freqsnew[peakidxnew],Hnew[peakidxnew], 'rv')
+    ax[1].semilogy(freqsnew,Hnew, color='r')
+    ax[1].semilogy(freqsnew[peakidxnew],Hnew[peakidxnew], 'rv')
+    for f in freqsnew[peakidxnew]:
+        ax[1].axvline(f, color='r')
 
     ax[1].set_xlim(flow, 4096)
+    ax[1].set_xlabel('Frequency [Hz]')
+    ax[1].set_ylim(0.001*max(H),1.1*max(H))
 
-    #sys.exit()
-    pl.savefig('time_spec-%.2f.png'%(1e3*delay))
+    pl.subplots_adjust(hspace=0.25)
+
+
+    fname='%s-time_spec-%.2f'%(waveform.waveform_name, 1e3*delay)
+    fname=fname.replace('.','_')+'.eps'
+    pl.savefig(fname)
+#   fname=fname.replace('.png','.eps')
+#   pl.savefig(fname)
 
 fpeaks=np.array(fpeaks)
 
-pl.close('all')
+#pl.close('all')
+
+#
+# Peak trend analysis
+#
+f2 = np.zeros(len(delays))
+fminus  = np.zeros(len(delays))
+for i,f in enumerate(fpeaks):
+    f2[i], fminus[i] = np.sort(f)[::-1][:2]
+
+f, ax = pl.subplots()
+ax.plot(delays*1e3, f2, 'b^', label='f$_2$')
+ax.plot(delays*1e3, fminus, 'rv', label='f$_-$')
+ax.legend(loc='lower left')
+ax.set_xlabel('Delay [ms]')
+ax.set_ylabel('Peak Frequency [Hz]')
+
+fname='%s_peakfreqs.eps'%waveform.waveform_name
+pl.savefig(fname)
 
 
 
