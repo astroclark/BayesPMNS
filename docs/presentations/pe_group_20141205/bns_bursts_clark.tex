@@ -1,0 +1,76 @@
+\documentclass{beamer}
+\setbeamertemplate{navigation symbols}{}
+
+\usepackage{beamerthemeshadow}
+\usepackage{comment}
+\usepackage{epstopdf}
+\usepackage{graphicx}
+\setbeamertemplate{caption}[numbered]
+
+\hypersetup{colorlinks}
+
+\def\gw#1{gravitational wave#1 (GW#1)\gdef\gw{GW}}
+\def\ns#1{neutron star#1 (NS#1)\gdef\ns{NS}}
+
+\newcommand{\red}[1]{{\color{red}{#1}}}
+
+\begin{document}
+\setbeamertemplate{caption}{\raggedright\insertcaption\par}
+
+%\title{BNS Windowing Examples}
+%\author{James A. Clark}
+%\institute{Georgia Institute Of Technology}
+%\date{} 
+
+%\begin{frame}[plain]
+%\titlepage
+%\end{frame}
+
+%\begin{frame}\frametitle{Table of contents}\tableofcontents
+%\end{frame} 
+
+%\section{{\tt LALSimulation} \& Burst Injections}
+
+\begin{frame}
+    \frametitle{BNS Burst PE}
+    NS group search plan:
+    \begin{itemize}
+        \item Use CWB \& burst PE tools for high-freq. BNS follow-ups
+        \item Goal: gather evidence for, and measure peak frequency of
+            possible post-merger NS oscillations
+    \end{itemize}
+
+    \begin{columns}[]
+
+        \column{0.5\textwidth}
+
+        \begin{center}
+            \vspace{-0.5cm}
+            \begin{figure}
+                %\begin{centering}
+                \scalebox{0.3}{
+                    \includegraphics{dd2_135135_example.eps}
+                }
+                %\caption{\tiny Example post-merger waveform spectrum 
+                %$    red/magenta=max. match sine-Gaussian.}
+                %\end{centering}
+            \end{figure}
+        \end{center}
+
+        \column{0.5\textwidth}
+
+        \begin{itemize}
+            \item Potentially good frequency recovery with sine-Gaussians in LIB
+                (see left figure)
+            \item Challenge: recover peak frequency without low-freq.
+                `confusion'
+            \item Investigations underway/to begin to characterise
+                reconstruction with CWB / BayesWave
+        \end{itemize}
+
+    \end{columns}
+
+\end{frame}
+
+\end{document}
+
