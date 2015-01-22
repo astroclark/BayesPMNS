@@ -18,6 +18,8 @@
 """
 
 import os, sys
+import glob
+from optparse import OptionParser
 import cPickle as pickle
 import numpy as np
 
@@ -27,33 +29,35 @@ def parser():
     # --- Command line input
     parser = OptionParser()
 
-    parser.add_option("-d", "--web-dir", default="./", type=str)
+    parser.add_option("-r", "--results-dir", default="./", type=str)
+    parser.add_option("-g", "--glob-pat", default="posterior_V1H1L1", type=str)
     parser.add_option("-o", "--out-name", default="alldata", type=str)
-    parser.add_option("-p", "--pos-samps", default="posterior_samples.dat",
-            type=str)
-    parser.add_option("-s", "--sub-dir", default="V1H1L1")
+    parser.add_option("-p", "--param-name", default="frequency", type=str)
 
     (opts,args) = parser.parse_args()
 
     return opts, args
 
+opts, args = parser()
 
-resultsdirs=os.listdir(opts.web_dir)
+possampsfiles=glob.glob('%s/%s*.dat'%(opts.results_dir, opts.glob_pat))
+if not possampsfiles:
+    print 'no files matching %s/%s*.dat'%(opts.results_dir, opts.glob_pat)
+    print 'exiting.'
+outfile=opts.out_name + '_' + opts.glob_pat + '.pickle'
+outfile=outfile.replace('*','')
 
-freqsamps=[]
-hrsssamps=[]
-logBsn=[]
-logBci=[]
+possamps=[]
+detstats=[]
 
-for r, resdir in enumerate(resultsdirs):
+for p, possampfile in enumerate(possampsfiles):
 
-        try:
-            freqdata = np.loadtxt('./%s/%s/%s'%(resdir, opts.sub_dir,
-                opts.pos_samps),
-                    skiprows=1, usecols=[1])
-            allfreqdata.append(freqdata)
-        except:
-            continue
+    if p==0:
+        f = open(possampfile, 'r')
+        params = f.readline().split('\t')[:-1]
+        colnum = params.index(opts.param_name)
 
+    possamps.append(np.loadtxt(possampfile, usecols=[colnum], skiprows=1))
+    detstats.append(np.loadtxt(possampfile+"_B.txt"))
 
-pickle.dump(allfreqdata, open("allfreqdata.pickle", "wb"))
+pickle.dump((detstats,possamps), open(outfile, "wb"))
