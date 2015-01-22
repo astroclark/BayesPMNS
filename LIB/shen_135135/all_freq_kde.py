@@ -16,14 +16,13 @@ def kde_sklearn(x, x_grid, bw=5, **kwargs):
     log_pdf = kde_skl.score_samples(x_grid[:, np.newaxis])
     return np.exp(log_pdf)
 
-data = pickle.load(open(sys.argv[1],'rb'))
-logB = np.loadtxt('logBsn.txt')[::-1]
+detstats, samples = pickle.load(open())
 
-freq_grid = np.arange(1500, 4000, 1)
-freq_kde_pdf = np.zeros(shape=(len(data), len(freq_grid)))
+grid = np.arange(1500, 4000, 1)
+kde_pdf = np.zeros(shape=(len(samples), len(grid)))
 
-for f in xrange(len(data)):
+for f in xrange(len(samples)):
 
-    print '%d of %d'%(f, len(data))
+    print '%d of %d'%(f, len(samples))
 
-    freq_kde_pdf[f, :] = kde_sklearn(data[f], freq_grid)
+    freq_kde_pdf[f, :] = kde_sklearn(samples[f], freq_grid)
