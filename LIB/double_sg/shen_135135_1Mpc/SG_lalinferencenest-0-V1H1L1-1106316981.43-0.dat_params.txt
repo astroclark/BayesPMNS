@@ -1,0 +1,1 @@
+time_min	time_mean	time_maxl	time_max	ra	quality	psi	logw	loghrss	logPrior	logL	frequency	deltaloglV1	deltaloglL1	deltaloglH1	deltalogL	dec	alpha	LAL_APPROXIMANT	
