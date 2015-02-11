@@ -3,7 +3,7 @@
 
 
 gpsstart=1101501504
-gpsend=1101501604
+gpsend=1101506504
 
 framelength=256
 
@@ -23,7 +23,7 @@ do
 		--frame-type BNSBURST_EXAMPLE --set-name BNSBURST_EXAMPLE \
 		--mdc-log BNSBURST_EXAMPLE-${start}-${framelength}.log \
 		--freq-low-cutoff 10 --snr-low 0 --snr-high 1e6 \
-		--fr-out-dir ./ --double-precision \
+		--fr-out-dir ./frames --double-precision \
 		--write-frame --verbose
 
 	start=$((${start}+${framelength}))
