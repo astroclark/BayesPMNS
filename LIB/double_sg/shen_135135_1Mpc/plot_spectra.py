@@ -53,10 +53,11 @@ def apply_taper(TimeSeries,newlen=16384):
 
 # ------------------- MAIN ----------------------
 
-waveform_names = ['nl3_135135']
+waveform_names = ['nl3_135135', 'shen_135135', 'dd2_135135', 'apr_135135', 'tma_135135']
 fmin=2000
 fmax=8192
 
+pl.figure()
 for waveform_name in waveform_names:
     print ''
     print '--- %s ---'%waveform_name
@@ -87,16 +88,15 @@ for waveform_name in waveform_names:
     sigmas = 50 + 10*np.random.randn(1e3)
     mu = freqs[idx]
 
-    pl.figure()
 
     for s in sigmas:
         y = np.exp(-0.5*(freqs-mu)**2 / s**2)
         y *= H[idx]*max(y)
         pl.plot(freqs,y, 'grey')
 
-    pl.plot(freqs,H, 'k')
+    pl.plot(freqs,H, 'k', label=waveform_name)
 
-    pl.show()
+pl.show()
 
 
 
