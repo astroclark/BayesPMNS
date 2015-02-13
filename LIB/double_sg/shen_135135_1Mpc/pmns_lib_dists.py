@@ -22,6 +22,7 @@ import os,sys
 import glob
 import numpy as np
 from itertools import combinations
+import shutil
 
 import matplotlib
 from matplotlib import pyplot as pl
@@ -61,7 +62,8 @@ matplotlib.rcParams.update(
         })  
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
-def write_results_page(outdir,injection_dirs,posteriors):
+def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
+        all_staccs, all_bsn, all_snr):
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
     htmlstr="""
     <html>
@@ -88,6 +90,7 @@ def write_results_page(outdir,injection_dirs,posteriors):
     <h2>Per Injection Results</h2>
     """.format(outdir=outdir)
 
+    p=0
     for posterior, injection_dir in zip(posteriors, injection_dirs):
         injection=injection_dir.split('/')[-1]
 
@@ -95,18 +98,71 @@ def write_results_page(outdir,injection_dirs,posteriors):
         htmlstr+="""
         <hr>
         <h2>{injection}</h2>
-        
+        <a href="{injection}"><b>All results</b></a></td>
         <h3>Summary Statistics</h3>
-            <table>
-                <tr align="center">
-                    <td></td>
-                </tr>
+        <p>
+            <ul>
+                <li>NetSNR (injected): {snr}</li>
+                <li>BSN: {bsn}</li>
+            </ul>
+        </p>
+
+        <p>
+            <table border="2">
                 <tr>
-                    <td><a href="{injection}">All results</a></td>
+                    <td><b>Parameter</b></td>
+                    <td><b>maxL</b></td>
+                    <td><b>mean</b></td>
+                    <td><b>median</b></td>
+                    <td><b>stdev</b></td>
+                    <td><b>low</b></td>
+                    <td><b>high</b></td>
+                    <td><b>stacc</b></td>
                 </tr>
-            </table>
+        """.format(injection=injection, snr=all_snr[p], bsn=all_bsn[p])
+
+
+        oneDMenu, twoDMenu, binSizes = oneD_bin_params()
+        parnames=filter(lambda x: x in posterior.names, oneDMenu)
+
+        for par_name in parnames:
+
+            # get confidence intervals and staccs
+            (low, high) = all_cl_intervals[p][par_name]
+            this_stacc = all_staccs[p][par_name]
+
+            htmlstr+="""
+                        <tr>
+                            <td>{parname}</td>
+                            <td>{maxP}</td>
+                            <td>{mean}</td>
+                            <td>{median}</td>
+                            <td>{stdev}</td>
+                            <td>{low}</td>
+                            <td>{high}</td>
+                            <td>{stacc}</td>
+                        </tr>
+                    """.format(parname=par_name, 
+                            maxP=posterior.maxP[1][par_name],
+                            mean=posterior.means[par_name],
+                            median=posterior.medians[par_name],
+                            stdev=posterior.stdevs[par_name], 
+                            low=low, high=high,
+                            stacc=this_stacc)
+                            
+        htmlstr+="""
+        </tr>
+        </p>
+
+        <p>
             <img width=800px src="{injection}/corner.png">
-        """.format(injection=injection)
+        </p>
+            """.format(injection=injection)
+        p+=1
+
+    htmlstr+="""
+    </html>
+    """
 
     f.write(htmlstr)
     f.close()
@@ -162,7 +218,10 @@ def stacc(pos, param, truth):
     Compute the standard accuracy statistic
     (see bayespputils.py:422)
     """
-    return np.sqrt(np.mean(pos[param].samples - truth)**2)
+    if truth is None:
+        return None
+    else:
+        return np.sqrt(np.mean(pos[param].samples - truth)**2)
 
 def kde_sklearn(x, x_grid, bandwidth=0.2, **kwargs):
     """Kernel Density Estimation with Scikit-learn"""
@@ -251,11 +310,11 @@ def plot_corner(posterior,percentiles,parvals=None):
 
     return trifig
 
-def get_extent(posterior,name,parvals):
+def get_extent(posterior,name,truevals):
     """
     Get the extent of the axes for this parameter
     """
-    #parnames = parvals.keys()
+    #parnames = truevals.keys()
     #parnames=filter(lambda x: x in posterior.names, parnames)
 
     extents=[]
@@ -264,12 +323,15 @@ def get_extent(posterior,name,parvals):
     # adjusting the extent of the panel to the max/min sample +/-
     # 0.5*standardaccuarcy
 
-    if parvals[name]:
-        if parvals[name]>=posterior[name].samples.max():
-            upper=parvals[name] + 0.5*stacc(posterior,name,parvals[name])
+    if truevals[name]:
+        if truevals[name]>=posterior[name].samples.max():
+            upper=truevals[name] + 0.5*stacc(posterior,name,truevals[name])
             lower=posterior[name].samples.min()
+        elif truevals[name]<=posterior[name].samples.min():
+            lower=truevals[name] - 0.5*stacc(posterior,name,truevals[name])
+            upper=posterior[name].samples.max()
         else:
-            lower=parvals[name] - 0.5*stacc(posterior,name,parvals[name])
+            lower=posterior[name].samples.min()
             upper=posterior[name].samples.max()
     else:
         lower=posterior[name].samples.min()
@@ -346,10 +408,13 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
     peparser = bppu.PEOutputParser('common')
     resultsObj = peparser.parse(open(posterior_file,'r'), info=[headerfile, None])
 
-    # Read Bayes and SNR files
+    # Read Bayes and SNR files and copy them into this directory in case it's
+    # useful later
     bfile=open(bsn_file, 'r')
     BSN=bfile.read()
     bfile.close()
+    BSN=float(BSN.split()[0])
+
 
     snrstring=""
     snrf=open(snr_file,'r')
@@ -360,6 +425,14 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
             continue
         snrstring=snrstring +" "+str(snr[0:-1])+" ,"
     snrstring=snrstring[0:-1]
+
+    # Just return the final (usually network) snr
+    SNR=float(snrstring.split()[-1])
+
+    # Archive files to this directory
+    shutil.copyfile(posterior_file, os.path.join(currentdir,posterior_file.split('/')[-1]))
+    shutil.copyfile(bsn_file, os.path.join(currentdir,bsn_file.split('/')[-1]))
+    shutil.copyfile(snr_file, os.path.join(currentdir,snr_file.split('/')[-1]))
 
     # Create Posterior Sample object (shouldn't matter whether we go with Posterior or BurstPosterior)
     pos = bppu.Posterior(resultsObj)
@@ -387,10 +460,14 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
     # ----------------------------------------------------------
 
     # --- Corner plot
-    corner_fig = plot_corner(pos, [0.1, 0.5, 0.9], parvals=truevals)
+    corner_fig = plot_corner(pos, [0.05, 0.5, 0.95], parvals=truevals)
     corner_fig.savefig(os.path.join(currentdir,'corner.png'))
 
     # --- 1D Posterior results (see cbcBayesBurstPostProc.py:733)
+
+    # Dictionaries to contain confidence intervals and standard accuracies
+    cl_intervals_allparams={}
+    staccs_allparams={}
     for par_name in oneDMenu:
         print >> sys.stdout, "Producing 1D posteriors for %s"%par_name
 
@@ -411,6 +488,13 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
         toppoints, injection_cl, reses, injection_area, cl_intervals = \
                 bppu.greedy_bin_one_param(pos, binParams, [0.67, 0.9, 0.95])
 
+        # add conf intervals dictionary
+        cl_intervals_allparams[par_name]=cl_intervals[1]
+
+        # add standard accuracy to dictionary
+        staccs_allparams[par_name]=stacc(pos,par_name,truevals[par_name])
+
+
         # --- Plotting
         fig = plot_oneDposterior(pos, par_name, cl_intervals[1],
                 truevals, plotkde=False)
@@ -419,7 +503,6 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
         oneDplotPath=os.path.join(currentdir,figname)
         fig.savefig(oneDplotPath)
 
-
     pl.close('all')
     # Things to return:
     # results directories
@@ -427,7 +510,7 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
     # stacc
     # median, mean, maxL
     # snr, Bayes factor
-    return currentdir, pos
+    return currentdir, BSN, SNR, pos, cl_intervals_allparams, staccs_allparams
 
 # End
 # =========================================================================
@@ -489,17 +572,27 @@ if len(sampfiles)==0:
 # Set up list of injection directories and posterior objects to point to in html
 injection_dirs = []
 allposteriors = []
+all_cl_intervals = []
+all_staccs = []
+all_BSN = []
+all_SNR = []
+
 for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 
     posterior_file = files[0]
     bsn_file = files[1]
     snr_file = files[2]
 
-    injdir, thisposterior = single_injection_results(outputdirectory,
-            posterior_file, bsn_file, snr_file)
+    injdir, BSN, SNR, thisposterior, cl_intervals, staccs = \
+            single_injection_results(outputdirectory, posterior_file, bsn_file,
+                    snr_file)
 
     injection_dirs.append(injdir)
     allposteriors.append(thisposterior)
+    all_cl_intervals.append(cl_intervals)
+    all_staccs.append(staccs)
+    all_BSN.append(BSN)
+    all_SNR.append(SNR)
 
 
 # -------------------------------------------------------
@@ -507,9 +600,10 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 
 # -------------------------------------------------------
 # Write HTML summary
-    write_results_page(outputdirectory, injection_dirs, allposteriors)
+write_results_page(outputdirectory, injection_dirs, allposteriors,
+        all_cl_intervals, all_staccs, all_BSN, all_SNR)
 
-    sys.exit()
+sys.exit()
 
 # --- Preallocation
 logBs   = np.zeros(len(datafiles))
