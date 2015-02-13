@@ -163,6 +163,8 @@ def plot_oneDposterior(posterior, param, cl_intervals,
 
     if param in ['frequency', 'bandwidth']:
         ax.set_xlabel(param+' [Hz]')
+    elif param in ['duration']:
+        ax.set_xlabel(param+' [s]')
     else:
         ax.set_xlabel(param)
 
