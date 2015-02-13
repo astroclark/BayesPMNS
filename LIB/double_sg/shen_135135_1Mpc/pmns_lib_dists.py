@@ -61,6 +61,56 @@ matplotlib.rcParams.update(
         })  
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
+def write_results_page(outdir,injection_dirs,posteriors):
+    f = open(os.path.join(outdir, "population_summary.html"), 'w')
+    htmlstr="""
+    <html>
+    <h1>Results Summary for {outdir}</h1>
+    <hr>
+    <p>
+        <ul>
+            <li></li>
+        </ul>
+    </p>
+
+    <h2>Summary Plots</h2>
+    <table>
+        <tr>
+            <td><h3>SNRs</h3></td>
+            <td><h3>Bayes Factors</h3></td>
+        </tr>
+        <tr>
+            <td><img src="logB_PDF.png"></td>
+            <td><img src="snr_PDF.png"></h3></td>
+        </tr>
+    </table>
+
+    <h2>Per Injection Results</h2>
+    """.format(outdir=outdir)
+
+    for posterior, injection_dir in zip(posteriors, injection_dirs):
+        injection=injection_dir.split('/')[-1]
+
+
+        htmlstr+="""
+        <hr>
+        <h2>{injection}</h2>
+        
+        <h3>Summary Statistics</h3>
+            <table>
+                <tr align="center">
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><a href="{injection}">All results</a></td>
+                </tr>
+            </table>
+            <img width=800px src="{injection}/corner.png">
+        """.format(injection=injection)
+
+    f.write(htmlstr)
+    f.close()
+
 
 def sort_enginefiles(filelist):
     """
@@ -216,11 +266,11 @@ def get_extent(posterior,name,parvals):
 
     if parvals[name]:
         if parvals[name]>=posterior[name].samples.max():
-            upper=parvals[name] + 0.5*stacc(pos,name,parvals[name])
+            upper=parvals[name] + 0.5*stacc(posterior,name,parvals[name])
             lower=posterior[name].samples.min()
         else:
-            lower=parvals[name] - 0.5*stacc(pos,name,parvals[name])
-            upper=posterior[name].samples.min()
+            lower=parvals[name] - 0.5*stacc(posterior,name,parvals[name])
+            upper=posterior[name].samples.max()
     else:
         lower=posterior[name].samples.min()
         upper=posterior[name].samples.max()
@@ -229,6 +279,8 @@ def get_extent(posterior,name,parvals):
 
 def add_derived_params(posterior):
     """
+    Derive posterior samples for quality, bandwidth and duration
+
     See LALSimBurst.c:800
     """
 
@@ -249,6 +301,12 @@ def add_derived_params(posterior):
                 posterior_samples=duration_samps)
         posterior.append(durationPDF)
 
+    if ('duration' not in posterior.names) and ('quality' in posterior.names):
+        duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['quality'].samples)
+        durationPDF = bppu.PosteriorOneDPDF(name='duration',
+                posterior_samples=duration_samps)
+        posterior.append(durationPDF)
+
     if ('bandwidth' not in posterior.names) and ('duration' in posterior.names):
         bandwidth_samps =  1.0/(np.sqrt(2)*np.pi*posterior['duration'].samples)
         bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
@@ -264,6 +322,116 @@ def add_derived_params(posterior):
 
     return posterior
 
+# =========================================================================
+#
+# BPPU tools
+#
+def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
+
+    """
+    Characterise the results, including producing plots, for a single injection
+    """
+
+    # Mostly taken from cbcBayesBurstPostProc.py
+
+    headerfile=snr_file.replace('_snr','_params')
+
+    # Output dir for this injection (top-level directory + event number and gps time
+    # taken from posterior samples filename)
+    currentdir=os.path.join(outdir,posterior_file.split('/')[-1].split('_')[-1].replace('.dat',''))
+    if not os.path.isdir(currentdir):
+        os.makedirs(currentdir)
+
+    # Create PE parser object
+    peparser = bppu.PEOutputParser('common')
+    resultsObj = peparser.parse(open(posterior_file,'r'), info=[headerfile, None])
+
+    # Read Bayes and SNR files
+    bfile=open(bsn_file, 'r')
+    BSN=bfile.read()
+    bfile.close()
+
+    snrstring=""
+    snrf=open(snr_file,'r')
+    snrs=snrf.readlines()
+    snrf.close()
+    for snr in snrs:
+        if snr=="\n":
+            continue
+        snrstring=snrstring +" "+str(snr[0:-1])+" ,"
+    snrstring=snrstring[0:-1]
+
+    # Create Posterior Sample object (shouldn't matter whether we go with Posterior or BurstPosterior)
+    pos = bppu.Posterior(resultsObj)
+
+    # Add in derived parameters
+    pos = add_derived_params(pos)
+
+    oneDMenu, twoDMenu, binSizes = oneD_bin_params()
+
+    # Get true values:
+    truevals={}
+    for item in oneDMenu:
+        if item=='frequency':
+            truevals[item]=waveform.fpeak
+        else:
+            truevals[item]=None
+
+    # Make sure we have quality AND bandwidth samples
+
+    # TODO:
+    #   3) Loop over injections
+    #   4) webpage for injection population
+    #   5) plot injected / recovered waveforms
+
+    # ----------------------------------------------------------
+
+    # --- Corner plot
+    corner_fig = plot_corner(pos, [0.1, 0.5, 0.9], parvals=truevals)
+    corner_fig.savefig(os.path.join(currentdir,'corner.png'))
+
+    # --- 1D Posterior results (see cbcBayesBurstPostProc.py:733)
+    for par_name in oneDMenu:
+        print >> sys.stdout, "Producing 1D posteriors for %s"%par_name
+
+        # Get bin params
+        try: 
+            pos[par_name.lower()]
+        except KeyError:
+            print "No posterior samples for %s, skipping binning."%par_name
+            continue
+        try: 
+            par_bin=binSizes[par_name]
+        except KeyError:
+            print "Bin size is not set for %s, skipping binning."%par_name
+            continue
+        binParams = {par_name:par_bin}
+
+        # --- Statistics from this posterior
+        toppoints, injection_cl, reses, injection_area, cl_intervals = \
+                bppu.greedy_bin_one_param(pos, binParams, [0.67, 0.9, 0.95])
+
+        # --- Plotting
+        fig = plot_oneDposterior(pos, par_name, cl_intervals[1],
+                truevals, plotkde=False)
+        
+        figname=par_name+'.png'
+        oneDplotPath=os.path.join(currentdir,figname)
+        fig.savefig(oneDplotPath)
+
+
+    pl.close('all')
+    # Things to return:
+    # results directories
+    # cl_intervals
+    # stacc
+    # median, mean, maxL
+    # snr, Bayes factor
+    return currentdir, pos
+
+# End
+# =========================================================================
+
 # ********************************************************************************
 # MAIN SCRIPT
 
@@ -274,13 +442,13 @@ resultsdir=sys.argv[1]
 waveform_name='shen_135135'#sys.argv[2]
 Nlive=512#sys.argv[3]
 
-outdir=resultsdir+'_allout'
-currentdir=os.path.join(outdir,'summaryfigs')
-if not os.path.isdir(currentdir):
-    os.makedirs(currentdir) 
+outputdirectory=resultsdir+'_allout'
+if not os.path.isdir(outputdirectory):
+    os.makedirs(outputdirectory) 
 else:
     print >> sys.stdout, \
-            "warning: %s exists, results will be overwritten"%outdir
+            "warning: %s exists, results will be overwritten"%outputdirectory
+currentdir=os.path.join(outputdirectory,'summaryfigs')
 
 # --- Construct the injected waveform
 waveform = pmns_utils.Waveform('%s_lessvisc'%waveform_name)
@@ -292,7 +460,7 @@ ifospattern="V1H1L1"
 engineglobpattern="lalinferencenest"
 sampglobpattern="posterior"
 
-Bfiles = glob.glob('%s/posterior_samples/%s_%s*.dat_B.txt'%(
+BSNfiles = glob.glob('%s/posterior_samples/%s_%s*.dat_B.txt'%(
     resultsdir, sampglobpattern, ifospattern ) )
 
 snrfiles  = glob.glob('%s/engine/%s*-%s-*_snr.txt'%(
@@ -305,119 +473,43 @@ sampfiles = glob.glob('%s/posterior_samples/%s_%s*.dat'%(
 # Sort the different file lists in ascending event number
 # XXX: DANGER this may be prone to breaking with changes to filenames
 snrfiles=sort_enginefiles(snrfiles)
-Bfiles=sort_possampfiles(Bfiles)
+BSNfiles=sort_possampfiles(BSNfiles)
 sampfiles=sort_possampfiles(sampfiles)
 
 if len(snrfiles)==0:
     print >> sys.stderr, "Failed to find SNR files; check glob patterns"
     sys.exit()
-if len(Bfiles)==0:
+if len(BSNfiles)==0:
     print >> sys.stderr, "Failed to find Bayes factor files; check glob patterns"
     sys.exit()
 if len(sampfiles)==0:
     print >> sys.stderr, "Failed to find posterior samples; check glob patterns"
     sys.exit()
 
-# =========================================================================
-#
-# BPPU tools
-#
-# Taken from cbcBayesBurstPostProc.py, move into a function?
+# Set up list of injection directories and posterior objects to point to in html
+injection_dirs = []
+allposteriors = []
+for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 
-currentfile=sampfiles[0]
-headerfile=snrfiles[0].replace('_snr','_params')
+    posterior_file = files[0]
+    bsn_file = files[1]
+    snr_file = files[2]
 
-# Output dir for this injection (top-level directory + event number and gps time
-# taken from posterior samples filename)
-currentdir=os.path.join(outdir,currentfile.split('/')[-1].split('_')[-1].replace('.dat',''))
-if not os.path.isdir(currentdir):
-    os.makedirs(currentdir)
+    injdir, thisposterior = single_injection_results(outputdirectory,
+            posterior_file, bsn_file, snr_file)
 
-# Create PE parser object
-peparser = bppu.PEOutputParser('common')
-resultsObj = peparser.parse(open(currentfile,'r'), info=[headerfile, None])
-
-# Read Bayes and SNR files
-bfile=open(Bfiles[0], 'r')
-BSN=bfile.read()
-bfile.close()
-
-snrfactor=snrfiles[0]
-snrstring=""
-snrfile=open(snrfactor,'r')
-snrs=snrfile.readlines()
-snrfile.close()
-for snr in snrs:
-    if snr=="\n":
-        continue
-    snrstring=snrstring +" "+str(snr[0:-1])+" ,"
-snrstring=snrstring[0:-1]
-
-# Create Posterior Sample object (shouldn't matter whether we go with Posterior or BurstPosterior)
-pos = bppu.Posterior(resultsObj)
-
-# Add in derived parameters
-pos = add_derived_params(pos)
-
-oneDMenu, twoDMenu, binSizes = oneD_bin_params()
-
-# Get true values:
-truevals={}
-for item in oneDMenu:
-    if item=='frequency':
-        truevals[item]=waveform.fpeak
-    else:
-        truevals[item]=None
-
-# Make sure we have quality AND bandwidth samples
-
-# TODO:
-#   3) Loop over injections
-#   4) webpage for injection population
-#   5) plot injected / recovered waveforms
-
-# ----------------------------------------------------------
-
-# --- Corner plot
-corner_fig = plot_corner(pos, [0.1, 0.5, 0.9], parvals=truevals)
-
-# --- 1D Posterior results (see cbcBayesBurstPostProc.py:733)
-for par_name in oneDMenu:
-    print >> sys.stdout, "Producing 1D posteriors for %s"%par_name
-
-    # Get bin params
-    try: 
-        pos[par_name.lower()]
-    except KeyError:
-        print "No posterior samples for %s, skipping binning."%par_name
-        continue
-    try: 
-        par_bin=binSizes[par_name]
-    except KeyError:
-        print "Bin size is not set for %s, skipping binning."%par_name
-        continue
-    binParams = {par_name:par_bin}
-
-    # --- Statistics from this posterior
-    toppoints, injection_cl, reses, injection_area, cl_intervals = \
-            bppu.greedy_bin_one_param(pos, binParams, [0.67, 0.9, 0.95])
-
-    # --- Plotting
-    fig = plot_oneDposterior(pos, par_name, cl_intervals[1],
-            truevals, plotkde=False)
-    
-    figname=par_name+'.png'
-    oneDplotPath=os.path.join(currentdir,figname)
-    fig.savefig(oneDplotPath)
+    injection_dirs.append(injdir)
+    allposteriors.append(thisposterior)
 
 
-pl.show()
+# -------------------------------------------------------
+# Construct summary plots and statistics
 
-# End
-# =========================================================================
+# -------------------------------------------------------
+# Write HTML summary
+    write_results_page(outputdirectory, injection_dirs, allposteriors)
 
-sys.exit()
-
+    sys.exit()
 
 # --- Preallocation
 logBs   = np.zeros(len(datafiles))
