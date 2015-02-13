@@ -64,7 +64,7 @@ matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
 def sort_enginefiles(filelist):
     """
-    Sort the list of files based on their event number
+    elSort the list of files based on their event number
     """
     eventnums=[]
     for filename in filelist:
@@ -103,7 +103,7 @@ def oneD_bin_params():
             'rightascension':0.05, 'declination':0.05, 'loghrss':0.01,
             'frequency':0.5, 'quality':0.05, 'phase':0.1, 'phi_orb':0.1,
             'psi':0.04, 'polarization':0.04, 'alpha':0.01, 'duration':0.0001,
-            'bandwidth':0.5}
+            'bandwidth':0.5, 'hrss':1e-23}
 
     return oneDMenu, twoDMenu, binSizes
 
@@ -122,38 +122,38 @@ def kde_sklearn(x, x_grid, bandwidth=0.2, **kwargs):
     log_pdf = kde_skl.score_samples(x_grid[:, np.newaxis])
     return np.exp(log_pdf)
 
-def plot_oneDposterior(posterior, cl_intervals, truth=None, plot1DParams=None,
-        plotkde=False):
+def plot_oneDposterior(posterior, param, cl_intervals, 
+        parvals=None, plotkde=False):
     """
     Plots a 1D histogram of the distribution of posterior samples for a given
     parameter
     """
-    param = plot1DParams.keys()[0].lower()
     pos_samps = posterior[param].samples
 
-    histbins = plot1DParams.values()[0]
 
     fig, ax = pl.subplots(figsize=(6,4))#, dpi=200)
 
     if plotkde==False:
+
         # Plot histogram
+        histbinswidth = 3.5*posterior[param].stdev / len(pos_samps)**(1./3)
+        histbins = np.arange(pos_samps.min(), pos_samps.max(), histbinswidth)
         (n, bins, patches) = ax.hist(pos_samps, histbins, normed='true',
-                histtype='stepfilled', facecolor='grey')
+                histtype='step', facecolor='grey', color='k')
         ax.set_ylim(0, 1.05*max(n))
     else:
-
         bw = 1.06*np.std(pos_samps)* len(pos_samps)**(-1./5)
         x_grid = np.linspace(0.9*min(pos_samps),1.1*max(pos_samps),1000)
-
         pdf = kde_sklearn(x=np.concatenate(pos_samps), x_grid=x_grid, bandwidth=bw)
 
         ax.plot(x_grid,pdf,color='grey')
 
-    ax.set_xlim(0.95*min(cl_intervals),1.05*max(cl_intervals))
+    # set axis limits
+    ax.set_xlim(get_extent(posterior,param,parvals))
 
     # Show injected value
-    if truth is not None:
-        ax.axvline(truth, color='r', label='Target %s'%param)
+    if parvals[param] is not None:
+        ax.axvline(parvals[param], color='r', label='Target %s'%param)
 
     # Show the median and 90% confidence interval
     ax.axvline(cl_intervals[0], color='k', linestyle='--')
@@ -169,14 +169,20 @@ def plot_oneDposterior(posterior, cl_intervals, truth=None, plot1DParams=None,
     ax.set_ylabel('Probability Density')
     ax.minorticks_on()
     ax.legend()
-
     pl.tight_layout()
 
     return fig
 
-def plot_corner(posterior,levels,parvals=None):
+def plot_corner(posterior,percentiles,parvals=None):
     """
     Local version of a corner plot to allow bespoke truth values
+
+    posterior: posterior object
+    percentiles: percentiles to draw on 1D histograms
+    parvals: dictionary of parameters with true values.  These parameters are
+    used to select which params in posterior to use for the triangle plot, as
+    well as to draw the target values
+
     """
     if parvals==None:
         print >> sys.stderr, "need param names and values"
@@ -186,16 +192,78 @@ def plot_corner(posterior,levels,parvals=None):
     truths=[parvals[p] for p in parnames]
 
     data = np.hstack([posterior[p].samples for p in parnames])
+    extents = [get_extent(posterior,name,parvals) for name in parnames]
 
-    #extents=[(0,1)]*len(parnames)
-    #extents[parnames=='frequency'] = 
-    #trifig=triangle.corner(data, labels=parnames, truths=truths,
-    #        quantiles=levels, truth_color='r', extents=extents)
     trifig=triangle.corner(data, labels=parnames, truths=truths,
-            quantiles=levels, truth_color='r')
+            quantiles=percentiles, truth_color='r', extents=extents)
 
     return trifig
 
+def get_extent(posterior,name,parvals):
+    """
+    Get the extent of the axes for this parameter
+    """
+    #parnames = parvals.keys()
+    #parnames=filter(lambda x: x in posterior.names, parnames)
+
+    extents=[]
+
+    # If a parameter has a 'true' value, make sure it's visible on the plot by
+    # adjusting the extent of the panel to the max/min sample +/-
+    # 0.5*standardaccuarcy
+
+    if parvals[name]:
+        if parvals[name]>=posterior[name].samples.max():
+            upper=parvals[name] + 0.5*stacc(pos,name,parvals[name])
+            lower=posterior[name].samples.min()
+        else:
+            lower=parvals[name] - 0.5*stacc(pos,name,parvals[name])
+            upper=posterior[name].samples.min()
+    else:
+        lower=posterior[name].samples.min()
+        upper=posterior[name].samples.max()
+
+    return (lower,upper)
+
+def add_derived_params(posterior):
+    """
+    See LALSimBurst.c:800
+    """
+
+    if 'frequency' not in posterior.names:
+        print >> sys.stderr, "no frequency parameter"
+        sys.exit()
+
+    if ('quality' not in posterior.names) and ('bandwidth' in posterior.names):
+        quality_samps = posterior['frequency'].samples /\
+                posterior['bandwidth'].samples
+        qualityPDF = bppu.PosteriorOneDPDF(name='quality',
+                posterior_samples=quality_samps)
+        posterior.append(qualityPDF)
+
+    if ('duration' not in posterior.names) and ('bandwidth' in posterior.names):
+        duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['bandwidth'].samples)
+        durationPDF = bppu.PosteriorOneDPDF(name='duration',
+                posterior_samples=duration_samps)
+        posterior.append(durationPDF)
+
+    if ('bandwidth' not in posterior.names) and ('duration' in posterior.names):
+        bandwidth_samps =  1.0/(np.sqrt(2)*np.pi*posterior['duration'].samples)
+        bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
+                posterior_samples=bandwidth_samps)
+        posterior.append(bandwidthPDF)
+
+    if ('bandwidth' not in posterior.names) and ('quality' in posterior.names):
+        bandwidth_samps = posterior['frequency'].samples /\
+                posterior['quality'].samples  
+        bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
+                posterior_samples=bandwidth_samps)
+        posterior.append(bandwidthPDF)
+
+    return posterior
+
+# ********************************************************************************
+# MAIN SCRIPT
 
 # -------------------------------
 # Load results
@@ -286,6 +354,9 @@ snrstring=snrstring[0:-1]
 # Create Posterior Sample object (shouldn't matter whether we go with Posterior or BurstPosterior)
 pos = bppu.Posterior(resultsObj)
 
+# Add in derived parameters
+pos = add_derived_params(pos)
+
 oneDMenu, twoDMenu, binSizes = oneD_bin_params()
 
 # Get true values:
@@ -296,15 +367,20 @@ for item in oneDMenu:
     else:
         truevals[item]=None
 
+# Make sure we have quality AND bandwidth samples
+
 # TODO:
-#   2) confidence intervals marked on 1D posteriors: nicer figures
 #   3) Loop over injections
 #   4) webpage for injection population
 #   5) plot injected / recovered waveforms
 
 # ----------------------------------------------------------
-# -- 1D Posterior results (see cbcBayesBurstPostProc.py:733)
-for par_name in ['frequency']:#oneDMenu:
+
+# --- Corner plot
+corner_fig = plot_corner(pos, [0.1, 0.5, 0.9], parvals=truevals)
+
+# --- 1D Posterior results (see cbcBayesBurstPostProc.py:733)
+for par_name in oneDMenu:
     print >> sys.stdout, "Producing 1D posteriors for %s"%par_name
 
     # Get bin params
@@ -325,17 +401,13 @@ for par_name in ['frequency']:#oneDMenu:
             bppu.greedy_bin_one_param(pos, binParams, [0.67, 0.9, 0.95])
 
     # --- Plotting
-    oneDPDFParams={par_name:50}
-    fig = plot_oneDposterior(pos, cl_intervals[1], truth=truevals[par_name],
-            plot1DParams=oneDPDFParams, plotkde=True)
+    fig = plot_oneDposterior(pos, par_name, cl_intervals[1],
+            truevals, plotkde=False)
     
     figname=par_name+'.png'
     oneDplotPath=os.path.join(currentdir,figname)
     fig.savefig(oneDplotPath)
 
-# --- Corner plot
-#corner_fig = plot_corner(pos, [0.67, 0.9, 0.95], parnames=oneDMenu, truevals)
-corner_fig = plot_corner(pos, [0.1, 0.5, 0.9], parvals=truevals)
 
 pl.show()
 
@@ -358,7 +430,6 @@ freq_area = np.zeros(len(datafiles))
 # --- Load each file
 for d, datafile in enumerate(datafiles):
     print >> sys.stdout, "Loading %d of %d (%s)"%(d, len(datafiles), datafile)
-
 
 
 
