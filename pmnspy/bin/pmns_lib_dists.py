@@ -63,7 +63,7 @@ matplotlib.rcParams.update(
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
 def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
-        all_staccs, all_bsn, all_snr):
+        all_staccs, accs, all_bsn, all_snr):
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
     htmlstr="""
     <html>
@@ -111,9 +111,9 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <table border="2">
                 <tr>
                     <td><b>Parameter</b></td>
-                    <td><b>maxL</b></td>
-                    <td><b>mean</b></td>
-                    <td><b>median</b></td>
+                    <td><b>maxP (true-maxP)</b></td>
+                    <td><b>mean (true-mean)</b></td>
+                    <td><b>median (true-median)</b></td>
                     <td><b>stdev</b></td>
                     <td><b>low</b></td>
                     <td><b>high</b></td>
@@ -130,13 +130,14 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             # get confidence intervals and staccs
             (low, high) = all_cl_intervals[p][par_name]
             this_stacc = all_staccs[p][par_name]
+            this_acc = all_accs[p][par_name]
 
             htmlstr+="""
                         <tr>
                             <td>{parname}</td>
-                            <td>{maxP}</td>
-                            <td>{mean}</td>
-                            <td>{median}</td>
+                            <td>{maxP} ({delta_maxP})</td>
+                            <td>{mean} ({delta_mean})</td>
+                            <td>{median} ({delta_median})</td>
                             <td>{stdev}</td>
                             <td>{low}</td>
                             <td>{high}</td>
@@ -146,6 +147,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
                             maxP=posterior.maxP[1][par_name],
                             mean=posterior.means[par_name],
                             median=posterior.medians[par_name],
+                            delta_maxP=this_acc[0], delta_mean=this_acc[1],
+                            delta_median=this_acc[2],
                             stdev=posterior.stdevs[par_name], 
                             low=low, high=high,
                             stacc=this_stacc)
@@ -222,6 +225,18 @@ def stacc(pos, param, truth):
         return None
     else:
         return np.sqrt(np.mean(pos[param].samples - truth)**2)
+
+def acc(pos, param, truth):
+    """
+    Compute the accuracy of the posterior measurement
+    """
+    if truth is None:
+        return [None]*3
+    else:
+        delta_maxP=truth - pos.maxP[1][param]
+        delta_mean=truth - pos.means[param]
+        delta_median=truth - pos.medians[param]
+        return [delta_maxP, delta_mean, delta_median]
 
 def kde_sklearn(x, x_grid, bandwidth=0.2, **kwargs):
     """Kernel Density Estimation with Scikit-learn"""
@@ -468,6 +483,7 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
     # Dictionaries to contain confidence intervals and standard accuracies
     cl_intervals_allparams={}
     staccs_allparams={}
+    accs_allparams={}
     for par_name in oneDMenu:
         print >> sys.stdout, "Producing 1D posteriors for %s"%par_name
 
@@ -493,6 +509,7 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
 
         # add standard accuracy to dictionary
         staccs_allparams[par_name]=stacc(pos,par_name,truevals[par_name])
+        accs_allparams[par_name]=acc(pos,par_name,truevals[par_name])
 
 
         # --- Plotting
@@ -504,13 +521,8 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
         fig.savefig(oneDplotPath)
 
     pl.close('all')
-    # Things to return:
-    # results directories
-    # cl_intervals
-    # stacc
-    # median, mean, maxL
-    # snr, Bayes factor
-    return currentdir, BSN, SNR, pos, cl_intervals_allparams, staccs_allparams
+    return currentdir, BSN, SNR, pos, cl_intervals_allparams, \
+            staccs_allparams, accs_allparams
 
 # End
 # =========================================================================
@@ -574,6 +586,7 @@ injection_dirs = []
 allposteriors = []
 all_cl_intervals = []
 all_staccs = []
+all_accs = []
 all_BSN = []
 all_SNR = []
 
@@ -583,7 +596,7 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     bsn_file = files[1]
     snr_file = files[2]
 
-    injdir, BSN, SNR, thisposterior, cl_intervals, staccs = \
+    injdir, BSN, SNR, thisposterior, cl_intervals, staccs, accs = \
             single_injection_results(outputdirectory, posterior_file, bsn_file,
                     snr_file)
 
@@ -591,6 +604,7 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     allposteriors.append(thisposterior)
     all_cl_intervals.append(cl_intervals)
     all_staccs.append(staccs)
+    all_accs.append(accs)
     all_BSN.append(BSN)
     all_SNR.append(SNR)
 
@@ -601,24 +615,7 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 # -------------------------------------------------------
 # Write HTML summary
 write_results_page(outputdirectory, injection_dirs, allposteriors,
-        all_cl_intervals, all_staccs, all_BSN, all_SNR)
-
-sys.exit()
-
-# --- Preallocation
-logBs   = np.zeros(len(datafiles))
-netSNRs = np.zeros(len(datafiles))
-
-freq_pdfs = []
-freq_maxL = np.zeros(len(datafiles))
-freq_low  = np.zeros(len(datafiles))
-freq_upp  = np.zeros(len(datafiles))
-freq_area = np.zeros(len(datafiles))
-
-# --- Load each file
-for d, datafile in enumerate(datafiles):
-    print >> sys.stdout, "Loading %d of %d (%s)"%(d, len(datafiles), datafile)
-
+        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR)
 
 
 if 0:
