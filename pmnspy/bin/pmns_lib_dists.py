@@ -31,6 +31,10 @@ from pylal import bayespputils as bppu
 import pmns_utils
 import triangle
 
+import pycbc.types
+import pycbc.filter
+from pycbc.psd import aLIGOZeroDetHighPower
+
 from sklearn.neighbors.kde import KernelDensity
 
 fig_width_pt = 246  # Get this from LaTeX using \showthe\columnwidth
@@ -63,7 +67,7 @@ matplotlib.rcParams.update(
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
 def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
-        all_staccs, accs, all_bsn, all_snr):
+        all_staccs, accs, all_bsn, all_snr, truevals):
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
     htmlstr="""
     <html>
@@ -86,9 +90,140 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <td><img src="snr_PDF.png"></h3></td>
         </tr>
     </table>
-
-    <h2>Per Injection Results</h2>
     """.format(outdir=outdir)
+
+    htmlstr+="""
+    <h3>Parameter Estimation</h3>
+    """
+
+    # -----------------------
+    # Parameters vs inj SNR
+    htmlstr+="""
+    <h3>Recovered Parameters vs Injected Optimal SNR</h3>
+    <p>
+        <ul>
+            <li>Injected value shown as red-dashed line, where available</li>
+            <li>Markers:  maximum a posteriori measurement</li>
+            <li>Black lines: 90% confidence interval</li>
+        </ul>
+    </p>
+    <table>
+        <tr>
+    """
+    for param in truevals.keys():
+        # Only add the plot if the trueval name is in posterior keys - hacky way
+        # to just make sure we don't try to include exponentiated-away values
+        # like loghrss
+        if param in posteriors[0].maxP[1].keys():
+            htmlstr+="""
+            <td><img width=350px src="{param}vsinjSNR.png"</td>
+            """.format(param=param)
+    htmlstr+="""
+        </tr>
+    </table>
+    """
+
+
+    # -----------------
+    # Parameters vs logB
+    htmlstr+="""
+    <h3>Recovered Parameters vs Bayes factor</h3>
+    <p>
+        <ul>
+            <li>Injected value shown as red-dashed line, where available</li>
+            <li>Markers:  maximum a posteriori measurement</li>
+            <li>Black lines: 90% confidence interval</li>
+        </ul>
+    </p>
+    <table>
+        <tr>
+    """
+    for param in truevals.keys():
+        # Only add the plot if the trueval name is in posterior keys - hacky way
+        # to just make sure we don't try to include exponentiated-away values
+        # like loghrss
+        if param in posteriors[0].maxP[1].keys():
+            htmlstr+="""
+            <td><img width=350px src="{param}vslogB.png"</td>
+            """.format(param=param)
+    htmlstr+="""
+        </tr>
+    </table>
+    """
+
+    # -----------------
+    # Parameters 1D hists
+    htmlstr+="""
+    <h3>Recovered Parameter Histograms</h3>
+    <p>
+        <ul>
+            <li>Injected value shown as red-dashed line, where available</li>
+        </ul>
+    </p>
+    <table>
+        <tr>
+    """
+    for param in truevals.keys():
+        # Only add the plot if the trueval name is in posterior keys - hacky way
+        # to just make sure we don't try to include exponentiated-away values
+        # like loghrss
+        if param in posteriors[0].maxP[1].keys():
+            htmlstr+="""
+            <td><img width=350px src="{param}.png"</td>
+            """.format(param=param)
+    htmlstr+="""
+        </tr>
+    </table>
+    """
+
+    # -----------------
+    # Accuracy
+    htmlstr+="""
+    <h3>Parameter Accuracy</h3>
+    <p>
+        <ul>
+            <li>Accuracy = max posterior - injected / target value</li>
+            <li>For posterior samples x: Standard Accuracy = sqrt[mean(x-x_true)^2]</li>
+        </ul>
+    </p>
+    <table>
+        <tr>
+    """
+    for param in truevals.keys():
+        if truevals[param] is None: continue
+        htmlstr+="""
+        <td><img width=350px src="{param}accvsinjSNR.png"</td>
+        <td><img width=350px src="{param}accvslogB.png"</td>
+        <td><img width=350px src="{param}acc.png"</td>
+        """.format(param=param)
+    htmlstr+="""
+        </tr>
+    </table>
+    """
+
+    htmlstr+="""
+    <table>
+        <tr>
+    """
+    for param in truevals.keys():
+        if truevals[param] is None: continue
+        htmlstr+="""
+        <td><img width=350px src="{param}staccvsinjSNR.png"</td>
+        <td><img width=350px src="{param}staccvslogB.png"</td>
+        <td><img width=350px src="{param}stacc.png"</td>
+        """.format(param=param)
+
+    htmlstr+="""
+        </tr>
+    </table>
+    """
+
+
+    # ---------------
+    htmlstr+="""
+    <hr>
+    <h2>Per Injection Results</h2>
+    """
 
     p=0
     for posterior, injection_dir in zip(posteriors, injection_dirs):
@@ -96,7 +231,6 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
 
 
         htmlstr+="""
-        <hr>
         <h2>{injection}</h2>
         <a href="{injection}"><b>All results</b></a></td>
         <h3>Summary Statistics</h3>
@@ -155,11 +289,13 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
                             
         htmlstr+="""
         </tr>
+        </table>
         </p>
 
         <p>
             <img width=800px src="{injection}/corner.png">
         </p>
+        <hr>
             """.format(injection=injection)
         p+=1
 
@@ -524,8 +660,158 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
     return currentdir, BSN, SNR, pos, cl_intervals_allparams, \
             staccs_allparams, accs_allparams
 
+def define_truth(oneDMenu,waveform):
+    """
+    Return a dictionary of injected values
+    """
+    truevals={}
+    for item in oneDMenu:
+        if item=='frequency':
+            truevals[item]=waveform.fpeak
+        else:
+            truevals[item]=None
+
+    return truevals
+
+def plot_measurement_vs_statistic(x, y, yerrs=None, truevals=None, param=None,
+        xlabel='', ylabel=''):
+    """
+    Plot recovered value, with error bars, vs detection stat (like injected SNR
+    or recovered logB)
+    """
+    fig, ax = pl.subplots(figsize=(6,4))#, dpi=200)
+
+    if yerrs is not None: yerrs=abs(yerrs)
+    
+    ax.errorbar(x, y, yerr=yerrs, linestyle='none', marker='^', capsize=0,
+            ecolor='k', color='m')
+    ax.minorticks_on()
+
+    if truevals is not None:
+        ax.axhline(truevals[param], color='r', linestyle='--')
+
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    else:
+        ax.set_xlabel('Ranking statistic')
+
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    else:
+        if param in ['frequency', 'bandwidth']:
+            ax.set_ylabel('%s [Hz]'%(param))
+        else:
+            ax.set_ylabel(param)
+
+    fig.tight_layout()
+
+    return fig
+
+def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
+    """
+    Plot histogram
+    """
+
+    fig, ax = pl.subplots(figsize=(6,4))#, dpi=200)
+
+    histbinswidth = 3.5*np.std(samples) / len(samples)**(1./3)
+    histbins = np.arange(min(samples), max(samples), histbinswidth)
+    (n, bins, patches) = ax.hist(samples, histbins, normed='true',
+            histtype='step', facecolor='grey', color='k')
+    ax.set_ylim(0, 1.05*max(n))
+
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    else:
+        ax.set_ylabel('PDF')
+
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    else:
+        if param in ['frequency', 'bandwidth']:
+            ax.set_xlabel('%s [Hz]'%(param))
+        else:
+            ax.set_xlabel(param)
+
+    fig.tight_layout()
+
+    return fig
+
 # End
 # =========================================================================
+
+def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096):
+    """
+    return the reconstructed F-domain sine-Gaussians from the posterior samples
+    in posterior, as well as the max-posterior reconstruction and the matches
+    with the target waveform
+    """
+    wlen=16384
+
+
+    # Get a zero-padded version of the target waveform
+    htarget=np.zeros(wlen)
+    htarget[0:len(waveform.hplus)]=waveform.hplus.data
+    htarget=pycbc.types.TimeSeries(htarget, delta_t = waveform.hplus.delta_t)
+
+    # Get frequency series of target waveform
+    H_target = htarget.to_frequencyseries()
+
+    # Make psd for matches
+    flen = len(H_target)
+    delta_f = np.diff(H_target.sample_frequencies)[0]
+    psd = aLIGOZeroDetHighPower(flen, H_target.delta_f, low_freq_cutoff=flow)
+
+    # -----------
+    # MAP waveform
+    # XXX: Time-domain is a little easier, since we don't have to figure out
+    # which frequencies to populate in a pycbc object
+
+    hp, _ = lalsim.SimBurstSineGaussian(posterior.maxP[1]['quality'],
+            posterior.maxP[1]['frequency'], posterior.maxP[1]['hrss'], 0.0, 0.0,
+            waveform.hplus.delta_t)
+
+    # zero-pad
+    h_MAP = np.zeros(wlen)
+    h_MAP[:hp.data.length]=hp.data.data
+    h_MAP_ts = pycbc.types.TimeSeries(h_MAP,waveform.hplus.delta_t)
+    H_MAP = h_MAP_ts.to_frequencyseries()
+
+    MAP_match = pycbc.filter.match(H_target, H_MAP, low_frequency_cutoff=flow,
+            high_frequency_cutoff=fupp)
+
+    # -----------
+
+    return H_target, H_MAP, MAP_match
+
+    # -------------------------
+    # Waveforms for all samples
+    # Pre-allocate:
+    nsamps = len(posterior['frequency'].samples)
+    reconstructions = np.zeros(shape=(nsamps, len(Hplus)))
+    matches = np.zeros(nsamps)
+
+
+
+    # All samples!
+    for idx in xrange(nsamps):
+
+        hcurrent = np.zeros(wlen)
+
+        # let's just use hplus for now...
+        hp, _ = lalsim.SimBurstSineGaussian(posterior['quality'].samples[idx],
+                posterior['frequency'].samples[idx],
+                posterior['hrss'].samples[idx], 0.0, 0.0,
+                waveform.hplus.delta_t)
+
+        # zero-padded version
+        hcurrent[:hp.data.length] = hp.data.data
+
+        # pycbc object
+        hcurrent_ts = pycbc.types.TimeSeries(hcurrent, delta_t=hp.deltaT)
+
+        reconstructions[idx, :] = Hcurrent.data
+
 
 # ********************************************************************************
 # MAIN SCRIPT
@@ -547,6 +833,7 @@ currentdir=os.path.join(outputdirectory,'summaryfigs')
 
 # --- Construct the injected waveform
 waveform = pmns_utils.Waveform('%s_lessvisc'%waveform_name)
+waveform.reproject_waveform(0,0)
 waveform.compute_characteristics()
 
 
@@ -612,70 +899,110 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 # -------------------------------------------------------
 # Construct summary plots and statistics
 
+# 
+# Parameter Estimation
+#
+
+# Get true values (XXX: repeated code!):
+oneDMenu, twoDMenu, binSizes = oneD_bin_params()
+truevals=define_truth(oneDMenu, waveform)
+
+for param in truevals.keys():
+
+    #
+    # Measured values
+    #
+
+    # Measured values for this parameter
+    try:
+        measured_vals = [ pos.maxP[1][param] for pos in allposteriors ]
+    except KeyError: continue
+
+
+    # Error bars for this parameter
+    try:
+        error_bars = np.transpose([
+            all_cl_intervals[p][param]-allposteriors[p].maxP[1][param] for p in
+            xrange(len(allposteriors)) ])
+    except KeyError: continue
+
+    # param vs statistic
+    fig = plot_measurement_vs_statistic(x=all_BSN, y=measured_vals, \
+            yerrs=error_bars, truevals=truevals, param=param, xlabel=r'$\log B_{\rm{s,n}}$')
+    fig.savefig('{outputdirectory}/{param}vslogB.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    fig = plot_measurement_vs_statistic(x=all_SNR, y=measured_vals, \
+            yerrs=error_bars, truevals=truevals, param=param, xlabel=r'Injected SNR')
+    fig.savefig('{outputdirectory}/{param}vsinjSNR.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    # histogrammed params
+    fig = make_oneDhist(measured_vals, param=param)
+    fig.savefig('{outputdirectory}/{param}.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    #
+    # Accuracy
+    #
+    if truevals[param] is None: continue
+
+    # Get the maxP estimate (zeroth)
+    measured_vals = [ all_accs[p][param][0] for p in xrange(len(all_accs)) ]
+
+    fig = plot_measurement_vs_statistic(x=all_BSN, y=measured_vals, param=param,
+            ylabel=param+' accuracy', xlabel=r'$\log B_{\rm{s,n}}$')
+    pl.yscale('log')
+    fig.savefig('{outputdirectory}/{param}accvslogB.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    fig = plot_measurement_vs_statistic(x=all_SNR, y=measured_vals, param=param,
+            ylabel=param+' accuracy', xlabel=r'Injected SNR')
+    pl.yscale('log')
+    fig.savefig('{outputdirectory}/{param}accvsinjSNR.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    fig = make_oneDhist(measured_vals, param=param, xlabel=param+' accuracy')
+    fig.savefig('{outputdirectory}/{param}acc.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    #
+    # STANDARD Accuracy
+    #
+
+    # Get the maxP estimate (zeroth)
+    measured_vals = [ all_staccs[p][param] for p in xrange(len(all_staccs)) ]
+
+    fig = plot_measurement_vs_statistic(x=all_BSN, y=measured_vals, param=param,
+            ylabel=param+' standard accuracy', xlabel=r'$\log B_{\rm{s,n}}$')
+    pl.yscale('log')
+    fig.savefig('{outputdirectory}/{param}staccvslogB.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    fig = plot_measurement_vs_statistic(x=all_SNR, y=measured_vals, param=param,
+            ylabel=param+' standard accuracy', xlabel=r'Injected SNR')
+    pl.yscale('log')
+    fig.savefig('{outputdirectory}/{param}staccvsinjSNR.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+    fig = make_oneDhist(measured_vals, param=param, xlabel=param+' standard accuracy')
+    fig.savefig('{outputdirectory}/{param}stacc.png'.format(param=param,
+        outputdirectory=outputdirectory))
+    pl.close(fig)
+
+
+
 # -------------------------------------------------------
 # Write HTML summary
 write_results_page(outputdirectory, injection_dirs, allposteriors,
-        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR)
-
-
-if 0:
-    # ----------------------------------------------------------
-    # -- 2D Posterior results (see cbcBayesBurstPostProc.py:733)
-
-    for par1_name,par2_name in twoDMenu:
-        print >> sys.stdout, "Producing 2D posteriors for %s-%s"%(par1_name, par2_name)
-
-        # Get bin params
-        par1_name=par1_name.lower()
-        par2_name=par2_name.lower()
-        try: 
-            pos[par1_name.lower()]
-        except KeyError:
-            print "No posterior samples for %s, skipping binning."%par1_name
-            continue
-        try: 
-            pos[par2_name.lower()]
-        except KeyError:
-            print "No posterior samples for %s, skipping binning."%par2_name
-            continue
-
-        # Bin sizes
-        try: 
-            par1_bin=binSizes[par1_name]
-        except KeyError:
-            print "Bin size is not set for %s, skipping %s/%s binning."%(\
-                par1_name, par1_name, par2_name)
-            continue
-        try: 
-            par2_bin=binSizes[par2_name]
-        except KeyError:
-            print "Bin size is not set for %s, skipping %s/%s binning."%(\
-                par2_name, par1_name, par2_name)
-            continue
-
-        #print "Binning %s-%s to determine confidence levels ..."%(par1_name,par2_name)
-        #Form greedy binning input structure
-        twoDParams={par1_name:par1_bin,par2_name:par2_bin}
-
-        #Greedy bin the posterior samples
-        toppoints, injection_cl, reses, injection_area = \
-            bppu.greedy_bin_two_param(pos, twoDParams, [0.67, 0.9, 0.95])
-
-
-        # --- Plotting
-        greedy2ContourPlot = bppu.plot_two_param_kde_greedy_levels({'Result':pos},
-                twoDParams, [0.67,0.9,0.95], {'Result':'k'})
-
-        greedy2contourpath = os.path.join(currentdir,
-                '%s-%s_greedy2contour.png'%(par1_name, par2_name))
-        greedy2ContourPlot.savefig(greedy2contourpath)
-        
-        greedy2HistFig = bppu.plot_two_param_greedy_bins_hist(pos, twoDParams,
-                [0.67, 0.9, 0.95])
-        greedy2histpath = os.path.join(currentdir,'% s-%s_greedy2.png'%(par1_name,
-            par2_name))
-        greedy2HistFig.savefig(greedy2histpath)
-
-        sys.exit()
+        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR, truevals)
 
 
