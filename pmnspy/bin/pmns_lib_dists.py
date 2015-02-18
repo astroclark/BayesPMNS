@@ -69,7 +69,8 @@ matplotlib.rcParams.update(
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
 def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
-        all_staccs, accs, all_bsn, all_snr, truevals, all_summaries):
+        all_staccs, accs, all_bsn, all_snr, all_reconstructions, truevals,
+        all_summaries):
 
 
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
@@ -268,7 +269,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     """
 
 
-    # ---------------
+    # ---------------------
+    # Per Injection Results
     htmlstr+="""
     <hr>
     <h2>Per Injection Results</h2>
@@ -288,6 +290,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <ul>
                 <li>NetSNR (injected): {snr}</li>
                 <li>BSN: {bsn}</li>
+                <li>Match: {map_match}</li>
             </ul>
         </p>
 
@@ -303,8 +306,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
                     <td><b>high</b></td>
                     <td><b>stacc</b></td>
                 </tr>
-        """.format(injection=injection, snr=all_snr[p], bsn=all_bsn[p])
-
+        """.format(injection=injection, snr=all_snr[p], bsn=all_bsn[p],
+                all_reconstructions[p]['MAPMatch'])
 
         oneDMenu, twoDMenu, binSizes = oneD_bin_params()
         parnames=filter(lambda x: x in posterior.names, oneDMenu)
@@ -343,7 +346,12 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         </p>
 
         <p>
-            <img width=500px src="{injection}/reconPSD.png">
+            <table>
+                <tr>
+                    <td><img width=500px src="{injection}/reconPSD.png"></td>
+                    <td><img width=500px src="{injection}/matchhist.png"></td>
+                </tr>
+            </table>
         </p>
 
         <p>
@@ -719,6 +727,10 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file,
     fig = plot_sampled_psd(reconstruction)
     fig.savefig(os.path.join(currentdir,'reconPSD.png'))
 
+    # Histogram matches
+    fig = make_oneDhist(reconstruction['SampledMatches'], 'Match')
+    fig.savefig(os.path.join(currentdir, 'matchhist.png'))
+
     pl.close('all')
     return currentdir, BSN, SNR, pos, cl_intervals_allparams, \
             staccs_allparams, accs_allparams, reconstruction
@@ -782,6 +794,7 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
     (n, bins, patches) = ax.hist(samples, histbins, normed='true',
             histtype='step', facecolor='grey', color='k')
     ax.set_ylim(0, 1.05*max(n))
+    ax.minorticks_on()
 
     if ylabel:
         ax.set_ylabel(ylabel)
@@ -1024,11 +1037,20 @@ def measurement_summary(name, values):
 # -------------------------------
 # Load results
 
-resultsdir=sys.argv[1]
-waveform_name='shen_135135'#sys.argv[2]
-Nlive=512#sys.argv[3]
+# --- XXX Input (should grow up and use an option parser)
 
-outputdirectory=resultsdir+'_allout'
+resultsdir=sys.argv[1]
+waveform_name=sys.argv[2]
+
+if len(sys.argv[3])>=3:
+    BSN_threshold=float(sys.argv[3])
+else:
+    BSN_threshold=-np.inf
+
+outputdirectory=resultsdir+'_'+sys.argv[4]
+
+# --- end input
+
 if not os.path.isdir(outputdirectory):
     os.makedirs(outputdirectory) 
 else:
@@ -1088,6 +1110,16 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     posterior_file = files[0]
     bsn_file = files[1]
     snr_file = files[2]
+
+    # Read Bayes file right now in case we want to apply a threshold
+    bfile=open(bsn_file, 'r')
+    BSN=bfile.read()
+    bfile.close()
+    BSN=float(BSN.split()[0])
+
+    if BSN<BSN_threshold:
+        print 'injection missed, continuing to next'
+        continue
 
     injdir, BSN, SNR, thisposterior, cl_intervals, staccs, accs, \
             reconstruction = single_injection_results(outputdirectory,
@@ -1246,8 +1278,8 @@ for param in truevals.keys():
 # -------------------------------------------------------
 # Write HTML summary
 write_results_page(outputdirectory, injection_dirs, allposteriors,
-        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR, truevals,
-        all_summaries)
+        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR,
+        all_reconstructions, truevals, all_summaries)
 
 # Dump a text file with the summaries
 f=open(os.path.join(outputdirectory, "summary.txt"), "w")
