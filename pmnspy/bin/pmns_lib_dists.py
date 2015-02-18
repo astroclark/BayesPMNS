@@ -27,6 +27,7 @@ import shutil
 import matplotlib
 from matplotlib import pyplot as pl
 
+import lalsimulation as lalsim
 from pylal import bayespputils as bppu
 import pmns_utils
 import triangle
@@ -67,27 +68,70 @@ matplotlib.rcParams.update(
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
 def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
-        all_staccs, accs, all_bsn, all_snr, truevals):
+        all_staccs, accs, all_bsn, all_snr, truevals, all_summaries):
+
+
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
     htmlstr="""
     <html>
     <h1>Results Summary for {outdir}</h1>
-    <hr>
-    <p>
-        <ul>
-            <li></li>
-        </ul>
-    </p>
+    <ul>
+        <li><a href="#SummaryStatistics">Summary Statistics (tabulated)</a></li>
+        <li><a href="#RecParamsVsSNR">Parameter Estimates vs Injected SNR</a></li>
+        <li><a href="#RecParamsVsBSN">Parameter Estimates vs BSN</a></li>
+        <li><a href="#RecParams">Parameter Estimate Histograms</a></li>
+        <li><a href="#ParamsAccuracy">Parameter Estimate Accuracies</a></li>
+        <li><a href="#Injections">Per-Injection Results</a></li>
+    </ul>
 
-    <h2>Summary Plots</h2>
+    <h3>Summary Statistics</h3>
+    <a name="SummaryStatistics"></a>
+    <table border=2>
+        <tr>
+            <td><b>Statistic</b></td>
+            <td><b>Mean</b></td>
+            <td><b>Std</b></td>
+            <td><b>Median</b></td>
+            <td><b>5th, 95th percentile</b></td>
+        </tr>
+        """.format(outdir=outdir)
+
+    for summary in all_summaries:
+        htmlstr+="""
+            <tr>
+                <td><b>{name}</b></td>
+                <td>{mean}</td>
+                <td>{std}</td>
+                <td>{median}</td>
+                <td>{pc5}, {pc90}</td>
+            </tr>
+            """.format(
+                    name=summary['name'],
+                    mean=summary['mean'],
+                    std=summary['std'],
+                    median=summary['median'],
+                    pc5=summary['5thPercentile'],
+                    pc90=summary['90thPercentile'],
+                    )
+
+    htmlstr+="""
+        </table>
+
+    <table>
+    <tr>
+        <td width=400px>Figure shows the PSDs reconstructed from the MAP params for each
+        injection.  Note that the target signal hrss corresponds to an optimally
+        oriented source at 20 Mpc; the reconstructed hrss correspond to the actual
+        injections analysis (i.e., don't expect the amplitudes to match!)</td>
+        <td> <img width=500px src="MAP_PSDs.png"></td>
+    </tr>
+    </table>
+
+    <h3>Ranking Statistics</h3>
     <table>
         <tr>
-            <td><h3>SNRs</h3></td>
-            <td><h3>Bayes Factors</h3></td>
-        </tr>
-        <tr>
-            <td><img src="logB_PDF.png"></td>
-            <td><img src="snr_PDF.png"></h3></td>
+            <td><img width=500px src="logBvsSNR.png"></td>
+            <td><img width=500px src="logBs.png"></h3></td>
         </tr>
     </table>
     """.format(outdir=outdir)
@@ -100,6 +144,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     # Parameters vs inj SNR
     htmlstr+="""
     <h3>Recovered Parameters vs Injected Optimal SNR</h3>
+    <a name="RecParmsVsSNR"></a>
     <p>
         <ul>
             <li>Injected value shown as red-dashed line, where available</li>
@@ -116,7 +161,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         # like loghrss
         if param in posteriors[0].maxP[1].keys():
             htmlstr+="""
-            <td><img width=350px src="{param}vsinjSNR.png"</td>
+            <td><img width=500px src="{param}vsinjSNR.png"</td>
             """.format(param=param)
     htmlstr+="""
         </tr>
@@ -128,6 +173,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     # Parameters vs logB
     htmlstr+="""
     <h3>Recovered Parameters vs Bayes factor</h3>
+    <a name="RecParmsVsBSN"></a>
     <p>
         <ul>
             <li>Injected value shown as red-dashed line, where available</li>
@@ -144,7 +190,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         # like loghrss
         if param in posteriors[0].maxP[1].keys():
             htmlstr+="""
-            <td><img width=350px src="{param}vslogB.png"</td>
+            <td><img width=500px src="{param}vslogB.png"</td>
             """.format(param=param)
     htmlstr+="""
         </tr>
@@ -155,6 +201,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     # Parameters 1D hists
     htmlstr+="""
     <h3>Recovered Parameter Histograms</h3>
+    <a name="RecParams"></a>
     <p>
         <ul>
             <li>Injected value shown as red-dashed line, where available</li>
@@ -169,7 +216,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         # like loghrss
         if param in posteriors[0].maxP[1].keys():
             htmlstr+="""
-            <td><img width=350px src="{param}.png"</td>
+            <td><img width=500px src="{param}.png"</td>
             """.format(param=param)
     htmlstr+="""
         </tr>
@@ -180,6 +227,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     # Accuracy
     htmlstr+="""
     <h3>Parameter Accuracy</h3>
+    <a name="ParamsAccuracy"></a>
     <p>
         <ul>
             <li>Accuracy = max posterior - injected / target value</li>
@@ -192,9 +240,9 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     for param in truevals.keys():
         if truevals[param] is None: continue
         htmlstr+="""
-        <td><img width=350px src="{param}accvsinjSNR.png"</td>
-        <td><img width=350px src="{param}accvslogB.png"</td>
-        <td><img width=350px src="{param}acc.png"</td>
+        <td><img width=500px src="{param}accvsinjSNR.png"</td>
+        <td><img width=500px src="{param}accvslogB.png"</td>
+        <td><img width=500px src="{param}acc.png"</td>
         """.format(param=param)
     htmlstr+="""
         </tr>
@@ -208,9 +256,9 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     for param in truevals.keys():
         if truevals[param] is None: continue
         htmlstr+="""
-        <td><img width=350px src="{param}staccvsinjSNR.png"</td>
-        <td><img width=350px src="{param}staccvslogB.png"</td>
-        <td><img width=350px src="{param}stacc.png"</td>
+        <td><img width=500px src="{param}staccvsinjSNR.png"</td>
+        <td><img width=500px src="{param}staccvslogB.png"</td>
+        <td><img width=500px src="{param}stacc.png"</td>
         """.format(param=param)
 
     htmlstr+="""
@@ -223,6 +271,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     htmlstr+="""
     <hr>
     <h2>Per Injection Results</h2>
+    <a name="Injections"></a>
     """
 
     p=0
@@ -290,6 +339,10 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         htmlstr+="""
         </tr>
         </table>
+        </p>
+
+        <p>
+            <img width=500px src="{injection}/reconPSD.png">
         </p>
 
         <p>
@@ -539,7 +592,8 @@ def add_derived_params(posterior):
 #
 # BPPU tools
 #
-def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
+def single_injection_results(outdir, posterior_file, bsn_file, snr_file,
+        waveform):
 
     """
     Characterise the results, including producing plots, for a single injection
@@ -656,9 +710,17 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file):
         oneDplotPath=os.path.join(currentdir,figname)
         fig.savefig(oneDplotPath)
 
+    # Generate reconstructed waveforms
+    print >> sys.stdout, "Generating reconstructions"
+    reconstruction = reconstructed_SineGaussianF(pos, waveform)
+
+    # Plot reconstructed PSDs
+    fig = plot_sampled_psd(reconstruction)
+    fig.savefig(os.path.join(currentdir,'reconPSD.png'))
+
     pl.close('all')
     return currentdir, BSN, SNR, pos, cl_intervals_allparams, \
-            staccs_allparams, accs_allparams
+            staccs_allparams, accs_allparams, reconstruction
 
 def define_truth(oneDMenu,waveform):
     """
@@ -730,8 +792,10 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
     else:
         if param in ['frequency', 'bandwidth']:
             ax.set_xlabel('%s [Hz]'%(param))
-        else:
+        elif param is not None:
             ax.set_xlabel(param)
+        else:
+            ax.set_xlabel(xlabel)
 
     fig.tight_layout()
 
@@ -740,7 +804,8 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
 # End
 # =========================================================================
 
-def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096):
+def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096,
+        nrec=500):
     """
     return the reconstructed F-domain sine-Gaussians from the posterior samples
     in posterior, as well as the max-posterior reconstruction and the matches
@@ -753,6 +818,11 @@ def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096):
     htarget=np.zeros(wlen)
     htarget[0:len(waveform.hplus)]=waveform.hplus.data
     htarget=pycbc.types.TimeSeries(htarget, delta_t = waveform.hplus.delta_t)
+
+    # Normalise so that the target has hrss=1
+    #hrssTarget = pycbc.filter.sigma(htarget, low_frequency_cutoff=flow,
+    #        high_frequency_cutoff=fupp)
+    #htarget.data /= hrssTarget
 
     # Get frequency series of target waveform
     H_target = htarget.to_frequencyseries()
@@ -770,48 +840,182 @@ def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096):
     hp, _ = lalsim.SimBurstSineGaussian(posterior.maxP[1]['quality'],
             posterior.maxP[1]['frequency'], posterior.maxP[1]['hrss'], 0.0, 0.0,
             waveform.hplus.delta_t)
+    #hp, _ = lalsim.SimBurstSineGaussian(posterior.maxP[1]['quality'],
+    #        posterior.maxP[1]['frequency'], 1.0, 0.0, 0.0,
+    #        waveform.hplus.delta_t)
 
     # zero-pad
     h_MAP = np.zeros(wlen)
+
+    # populate
     h_MAP[:hp.data.length]=hp.data.data
+
+    # pycbc objects
     h_MAP_ts = pycbc.types.TimeSeries(h_MAP,waveform.hplus.delta_t)
     H_MAP = h_MAP_ts.to_frequencyseries()
 
     MAP_match = pycbc.filter.match(H_target, H_MAP, low_frequency_cutoff=flow,
-            high_frequency_cutoff=fupp)
-
-    # -----------
-
-    return H_target, H_MAP, MAP_match
+            high_frequency_cutoff=fupp)[0]
 
     # -------------------------
     # Waveforms for all samples
     # Pre-allocate:
-    nsamps = len(posterior['frequency'].samples)
-    reconstructions = np.zeros(shape=(nsamps, len(Hplus)))
-    matches = np.zeros(nsamps)
 
+    #nrec=500
+    if len(posterior['frequency'].samples)>nrec:
+        decidx = np.random.randint(0, len(posterior['frequency'].samples),
+                nrec)
+    else:
+        decidx = xrange(nrec)
 
+    reconstructions = np.zeros(shape=(nrec, len(H_target)), dtype=complex)
+    matches = np.zeros(nrec)
 
     # All samples!
-    for idx in xrange(nsamps):
+    for idx in xrange(nrec):
 
-        hcurrent = np.zeros(wlen)
 
         # let's just use hplus for now...
-        hp, _ = lalsim.SimBurstSineGaussian(posterior['quality'].samples[idx],
-                posterior['frequency'].samples[idx],
-                posterior['hrss'].samples[idx], 0.0, 0.0,
+        hp, _ = lalsim.SimBurstSineGaussian(
+                np.squeeze(posterior['quality'].samples)[idx],
+                np.squeeze(posterior['frequency'].samples)[idx],
+                np.squeeze(posterior['hrss'].samples)[idx], 0.0, 0.0,
                 waveform.hplus.delta_t)
+       #hp, _ = lalsim.SimBurstSineGaussian(
+       #        np.squeeze(posterior['quality'].samples)[idx],
+       #        np.squeeze(posterior['frequency'].samples)[idx],
+       #        1.0, 0.0, 0.0,
+       #        waveform.hplus.delta_t)
 
-        # zero-padded version
+        # zero pad
+        hcurrent = np.zeros(wlen)
+
+        # populate
         hcurrent[:hp.data.length] = hp.data.data
 
         # pycbc object
         hcurrent_ts = pycbc.types.TimeSeries(hcurrent, delta_t=hp.deltaT)
 
-        reconstructions[idx, :] = Hcurrent.data
+        # populate array of all reconstructions
+        reconstructions[idx, :] = hcurrent_ts.to_frequencyseries().data
 
+        # compute match for this sample
+        matches[idx] = pycbc.filter.match(H_target,
+                hcurrent_ts.to_frequencyseries(), low_frequency_cutoff=flow,
+                high_frequency_cutoff=fupp)[0]
+
+    # -----------
+    reconstruction = {}
+    reconstruction['FrequencyAxis'] = H_MAP.sample_frequencies
+    reconstruction['TargetSpectrum'] = H_target
+    reconstruction['MAPSpectrum'] = H_MAP
+    reconstruction['MAPMatch'] = MAP_match
+    reconstruction['SampledReconstructions'] = reconstructions
+    reconstruction['SampledMatches'] = matches
+
+    return reconstruction
+
+def plot_sampled_psd(reconstruction):
+    """
+    Produce power spectrum showing a subset of PSDs of the posterior-sampled
+    waveforms, the MAP PSD and the target PSD
+    """
+
+    fig, ax = pl.subplots(figsize=(6,4))
+
+    Nplot=500
+    if len(reconstruction['SampledMatches'])>Nplot:
+        decidx = np.random.randint(0, len(reconstruction['SampledMatches']), Nplot)
+    else:
+        decidx = xrange(100)
+
+    # Plot samples
+    i=0
+    for idx in decidx:
+
+        if i==0:
+            label="Posterior Samples"
+        else:
+            label=""
+
+        ax.semilogy(reconstruction['FrequencyAxis'],
+                abs(reconstruction['SampledReconstructions'][idx,:])**2,
+                color='k', alpha=0.1, label=label)
+        i+=1
+
+    # Plot MAP
+    ax.semilogy(reconstruction['FrequencyAxis'],
+            abs(reconstruction['MAPSpectrum'])**2, color='r', 
+            label='MAP estimate')
+
+    # Plot Target
+    ax.semilogy(reconstruction['FrequencyAxis'],
+            abs(reconstruction['TargetSpectrum'])**2, color='g',
+            label='Target', linewidth=2)
+
+    ax.set_xlabel('Frequency [Hz]')
+    ax.set_ylabel(r'$|H(f)|^2$')
+    ax.set_xlim(1000, 4096)
+    ax.set_ylim(1e-55,1e-45)
+    ax.minorticks_on()
+    ax.legend(loc='lower right')
+
+    fig.tight_layout()
+
+    return fig
+
+def plot_map_psds(reconstructions):
+    """
+    Produce power spectra showing the all MAP estimate PSDs and the target PSD
+    """
+
+    fig, ax = pl.subplots(figsize=(6,4))
+
+    # Plot samples
+    i=0
+    for reconstruction in reconstructions:
+
+        if i==0:
+            label="MAP PSD Estimates"
+        else:
+            label=""
+
+        # Plot MAP
+        ax.semilogy(reconstruction['FrequencyAxis'],
+                abs(reconstruction['MAPSpectrum'])**2, color='k', 
+                label=label, alpha=0.25)
+
+        i+=1
+
+    # Plot Target
+    ax.semilogy(reconstruction['FrequencyAxis'],
+            abs(reconstruction['TargetSpectrum'])**2, color='g',
+            label='Target', linewidth=2)
+
+    ax.set_xlabel('Frequency [Hz]')
+    ax.set_ylabel(r'$|H(f)|^2$')
+    ax.set_xlim(1000, 4096)
+    ax.set_ylim(1e-55,1e-45)
+    ax.minorticks_on()
+    ax.legend(loc='lower right')
+
+    fig.tight_layout()
+
+    return fig
+
+def measurement_summary(name, values):
+    """
+    Return a dictionary with summary statistics of the sample of values
+    """
+    summary = {}
+    summary['name'] = name
+    summary['mean'] = np.mean(values)
+    summary['median'] = np.median(values)
+    summary['std'] = np.std(values)
+    summary['5thPercentile'] = np.percentile(values, 5)
+    summary['90thPercentile'] = np.percentile(values, 90)
+
+    return summary
 
 # ********************************************************************************
 # MAIN SCRIPT
@@ -876,6 +1080,7 @@ all_staccs = []
 all_accs = []
 all_BSN = []
 all_SNR = []
+all_reconstructions = []
 
 for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 
@@ -883,9 +1088,9 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     bsn_file = files[1]
     snr_file = files[2]
 
-    injdir, BSN, SNR, thisposterior, cl_intervals, staccs, accs = \
-            single_injection_results(outputdirectory, posterior_file, bsn_file,
-                    snr_file)
+    injdir, BSN, SNR, thisposterior, cl_intervals, staccs, accs, \
+            reconstruction = single_injection_results(outputdirectory,
+                    posterior_file, bsn_file, snr_file, waveform)
 
     injection_dirs.append(injdir)
     allposteriors.append(thisposterior)
@@ -894,10 +1099,37 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     all_accs.append(accs)
     all_BSN.append(BSN)
     all_SNR.append(SNR)
+    all_reconstructions.append(reconstruction)
 
 
 # -------------------------------------------------------
 # Construct summary plots and statistics
+
+all_summaries = []
+#
+# LogB behaviour
+#
+fig = plot_measurement_vs_statistic(x=all_SNR, y=all_BSN, 
+        xlabel='Injected SNR', ylabel=r'$\log B_{\rm{s,n}}$')
+fig.savefig('{outputdirectory}/logBvsSNR.png'.format(
+    outputdirectory=outputdirectory))
+pl.close(fig)
+
+fig = make_oneDhist(all_BSN, xlabel=r'$\log B_{\rm{s,n}}$' )
+fig.savefig('{outputdirectory}/logBs.png'.format(
+    outputdirectory=outputdirectory))
+pl.close(fig)
+
+all_summaries.append(measurement_summary('BSN', all_BSN))
+all_summaries.append(measurement_summary('Injected SNR', all_SNR))
+
+#
+# Waveform Reconstructions
+#
+fig = plot_map_psds(all_reconstructions)
+fig.savefig('{outputdirectory}/MAP_PSDs.png'.format(
+    outputdirectory=outputdirectory))
+pl.close(fig)
 
 # 
 # Parameter Estimation
@@ -909,6 +1141,7 @@ truevals=define_truth(oneDMenu, waveform)
 
 for param in truevals.keys():
 
+
     #
     # Measured values
     #
@@ -918,6 +1151,8 @@ for param in truevals.keys():
         measured_vals = [ pos.maxP[1][param] for pos in allposteriors ]
     except KeyError: continue
 
+    # Summarise
+    all_summaries.append(measurement_summary('%s-MAP'%param, measured_vals))
 
     # Error bars for this parameter
     try:
@@ -953,6 +1188,9 @@ for param in truevals.keys():
     # Get the maxP estimate (zeroth)
     measured_vals = [ all_accs[p][param][0] for p in xrange(len(all_accs)) ]
 
+    # Summarise
+    all_summaries.append(measurement_summary('%s-Accuracy'%param, measured_vals))
+
     fig = plot_measurement_vs_statistic(x=all_BSN, y=measured_vals, param=param,
             ylabel=param+' accuracy', xlabel=r'$\log B_{\rm{s,n}}$')
     pl.yscale('log')
@@ -978,6 +1216,9 @@ for param in truevals.keys():
 
     # Get the maxP estimate (zeroth)
     measured_vals = [ all_staccs[p][param] for p in xrange(len(all_staccs)) ]
+    
+    # Summarise
+    all_summaries.append(measurement_summary('%s-StandardAccuracy'%param, measured_vals))
 
     fig = plot_measurement_vs_statistic(x=all_BSN, y=measured_vals, param=param,
             ylabel=param+' standard accuracy', xlabel=r'$\log B_{\rm{s,n}}$')
@@ -1000,9 +1241,25 @@ for param in truevals.keys():
 
 
 
+
 # -------------------------------------------------------
 # Write HTML summary
 write_results_page(outputdirectory, injection_dirs, allposteriors,
-        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR, truevals)
+        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR, truevals,
+        all_summaries)
+
+# Dump a text file with the summaries
+f=open(os.path.join(outputdirectory, "summary.txt"), "w")
+f.write("# name mean std median 5thPercentile 90thPercentile\n")
+for summary in all_summaries:
+    f.write("{name} {mean} {std} {median} {pc5} {pc90}\n".format(
+                name=summary['name'],
+                mean=summary['mean'],
+                std=summary['std'],
+                median=summary['median'],
+                pc5=summary['5thPercentile'],
+                pc90=summary['90thPercentile'],
+                ))
+f.close()
 
 
