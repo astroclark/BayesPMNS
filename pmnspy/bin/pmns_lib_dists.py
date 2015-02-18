@@ -25,6 +25,7 @@ from itertools import combinations
 import shutil
 
 import matplotlib
+matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 
 import lalsimulation as lalsim
@@ -59,7 +60,7 @@ matplotlib.rcParams.update(
         })  
 
 matplotlib.rcParams.update(                                                                                       
-        {'savefig1.dpi': 200,                                                                                     
+        {'savefig.dpi': 200,                                                                                     
         'xtick.major.size':8,
         'xtick.minor.size':4,
         'ytick.major.size':8,                                                                                     
