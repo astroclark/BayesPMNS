@@ -129,6 +129,18 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     </tr>
     </table>
 
+    <table>
+    <tr>
+        <td width=400px>Figure shows values of match between MAP waveform
+        reconstruction and target waveform.  Note that this match may be
+        computed over the full spectrum of the analysis, while we are usually
+        only really interested in peak frequency and immediate surroundings
+        (i.e., don't be alarmed at low match values!)</td>
+        <td> <img width=500px src="MAPMatches.png"></td>
+    </tr>
+    </table>
+
+
     <h3>Ranking Statistics</h3>
     <table>
         <tr>
@@ -307,7 +319,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
                     <td><b>stacc</b></td>
                 </tr>
         """.format(injection=injection, snr=all_snr[p], bsn=all_bsn[p],
-                all_reconstructions[p]['MAPMatch'])
+                map_match=all_reconstructions[p]['MAPMatch'])
 
         oneDMenu, twoDMenu, binSizes = oneD_bin_params()
         parnames=filter(lambda x: x in posterior.names, oneDMenu)
@@ -793,7 +805,13 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
     histbins = np.arange(min(samples), max(samples), histbinswidth)
     (n, bins, patches) = ax.hist(samples, histbins, normed='true',
             histtype='step', facecolor='grey', color='k')
-    ax.set_ylim(0, 1.05*max(n))
+
+
+    # plot samples along xaxis
+    ax.plot(samples, 0-1e-2*max(n)*np.ones(len(samples)), linestyle='none',
+            color='k', marker='|')
+    ax.set_ylim(0-5.5e-2*max(n),max(n))
+
     ax.minorticks_on()
 
     if ylabel:
@@ -1041,13 +1059,13 @@ def measurement_summary(name, values):
 
 resultsdir=sys.argv[1]
 waveform_name=sys.argv[2]
+outputdirectory=sys.argv[3]
 
-if len(sys.argv[3])>=3:
-    BSN_threshold=float(sys.argv[3])
+if len(sys.argv)>4: # remember 0 is the program name
+    BSN_threshold=float(sys.argv[4])
 else:
     BSN_threshold=-np.inf
 
-outputdirectory=resultsdir+'_'+sys.argv[4]
 
 # --- end input
 
@@ -1154,7 +1172,7 @@ fig.savefig('{outputdirectory}/logBs.png'.format(
 pl.close(fig)
 
 all_summaries.append(measurement_summary('BSN', all_BSN))
-all_summaries.append(measurement_summary('Injected SNR', all_SNR))
+all_summaries.append(measurement_summary('Injected-SNR', all_SNR))
 
 #
 # Waveform Reconstructions
@@ -1163,6 +1181,13 @@ fig = plot_map_psds(all_reconstructions)
 fig.savefig('{outputdirectory}/MAP_PSDs.png'.format(
     outputdirectory=outputdirectory))
 pl.close(fig)
+
+all_map_matches = [ reconstruction['MAPMatch'] for reconstruction in all_reconstructions ]
+fig = make_oneDhist(all_map_matches, xlabel='MAP Match')
+fig.savefig('{outputdirectory}/MAPMatches.png'.format(
+    outputdirectory=outputdirectory))
+all_summaries.append(measurement_summary('MAPMatches', all_map_matches))
+
 
 # 
 # Parameter Estimation
