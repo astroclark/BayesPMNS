@@ -230,7 +230,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     <a name="ParamsAccuracy"></a>
     <p>
         <ul>
-            <li>Accuracy = max posterior - injected / target value</li>
+            <li>Accuracy = abs(max posterior - target value)</li>
             <li>For posterior samples x: Standard Accuracy = sqrt[mean(x-x_true)^2]</li>
         </ul>
     </p>
@@ -422,9 +422,9 @@ def acc(pos, param, truth):
     if truth is None:
         return [None]*3
     else:
-        delta_maxP=truth - pos.maxP[1][param]
-        delta_mean=truth - pos.means[param]
-        delta_median=truth - pos.medians[param]
+        delta_maxP=abs(truth - pos.maxP[1][param])
+        delta_mean=abs(truth - pos.means[param])
+        delta_median=abs(truth - pos.medians[param])
         return [delta_maxP, delta_mean, delta_median]
 
 def kde_sklearn(x, x_grid, bandwidth=0.2, **kwargs):
@@ -945,12 +945,12 @@ def plot_sampled_psd(reconstruction):
 
     # Plot MAP
     ax.semilogy(reconstruction['FrequencyAxis'],
-            abs(reconstruction['MAPSpectrum'])**2, color='r', 
+            abs(reconstruction['MAPSpectrum'])**2, color='g', 
             label='MAP estimate')
 
     # Plot Target
     ax.semilogy(reconstruction['FrequencyAxis'],
-            abs(reconstruction['TargetSpectrum'])**2, color='g',
+            abs(reconstruction['TargetSpectrum'])**2, color='r',
             label='Target', linewidth=2)
 
     ax.set_xlabel('Frequency [Hz]')
@@ -989,7 +989,7 @@ def plot_map_psds(reconstructions):
 
     # Plot Target
     ax.semilogy(reconstruction['FrequencyAxis'],
-            abs(reconstruction['TargetSpectrum'])**2, color='g',
+            abs(reconstruction['TargetSpectrum'])**2, color='r',
             label='Target', linewidth=2)
 
     ax.set_xlabel('Frequency [Hz]')
