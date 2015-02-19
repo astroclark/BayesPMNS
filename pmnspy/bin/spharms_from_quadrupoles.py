@@ -125,12 +125,12 @@ times -= times[0]
 if opts.ninja_units:
 
     # Just rescale to 1 Mpc
-    Ixx *= 1.0#extract_dist
-    Ixy *= 1.0#extract_dist
-    Ixz *= 1.0#extract_dist
-    Iyy *= 1.0#extract_dist
-    Iyz *= 1.0#extract_dist
-    Izz *= 1.0#extract_dist
+    Ixx /= extract_dist
+    Ixy /= extract_dist
+    Ixz /= extract_dist
+    Iyy /= extract_dist
+    Iyz /= extract_dist
+    Izz /= extract_dist
 
 else:
     # Convert to NINJA units
