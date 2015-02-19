@@ -124,13 +124,13 @@ times -= times[0]
 ###########################
 if opts.ninja_units:
 
-    # Just rescale to 1 Mpc
-    Ixx /= extract_dist
-    Ixy /= extract_dist
-    Ixz /= extract_dist
-    Iyy /= extract_dist
-    Iyz /= extract_dist
-    Izz /= extract_dist
+    # don't do anything
+    Ixx *= 1.0
+    Ixy *= 1.0
+    Ixz *= 1.0
+    Iyy *= 1.0
+    Iyz *= 1.0
+    Izz *= 1.0
 
 else:
     # Convert to NINJA units
