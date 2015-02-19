@@ -70,7 +70,7 @@ matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
 def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         all_staccs, accs, all_bsn, all_snr, all_reconstructions, truevals,
-        all_summaries):
+        all_summaries, BSN_threshold, epsilon, stdev_epsilon):
 
 
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
@@ -88,6 +88,10 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
 
     <h3>Summary Statistics</h3>
     <a name="SummaryStatistics"></a>
+    <ul>
+        <li>BSN threshold: {bsn_thresh}</li>
+        <li>Efficiency (+/- 1 sigma): {epsilon} +/- {stdev_epsilon}</li>
+    </ul>
     <table border=2>
         <tr>
             <td><b>Statistic</b></td>
@@ -96,7 +100,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <td><b>Median</b></td>
             <td><b>5th, 95th percentile</b></td>
         </tr>
-        """.format(outdir=outdir)
+        """.format(outdir=outdir, bsn_thresh=BSN_threshold, epsilon=epsilon,
+                stdev_epsilon=stdev_epsilon)
 
     for summary in all_summaries:
         htmlstr+="""
@@ -1049,6 +1054,24 @@ def measurement_summary(name, values):
 
     return summary
 
+def compute_efficiency(k,N,b=True):
+
+    k=float(k)
+    N=float(N)
+    if b:
+        # Bayesian treatment
+        classify_efficiencyilon=(k+1)/(N+2)
+        stdev_classify_efficiencyilon=np.sqrt(classify_efficiencyilon*(1-classify_efficiencyilon)/(N+3))
+    else:
+        # Binomial treatment
+        if N==0:
+            classify_efficiencyilon=0.0
+            stdev_classify_efficiencyilon=0.0
+        else:
+            classify_efficiencyilon=k/N
+            stdev_classify_efficiencyilon=np.sqrt(classify_efficiencyilon*(1-classify_efficiencyilon)/N)
+    return (classify_efficiencyilon,stdev_classify_efficiencyilon)
+
 # ********************************************************************************
 # MAIN SCRIPT
 
@@ -1123,6 +1146,7 @@ all_BSN = []
 all_SNR = []
 all_reconstructions = []
 
+Nfound = 0
 for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 
     posterior_file = files[0]
@@ -1152,9 +1176,15 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     all_SNR.append(SNR)
     all_reconstructions.append(reconstruction)
 
+    Nfound +=1
+
 
 # -------------------------------------------------------
 # Construct summary plots and statistics
+
+# 'detection' efficiency
+epsilon, stdev_epsilon = compute_efficiency(Nfound, len(BSNfiles))
+
 
 all_summaries = []
 #
@@ -1304,7 +1334,8 @@ for param in truevals.keys():
 # Write HTML summary
 write_results_page(outputdirectory, injection_dirs, allposteriors,
         all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR,
-        all_reconstructions, truevals, all_summaries)
+        all_reconstructions, truevals, all_summaries, BSN_threshold, epsilon,
+        stdev_epsilon)
 
 # Dump a text file with the summaries
 f=open(os.path.join(outputdirectory, "summary.txt"), "w")
@@ -1318,6 +1349,7 @@ for summary in all_summaries:
                 pc5=summary['5thPercentile'],
                 pc90=summary['90thPercentile'],
                 ))
+f.write("efficiency {0} {1} 0 0 0\n".format( epsilon, stdev_epsilon ))
 f.close()
 
 
