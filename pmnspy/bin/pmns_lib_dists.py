@@ -594,9 +594,10 @@ def add_derived_params(posterior):
         posterior.append(durationPDF)
 
     if ('duration' not in posterior.names) and ('quality' in posterior.names):
-        duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['quality'].samples)
+        duration_samps =  posterior['quality'].samples \
+                / ( np.sqrt(2)*np.pi * posterior['frequency'].samples )
         durationPDF = bppu.PosteriorOneDPDF(name='duration',
-                posterior_samples=duration_samps)
+            posterior_samples=duration_samps)
         posterior.append(durationPDF)
 
     if ('bandwidth' not in posterior.names) and ('duration' in posterior.names):
@@ -606,11 +607,20 @@ def add_derived_params(posterior):
         posterior.append(bandwidthPDF)
 
     if ('bandwidth' not in posterior.names) and ('quality' in posterior.names):
+
+
         bandwidth_samps = posterior['frequency'].samples /\
                 posterior['quality'].samples  
         bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
                 posterior_samples=bandwidth_samps)
         posterior.append(bandwidthPDF)
+
+    print '-----------------------------------'
+    print 'DIAGNOSTIC'
+    print 'max bandwidth samps:', max(bandwidth_samps)
+    print 'min bandwidth sampes:', min(bandwidth_samps)
+    print '-----------------------------------'
+
 
     return posterior
 
