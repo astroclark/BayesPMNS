@@ -580,34 +580,7 @@ def add_derived_params(posterior):
         print >> sys.stderr, "no frequency parameter"
         sys.exit()
 
-    if ('quality' not in posterior.names) and ('bandwidth' in posterior.names):
-        quality_samps = posterior['frequency'].samples /\
-                posterior['bandwidth'].samples
-        qualityPDF = bppu.PosteriorOneDPDF(name='quality',
-                posterior_samples=quality_samps)
-        posterior.append(qualityPDF)
-
-    if ('duration' not in posterior.names) and ('bandwidth' in posterior.names):
-        duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['bandwidth'].samples)
-        durationPDF = bppu.PosteriorOneDPDF(name='duration',
-                posterior_samples=duration_samps)
-        posterior.append(durationPDF)
-
-    if ('duration' not in posterior.names) and ('quality' in posterior.names):
-        duration_samps =  posterior['quality'].samples \
-                / ( np.sqrt(2)*np.pi * posterior['frequency'].samples )
-        durationPDF = bppu.PosteriorOneDPDF(name='duration',
-            posterior_samples=duration_samps)
-        posterior.append(durationPDF)
-
-    if ('bandwidth' not in posterior.names) and ('duration' in posterior.names):
-        bandwidth_samps =  1.0/(np.sqrt(2)*np.pi*posterior['duration'].samples)
-        bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
-                posterior_samples=bandwidth_samps)
-        posterior.append(bandwidthPDF)
-
     if ('bandwidth' not in posterior.names) and ('quality' in posterior.names):
-
 
         bandwidth_samps = posterior['frequency'].samples /\
                 posterior['quality'].samples  
@@ -615,11 +588,19 @@ def add_derived_params(posterior):
                 posterior_samples=bandwidth_samps)
         posterior.append(bandwidthPDF)
 
-    print '-----------------------------------'
-    print 'DIAGNOSTIC'
-    print 'max bandwidth samps:', max(bandwidth_samps)
-    print 'min bandwidth sampes:', min(bandwidth_samps)
-    print '-----------------------------------'
+    if ('quality' not in posterior.names) and ('bandwidth' in posterior.names):
+        quality_samps = posterior['frequency'].samples /\
+                posterior['bandwidth'].samples
+        qualityPDF = bppu.PosteriorOneDPDF(name='quality',
+                posterior_samples=quality_samps)
+        posterior.append(qualityPDF)
+
+    # By now we have bandwidth and quality
+    if ('duration' not in posterior.names):
+        duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['bandwidth'].samples)
+        durationPDF = bppu.PosteriorOneDPDF(name='duration',
+                posterior_samples=duration_samps)
+        posterior.append(durationPDF)
 
 
     return posterior
