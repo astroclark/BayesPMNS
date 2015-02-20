@@ -22,7 +22,7 @@
 # --- Input --- #
 #               #
 
-exececutable=`which pmns_lib_dists.py`
+executable=`which pmns_lib_dists.py`
 waveform=${1}
 inputdir="${2}"
 outputdir="${3}"
@@ -30,11 +30,22 @@ outputdir="${3}"
 thresholds="0 1 2 3 4 5 6 7 8 9 10"
 
 # --- End Input
+if [ ! -d ${outputdir} ]
+then
+    mkdir -p ${outputdir}/condor_logs
+else
+    echo "warning ${outputdir} exists, move"
+    exit
+fi
+
+# change to full path
+inputdir=`readlink -f ${inputdir}`
+outputdir=`readlink -f ${outputdir}`
 
 dagseed=`python -c "import lal; import random; print random.randint(0,int(lal.GPSTimeNow()))"`
-dagfile="${waveform}_${outputdir}.dag"
-subfile="${waveform}_${outputdir}.sub"
-shellfile="${waveform}_${outdir}.sh"
+dagfile="${outputdir}/postproc_${waveform}.dag"
+subfile="${outputdir}/postproc_${waveform}.sub"
+shellfile="${outputdir}/postproc_${waveform}.sh"
 
 rm -rf ${dagfile} ${subfile} ${shellfile} condor_logs
 
@@ -70,42 +81,35 @@ queue
 "
 echo "${subtext}" > ${subfile}
 
-mkdir ${outputdir}
-mkdir ${outputdir}/condor_logs
 
 #
 # Set up the DAG file
 #
 echo "writing dag file: ${dagfile}"
 
+echo "on threshold ${threshold} of ${thresholds}"
+
 for threshold in ${thresholds}
 do
-    echo "on threshold ${threshold} of ${thresholds}"
 
-    for threshold in ${thresholds}
-    do
+    # 
+    # Dag writing
+    #
+    jobname="pmnslibdists-${threshold}"
 
-        # 
-        # Dag writing
-        #
-        jobname="pmnslibdists-${threshold}"
+    thisdir="${outputdir}/threshold-${threshold}"
+    jobargs="${inputdir} ${waveform} ${thisdir} ${threshold}"
 
-        thisdir="${outputdir}/threshold-${threshold}"
-        mkdir ${thisdir}
-        jobargs="${inputdir} ${waveform} ${thisdir} ${threshold}"
+    mkdir -p ${thisdir}
 
-        echo "JOB ${jobname} ${subfile}" >> ${dagfile}
-        echo "VARS ${jobname} macroid=\"${jobname}\" macroarguments=\"${jobargs}\"" >> ${dagfile}
-        echo "" >> ${dagfile}
+    echo "JOB ${jobname} ${subfile}" >> ${dagfile}
+    echo "VARS ${jobname} macroid=\"${jobname}\" macroarguments=\"${jobargs}\"" >> ${dagfile}
+    echo "" >> ${dagfile}
 
-        #
-        # Shell writing
-        #
-        echo "${executable} ${jobargs}" >> ${shellfile}
+    #
+    # Shell writing
+    #
+    echo "${executable} ${jobargs}" >> ${shellfile}
 
-
-    done
 
 done
-
-
