@@ -25,6 +25,7 @@ from itertools import combinations
 import shutil
 
 import matplotlib
+matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 
 import lalsimulation as lalsim
@@ -59,7 +60,7 @@ matplotlib.rcParams.update(
         })  
 
 matplotlib.rcParams.update(                                                                                       
-        {'savefig1.dpi': 200,                                                                                     
+        {'savefig.dpi': 200,                                                                                     
         'xtick.major.size':8,
         'xtick.minor.size':4,
         'ytick.major.size':8,                                                                                     
@@ -68,7 +69,8 @@ matplotlib.rcParams.update(
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"] 
 
 def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
-        all_staccs, accs, all_bsn, all_snr, truevals, all_summaries):
+        all_staccs, accs, all_bsn, all_snr, all_reconstructions, truevals,
+        all_summaries, BSN_threshold, epsilon, stdev_epsilon):
 
 
     f = open(os.path.join(outdir, "population_summary.html"), 'w')
@@ -86,6 +88,10 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
 
     <h3>Summary Statistics</h3>
     <a name="SummaryStatistics"></a>
+    <ul>
+        <li>BSN threshold: {bsn_thresh}</li>
+        <li>Efficiency (+/- 1 sigma): {epsilon} +/- {stdev_epsilon}</li>
+    </ul>
     <table border=2>
         <tr>
             <td><b>Statistic</b></td>
@@ -94,7 +100,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <td><b>Median</b></td>
             <td><b>5th, 95th percentile</b></td>
         </tr>
-        """.format(outdir=outdir)
+        """.format(outdir=outdir, bsn_thresh=BSN_threshold, epsilon=epsilon,
+                stdev_epsilon=stdev_epsilon)
 
     for summary in all_summaries:
         htmlstr+="""
@@ -126,6 +133,18 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         <td> <img width=500px src="MAP_PSDs.png"></td>
     </tr>
     </table>
+
+    <table>
+    <tr>
+        <td width=400px>Figure shows values of match between MAP waveform
+        reconstruction and target waveform.  Note that this match may be
+        computed over the full spectrum of the analysis, while we are usually
+        only really interested in peak frequency and immediate surroundings
+        (i.e., don't be alarmed at low match values!)</td>
+        <td> <img width=500px src="MAPMatches.png"></td>
+    </tr>
+    </table>
+
 
     <h3>Ranking Statistics</h3>
     <table>
@@ -267,7 +286,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
     """
 
 
-    # ---------------
+    # ---------------------
+    # Per Injection Results
     htmlstr+="""
     <hr>
     <h2>Per Injection Results</h2>
@@ -287,6 +307,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <ul>
                 <li>NetSNR (injected): {snr}</li>
                 <li>BSN: {bsn}</li>
+                <li>Match: {map_match}</li>
             </ul>
         </p>
 
@@ -302,8 +323,8 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
                     <td><b>high</b></td>
                     <td><b>stacc</b></td>
                 </tr>
-        """.format(injection=injection, snr=all_snr[p], bsn=all_bsn[p])
-
+        """.format(injection=injection, snr=all_snr[p], bsn=all_bsn[p],
+                map_match=all_reconstructions[p]['MAPMatch'])
 
         oneDMenu, twoDMenu, binSizes = oneD_bin_params()
         parnames=filter(lambda x: x in posterior.names, oneDMenu)
@@ -342,7 +363,12 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
         </p>
 
         <p>
-            <img width=500px src="{injection}/reconPSD.png">
+            <table>
+                <tr>
+                    <td><img width=500px src="{injection}/reconPSD.png"></td>
+                    <td><img width=500px src="{injection}/matchhist.png"></td>
+                </tr>
+            </table>
         </p>
 
         <p>
@@ -554,6 +580,14 @@ def add_derived_params(posterior):
         print >> sys.stderr, "no frequency parameter"
         sys.exit()
 
+    if ('bandwidth' not in posterior.names) and ('quality' in posterior.names):
+
+        bandwidth_samps = posterior['frequency'].samples /\
+                posterior['quality'].samples  
+        bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
+                posterior_samples=bandwidth_samps)
+        posterior.append(bandwidthPDF)
+
     if ('quality' not in posterior.names) and ('bandwidth' in posterior.names):
         quality_samps = posterior['frequency'].samples /\
                 posterior['bandwidth'].samples
@@ -561,30 +595,13 @@ def add_derived_params(posterior):
                 posterior_samples=quality_samps)
         posterior.append(qualityPDF)
 
-    if ('duration' not in posterior.names) and ('bandwidth' in posterior.names):
+    # By now we have bandwidth and quality
+    if ('duration' not in posterior.names):
         duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['bandwidth'].samples)
         durationPDF = bppu.PosteriorOneDPDF(name='duration',
                 posterior_samples=duration_samps)
         posterior.append(durationPDF)
 
-    if ('duration' not in posterior.names) and ('quality' in posterior.names):
-        duration_samps =  1.0/(np.sqrt(2)*np.pi*posterior['quality'].samples)
-        durationPDF = bppu.PosteriorOneDPDF(name='duration',
-                posterior_samples=duration_samps)
-        posterior.append(durationPDF)
-
-    if ('bandwidth' not in posterior.names) and ('duration' in posterior.names):
-        bandwidth_samps =  1.0/(np.sqrt(2)*np.pi*posterior['duration'].samples)
-        bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
-                posterior_samples=bandwidth_samps)
-        posterior.append(bandwidthPDF)
-
-    if ('bandwidth' not in posterior.names) and ('quality' in posterior.names):
-        bandwidth_samps = posterior['frequency'].samples /\
-                posterior['quality'].samples  
-        bandwidthPDF = bppu.PosteriorOneDPDF(name='bandwidth',
-                posterior_samples=bandwidth_samps)
-        posterior.append(bandwidthPDF)
 
     return posterior
 
@@ -718,6 +735,10 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file,
     fig = plot_sampled_psd(reconstruction)
     fig.savefig(os.path.join(currentdir,'reconPSD.png'))
 
+    # Histogram matches
+    fig = make_oneDhist(reconstruction['SampledMatches'], 'Match')
+    fig.savefig(os.path.join(currentdir, 'matchhist.png'))
+
     pl.close('all')
     return currentdir, BSN, SNR, pos, cl_intervals_allparams, \
             staccs_allparams, accs_allparams, reconstruction
@@ -780,7 +801,14 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
     histbins = np.arange(min(samples), max(samples), histbinswidth)
     (n, bins, patches) = ax.hist(samples, histbins, normed='true',
             histtype='step', facecolor='grey', color='k')
-    ax.set_ylim(0, 1.05*max(n))
+
+
+    # plot samples along xaxis
+    ax.plot(samples, 0-1e-2*max(n)*np.ones(len(samples)), linestyle='none',
+            color='k', marker='|')
+    ax.set_ylim(0-5.5e-2*max(n),max(n))
+
+    ax.minorticks_on()
 
     if ylabel:
         ax.set_ylabel(ylabel)
@@ -1017,17 +1045,44 @@ def measurement_summary(name, values):
 
     return summary
 
+def compute_efficiency(k,N,b=True):
+
+    k=float(k)
+    N=float(N)
+    if b:
+        # Bayesian treatment
+        classify_efficiencyilon=(k+1)/(N+2)
+        stdev_classify_efficiencyilon=np.sqrt(classify_efficiencyilon*(1-classify_efficiencyilon)/(N+3))
+    else:
+        # Binomial treatment
+        if N==0:
+            classify_efficiencyilon=0.0
+            stdev_classify_efficiencyilon=0.0
+        else:
+            classify_efficiencyilon=k/N
+            stdev_classify_efficiencyilon=np.sqrt(classify_efficiencyilon*(1-classify_efficiencyilon)/N)
+    return (classify_efficiencyilon,stdev_classify_efficiencyilon)
+
 # ********************************************************************************
 # MAIN SCRIPT
 
 # -------------------------------
 # Load results
 
-resultsdir=sys.argv[1]
-waveform_name='shen_135135'#sys.argv[2]
-Nlive=512#sys.argv[3]
+# --- XXX Input (should grow up and use an option parser)
 
-outputdirectory=resultsdir+'_allout'
+resultsdir=sys.argv[1]
+waveform_name=sys.argv[2]
+outputdirectory=sys.argv[3]
+
+if len(sys.argv)>4: # remember 0 is the program name
+    BSN_threshold=float(sys.argv[4])
+else:
+    BSN_threshold=-np.inf
+
+
+# --- end input
+
 if not os.path.isdir(outputdirectory):
     os.makedirs(outputdirectory) 
 else:
@@ -1082,11 +1137,22 @@ all_BSN = []
 all_SNR = []
 all_reconstructions = []
 
+Nfound = 0
 for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
 
     posterior_file = files[0]
     bsn_file = files[1]
     snr_file = files[2]
+
+    # Read Bayes file right now in case we want to apply a threshold
+    bfile=open(bsn_file, 'r')
+    BSN=bfile.read()
+    bfile.close()
+    BSN=float(BSN.split()[0])
+
+    if BSN<BSN_threshold:
+        print 'injection missed, continuing to next'
+        continue
 
     injdir, BSN, SNR, thisposterior, cl_intervals, staccs, accs, \
             reconstruction = single_injection_results(outputdirectory,
@@ -1101,9 +1167,15 @@ for fileidx, files in enumerate(zip(sampfiles,BSNfiles,snrfiles)):
     all_SNR.append(SNR)
     all_reconstructions.append(reconstruction)
 
+    Nfound +=1
+
 
 # -------------------------------------------------------
 # Construct summary plots and statistics
+
+# 'detection' efficiency
+epsilon, stdev_epsilon = compute_efficiency(Nfound, len(BSNfiles))
+
 
 all_summaries = []
 #
@@ -1121,7 +1193,7 @@ fig.savefig('{outputdirectory}/logBs.png'.format(
 pl.close(fig)
 
 all_summaries.append(measurement_summary('BSN', all_BSN))
-all_summaries.append(measurement_summary('Injected SNR', all_SNR))
+all_summaries.append(measurement_summary('Injected-SNR', all_SNR))
 
 #
 # Waveform Reconstructions
@@ -1130,6 +1202,13 @@ fig = plot_map_psds(all_reconstructions)
 fig.savefig('{outputdirectory}/MAP_PSDs.png'.format(
     outputdirectory=outputdirectory))
 pl.close(fig)
+
+all_map_matches = [ reconstruction['MAPMatch'] for reconstruction in all_reconstructions ]
+fig = make_oneDhist(all_map_matches, xlabel='MAP Match')
+fig.savefig('{outputdirectory}/MAPMatches.png'.format(
+    outputdirectory=outputdirectory))
+all_summaries.append(measurement_summary('MAPMatches', all_map_matches))
+
 
 # 
 # Parameter Estimation
@@ -1245,8 +1324,9 @@ for param in truevals.keys():
 # -------------------------------------------------------
 # Write HTML summary
 write_results_page(outputdirectory, injection_dirs, allposteriors,
-        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR, truevals,
-        all_summaries)
+        all_cl_intervals, all_staccs, all_accs, all_BSN, all_SNR,
+        all_reconstructions, truevals, all_summaries, BSN_threshold, epsilon,
+        stdev_epsilon)
 
 # Dump a text file with the summaries
 f=open(os.path.join(outputdirectory, "summary.txt"), "w")
@@ -1260,6 +1340,7 @@ for summary in all_summaries:
                 pc5=summary['5thPercentile'],
                 pc90=summary['90thPercentile'],
                 ))
+f.write("efficiency {0} {1} 0 0 0\n".format( epsilon, stdev_epsilon ))
 f.close()
 
 
