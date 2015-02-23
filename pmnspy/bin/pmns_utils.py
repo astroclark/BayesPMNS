@@ -129,7 +129,11 @@ class Waveform:
         if self.waveform_name != 'sfho_1616': 
 
             # Find peak frequency
-            self.fpeak = freq[np.argmax(abs(Hplus.data[idx]**2))]
+            idx_peak = (Hplus.sample_frequencies.data > 2000) * \
+                    (Hplus.sample_frequencies.data < fupp)
+
+            freq = Hplus.sample_frequencies.data[idx_peak]
+            self.fpeak = freq[np.argmax(abs(Hplus.data[idx_peak]**2))]
 
 
 #           # Get FWHM of peak
