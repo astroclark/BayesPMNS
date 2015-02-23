@@ -42,11 +42,17 @@ def pca(catalogue):
     # sort the PCs by descending order of the singular values (i.e. by the
     # proportion of total variance they explain)
     ind = np.argsort(S)[::-1]
-    U = U[:, ind]
+    U = U[:,ind]
     S = S[ind]
-    V = V[:, ind]
+    V = V[:,ind]
 
-    return U, S, V
+    # See e.g.,:
+    # http://en.wikipedia.org/wiki/Principal_component_analysis#Singular_value_decomposition
+
+    # Score matrix:
+    PCs = U * S
+
+    return PCs, V, S**2 #Betas
 
 def apply_window(data):
     win = lal.CreateTukeyREAL8Window(len(data), 0.9)
@@ -80,9 +86,30 @@ def catwave_to_spectrum(catwave, catfreqs, freqaxis, freq_low, freq_high):
     idx = (freqaxis>=freq_low) * (freqaxis<freq_high)
     catidx = (catfreqs>=freq_low) * (catfreqs<freq_high)
 
-    full_spectrum[idx] = catwave[catidx]
+    full_spectrum[idx] = np.copy(catwave[catidx])
 
     return full_spectrum
+
+
+def build_hf_component(signal_freqs, peak_width, PCs, Betas, use_npcs, fpeak):
+
+    # Reconstruct the peak
+    reconstruction = reconstruct_signal(PCs, Betas, use_npcs)
+
+    # Determine the range of frequencies spanned by the data in catalogue form
+    delta_f = np.diff(signal_freqs)[0]
+    catfreq_low  = fpeak - 0.5*len(reconstruction)*delta_f
+    catfreq_high = fpeak + 0.5*len(reconstruction)*delta_f
+    cat_freqs = np.arange(catfreq_low, catfreq_high, delta_f)
+
+    # Determine the desired range of frequencies
+    freq_low  = fpeak - 0.5*peak_width
+    freq_high = fpeak + 0.5*peak_width
+
+    hf_component = catwave_to_spectrum(reconstruction, cat_freqs, signal_freqs,
+            freq_low, freq_high)
+
+    return hf_component
 
 
 def comp_match(timeseries1, timeseries2, delta_t=1./16384, flow=10., fhigh=8192,
@@ -123,6 +150,44 @@ def taper(input_data):
     return timeseries.data.data
 
 
+def reconstruct_signal(PCs, Betas, nPCs):
+
+    reconstruction = np.zeros(np.shape(PCs)[0], dtype=complex)
+    for n in xrange(nPCs):
+        reconstruction += Betas[n] * PCs[:,n]
+
+    return reconstruction/scipy.linalg.norm(reconstruction)
+
+def stitch_highlow(lf_component, hf_component):
+    full_spectrum = np.zeros(len(lf_component), dtype=complex)
+
+    lf_nonzero = np.argwhere(abs(lf_component)>0)
+    hf_nonzero = np.argwhere(abs(hf_component)>0)
+
+    # populate output array
+    full_spectrum[lf_nonzero] = lf_component[lf_nonzero]
+    full_spectrum[hf_nonzero] += hf_component[hf_nonzero]
+
+    # if components intersect...
+#    intersect_idx = np.intersect1d(lf_nonzero, hf_nonzero)
+
+#    if len(intersect_idx)>0:
+
+
+    #full_spectrum = \
+    #        movingaverage(full_spectrum, 10)
+
+    #for i in intersect_idx:
+    #    full_spectrum[i] = np.mean([lf_component[i], hf_component[i]])
+
+    return full_spectrum
+
+def movingaverage(interval, window_size):
+    window = np.ones(int(window_size))/float(window_size)
+    return np.convolve(interval, window, 'same')
+
+
+
 #def pmns_template(low_component, high_component, high_location):
 
 
@@ -148,6 +213,7 @@ waveform_names=['apr_135135_lessvisc',
 #               ]
 
 npcs = len(waveform_names)
+fpeaks = np.zeros(npcs)
 
 # Preallocate arrays for low and high frequency catalogues
 low_cat  = np.zeros(shape=(4097, len(waveform_names)), dtype=complex)
@@ -167,22 +233,22 @@ for w, name in enumerate(waveform_names):
     waveform = pmns_utils.Waveform(name)
     waveform.compute_characteristics()
     waveform.reproject_waveform()
-    htmp = waveform.hplus 
-    htmp.data = taper(htmp.data)
+    waveform.hplus.data = taper(waveform.hplus.data)
+    fpeaks[w] = waveform.fpeak
 
     # Use unit-norm waveforms
-    htmp.data /= waveform.hrss_plus
+    waveform.hplus.data /= waveform.hrss_plus
 
     # High-pass at 1 kHz
-    htmp = pycbc.filter.highpass(htmp, 1000)
+    waveform.hplus = pycbc.filter.highpass(waveform.hplus, 1000)
 
     # window for a smooth start
     #htmp.data=apply_window(htmp.data)
 
     # Zero-pad
-    signal = pycbc.types.TimeSeries(np.zeros(8192), delta_t=htmp.delta_t)
-    signal.data[:len(htmp)] = htmp.data
-    time_cat[:,w] = signal.data
+    signal = pycbc.types.TimeSeries(np.zeros(8192), delta_t=waveform.hplus.delta_t)
+    signal.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+    time_cat[:,w] = np.copy(signal.data)
 
     signal_spectrum = signal.to_frequencyseries() 
 
@@ -192,22 +258,20 @@ for w, name in enumerate(waveform_names):
     idx_high = (signal_spectrum.sample_frequencies.data>waveform.fpeak-0.5*peak_width) *\
             (signal_spectrum.sample_frequencies.data<waveform.fpeak+0.5*peak_width)
 
-    # window for smoothness
-    #low_part = apply_window(signal_spectrum[idx_low])
-    #high_part= apply_window(signal_spectrum[idx_high])
-    low_part = signal_spectrum[idx_low]
+    # Chop out the high-frequency part and align the peak
     high_part= signal_spectrum[idx_high]
 
     # align peaks for high-frequency component
     aligned = np.zeros(4097, dtype=complex)
+
     peak_idx=np.argmax(abs(high_part))
     start_idx = align_idx - peak_idx
     aligned[start_idx:start_idx+len(high_part)] = high_part
 
-    # add to the catalogues
-    low_cat[:len(low_part),w] = low_part
-    high_cat[:,w] = aligned
-    full_cat[:len(signal_spectrum),w] = signal_spectrum
+    # Populate the catalogues
+    low_cat[idx_low,w] = np.copy(signal_spectrum[idx_low])
+    high_cat[:,w] = np.copy(aligned)
+    full_cat[:len(signal_spectrum),w] = np.copy(signal_spectrum.data)
 
     # PCA conditioning
 #   for n in xrange(np.shape(low_cat)[1]):
@@ -215,42 +279,47 @@ for w, name in enumerate(waveform_names):
 #       high_cat[:,n] -= np.mean(high_cat, axis=1)
 #       full_cat[:,n] -= np.mean(full_cat, axis=1)
 
+#       low_cat[:,n]  /= np.std(low_cat, axis=1)
+#       high_cat[:,n] /= np.std(high_cat, axis=1)
+#       full_cat[:,n] /= np.std(full_cat, axis=1)
 
 #
 # PCA
 #
-Ulow, Slow, Vlow = pca(low_cat)
-Uhigh, Shigh, Vhigh = pca(high_cat)
-Ufull, Sfull, Vfull = pca(full_cat)
-
+PCs_low,  Betas_low,  S_low  = pca(low_cat)
+PCs_high, Betas_high, S_high = pca(high_cat)
+PCs_full, Betas_full, S_full = pca(full_cat)
 
 # PCs in time-domain for testing / diagnostics
-PClow = np.zeros(shape=(8192, npcs))
-for n in xrange(npcs):
+low_TD_reconstruction = np.zeros(shape=(8192, len(waveform_names)))
+low_matches = np.zeros(shape=(len(waveform_names),npcs))
 
-    # populate a new spectrum with the waveform data at the correct location!
-
-    # Get time domain PCs for low-frequencies
-    freqaxis = signal_spectrum.sample_frequencies.data
-    freq_low = low_comp[0]
-    freq_high = low_comp[1]
-
-    low_cat_freqs = np.arange(low_comp[0], \
-            low_comp[0] + len(low_cat[:,n])*signal_spectrum.delta_f,
-            signal_spectrum.delta_f)
-    
-    full_spectrum = catwave_to_spectrum(Ulow[:,n], low_cat_freqs, freqaxis,
-            freq_low, freq_high)
-
-    tmp = pycbc.types.FrequencySeries(full_spectrum,
-            delta_f=signal_spectrum.delta_f)
-
-    PClow[:,n] = tmp.to_timeseries()
-
-for w in xrange(npcs-1):
-    print comp_match(PClow[:,0], time_cat[:,w], fhigh=2000)
+freqaxis = signal_spectrum.sample_frequencies.data
 
 sys.exit()
+for n in xrange(len(waveform_names)):
+
+    print '%d of %d'%(n, len(waveform_names))
+
+    # Loop over the number of pcs to use
+    for u, use_npcs in enumerate(xrange(1,11)):
+
+        low_rec_spectrum = \
+                reconstruct_signal(PCs_low, Betas_low[n,:], use_npcs)
+
+        # Transform to time domain
+        tmp = pycbc.types.FrequencySeries(low_rec_spectrum,
+                delta_f=signal_spectrum.delta_f)
+        low_TD_reconstruction[:,n] = np.copy(tmp.to_timeseries())
+
+        low_matches[n,u] = comp_match(low_TD_reconstruction[:,n], time_cat[:,n],
+                flow=low_comp[0], fhigh=low_comp[1], weighted=True)
+
+# Get minimal matches
+low_minimal_match = np.zeros(npcs)
+for m in xrange(npcs):
+    low_minimal_match[m] = min(low_matches[:,m])
+
 
 #####################################################
 # Plotting
@@ -258,22 +327,34 @@ sys.exit()
 #
 # PCA diagnostics
 #
-low_eigenergies = eigenenergy(Slow)
-high_eigenergies = eigenenergy(Shigh)
-full_eigenergies = eigenenergy(Sfull)
+low_eigenergies = eigenenergy(S_low)
+high_eigenergies = eigenenergy(S_high)
+full_eigenergies = eigenenergy(S_full)
 
-f, ax = pl.subplots()
-npcs = np.arange(len(Slow))+1
-ax.plot(npcs, full_eigenergies, label='full spectrum')
-ax.plot(npcs, low_eigenergies, label='low-F component')
-ax.plot(npcs, high_eigenergies, label='high-F component')
+f, ax = pl.subplots(nrows=2, figsize=(8,6), sharex=True)
+npcs_axis = range(1,11)
 
-ax.legend(loc='lower right')
-ax.set_ylim(0,1)
-ax.minorticks_on()
+# Eignenergies
+ax[0].plot(npcs_axis, full_eigenergies, label='full spectrum')
+ax[0].plot(npcs_axis, low_eigenergies, label='low-F component')
+ax[0].plot(npcs_axis, high_eigenergies, label='high-F component')
 
-#pl.show()
-#sys.exit()
+ax[0].legend(loc='lower right')
+ax[0].set_ylim(0,1)
+#ax[0].set_xlabel('Number of PCs')
+ax[0].set_ylabel('Eigenenergy')
+ax[0].minorticks_on()
+
+# Minimal match
+ax[1].plot(npcs_axis, low_minimal_match, label='low-F component')
+ax[1].legend(loc='lower right')
+ax[1].set_ylim(0,1)
+ax[1].set_xlabel('Number of PCs')
+ax[1].set_ylabel('Minimal Match')
+ax[1].minorticks_on()
+
+pl.show()
+sys.exit()
 
 #
 # Plot catalogue
@@ -294,11 +375,11 @@ ax[1][1].set_xlim(2048-250,2048+250)
 # Plot PCs
 #
 f, ax = pl.subplots(nrows=3, ncols=2)
-ax[0][0].plot(np.real(Ulow))
-ax[0][1].plot(np.imag(Ulow))
+ax[0][0].plot(np.real(PCs_low))
+ax[0][1].plot(np.imag(PCs_low))
 ax[1][0].plot(np.real(Uhigh))
 ax[1][1].plot(np.real(Uhigh))
-ax[2][0].plot(np.fft.ifft(Ulow))
+ax[2][0].plot(np.fft.ifft(PCs_low))
 ax[2][1].plot(np.fft.ifft(Uhigh))
 
 
