@@ -487,9 +487,6 @@ def plot_oneDposterior(posterior, param, cl_intervals,
 
         ax.plot(x_grid,pdf,color='grey')
 
-    # set axis limits
-    ax.set_xlim(get_extent(posterior,param,parvals))
-
     # Show injected value
     if parvals[param] is not None:
         ax.axvline(parvals[param], color='r', label='Target %s'%param)
@@ -499,6 +496,9 @@ def plot_oneDposterior(posterior, param, cl_intervals,
     ax.axvline(cl_intervals[1], color='k', linestyle='--', label=r'$\alpha=0.9$')
     ax.axvline(posterior[param].median, color='k', linestyle='-',
             label=r'median')
+
+    # set axis limits
+    ax.set_xlim(get_extent(posterior,param,parvals))
 
     if param in ['frequency', 'bandwidth']:
         ax.set_xlabel(param+' [Hz]')
