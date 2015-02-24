@@ -54,8 +54,12 @@ def pca(catalogue):
 
     return PCs, V, S**2 #Betas
 
-def apply_window(data):
-    win = lal.CreateTukeyREAL8Window(len(data), 0.1)
+def apply_window(data, padding):
+    """
+    Padding: number of samples for roll-off
+    """
+    beta = 2*float(padding) / len(data)
+    win = lal.CreateTukeyREAL8Window(len(data), beta)
     return data*win.data.data
 
 def eigenenergy(eigenvalues):
@@ -226,12 +230,17 @@ fpeaks = np.zeros(npcs)
 low_cat  = np.zeros(shape=(4097, len(waveform_names)), dtype=complex)
 high_cat = np.zeros(shape=(4097, len(waveform_names)), dtype=complex)
 full_cat = np.zeros(shape=(4097, len(waveform_names)), dtype=complex)
+early_full_cat = np.zeros(shape=(4097, len(waveform_names)), dtype=complex)
+late_full_cat = np.zeros(shape=(4097, len(waveform_names)), dtype=complex)
 time_cat = np.zeros(shape=(8192, len(waveform_names)))
+early_time_cat = np.zeros(shape=(8192, len(waveform_names)))
+late_time_cat = np.zeros(shape=(8192, len(waveform_names)))
 
 low_comp = [1000., 2000.]
 high_comp = [2000., 5000.]
 
 peak_width = 500.
+delay = 1e-3
 
 align_idx=2048
 for w, name in enumerate(waveform_names):
@@ -246,16 +255,32 @@ for w, name in enumerate(waveform_names):
     # Use unit-norm waveforms
     waveform.hplus.data /= waveform.hrss_plus
 
+    # Find merger
+    tpeak = np.floor(np.argmax(waveform.hplus.data) +
+            delay/waveform.hplus.delta_t)
 
     # High-pass at 1 kHz
-    waveform.hplus = pycbc.filter.highpass(waveform.hplus, 1000)
+    #waveform.hplus = pycbc.filter.highpass(waveform.hplus, 1000)
 
-    # Zero-pad
+    # Zero-pad / divide into early / late signals
     signal = pycbc.types.TimeSeries(np.zeros(8192), delta_t=waveform.hplus.delta_t)
     signal.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
     time_cat[:,w] = np.copy(signal.data)
 
+    early_signal = pycbc.types.TimeSeries(np.zeros(8192), delta_t=waveform.hplus.delta_t)
+    early_signal.data[:tpeak] = np.copy(waveform.hplus.data[:tpeak])
+    early_signal.data = apply_window(early_signal.data, delay/waveform.hplus.delta_t)
+    early_time_cat[:,w] = np.copy(early_signal.data)
+
+    late_signal = pycbc.types.TimeSeries(np.zeros(8192), delta_t=waveform.hplus.delta_t)
+    late_signal.data[tpeak:tpeak+len(waveform.hplus.data[tpeak:])] = \
+            np.copy(waveform.hplus.data[tpeak:])
+    late_signal.data = apply_window(late_signal.data, delay/waveform.hplus.delta_t)
+    late_time_cat[:,w] = np.copy(late_signal.data)
+
     signal_spectrum = signal.to_frequencyseries() 
+    early_signal_spectrum = early_signal.to_frequencyseries() 
+    late_signal_spectrum  = late_signal.to_frequencyseries() 
 
     # Select out the low and high frequency parts
     idx_low = (signal_spectrum.sample_frequencies.data>=low_comp[0])*\
@@ -266,6 +291,8 @@ for w, name in enumerate(waveform_names):
     # Chop out the high-frequency part and align the peak
     high_component = signal_spectrum[idx_high]
     low_component  = signal_spectrum[idx_low]
+    #high_component = late_signal_spectrum[idx_high]
+    #low_component  = early_signal_spectrum[idx_low]
 
     #
     # Feature Alignment
@@ -275,7 +302,7 @@ for w, name in enumerate(waveform_names):
     #
     # Smooth out edges introduced from truncating features
     # 
-    smooth=True
+    smooth=False
     if smooth:
 
         idx = range(int(align_idx-0.5*peak_width/signal_spectrum.delta_f),
@@ -293,6 +320,8 @@ for w, name in enumerate(waveform_names):
     low_cat[:,w]  = np.copy(low_spectrum)
     high_cat[:,w] = np.copy(peak_spectrum)
     full_cat[:,w] = np.copy(signal_spectrum.data)
+    early_full_cat[:,w] = np.copy(early_signal_spectrum.data)
+    late_full_cat[:,w] = np.copy(late_signal_spectrum.data)
 
     # PCA conditioning
 #   for n in xrange(np.shape(low_cat)[1]):
@@ -319,8 +348,6 @@ full_mags, full_phases = complex_to_polar(full_cat)
 magPCs_full,  magBetas_full,  magS_full = pca(full_mags)
 phasePCs_full,  phaseBetas_full,  phaseS_full = pca(full_phases)
 
-### XXXXXXX: FILTER IN THE TIME DOMAIN!
-
 # Amplitude & Phase-maximised match
 low_matches = np.zeros(shape=(len(waveform_names),npcs))
 high_matches = np.zeros(shape=(len(waveform_names),npcs))
@@ -335,33 +362,6 @@ synth_dots = np.zeros(shape=(len(waveform_names),npcs))
 
 freqaxis = signal_spectrum.sample_frequencies.data
 
-#########
-# DEVEL #
-
-use_npcs=9
-n=0
-low_rec_spectrum = \
-        reconstruct_signal(magPCs_low, magBetas_low[n,:], \
-        phasePCs_low, phaseBetas_low[n,:], use_npcs)
-
-high_rec_simple = \
-        reconstruct_signal(magPCs_high, magBetas_high[n,:], \
-        phasePCs_high, phaseBetas_high[n,:], use_npcs)
-
-high_rec_spectrum = \
-        build_hf_component(freqaxis, peak_width, \
-        magPCs_high, magBetas_high[n,:], \
-        phasePCs_high, phaseBetas_high[n,:], \
-        use_npcs, fpeaks[n])
-
-magTest_high = abs(high_rec_spectrum)
-phaseTest_high = np.unwrap(np.angle(high_rec_spectrum))
-
-magTest_low = abs(low_rec_spectrum)
-phaseTest_low = np.unwrap(np.angle(low_rec_spectrum))
-
-#sys.exit()
-# ----
 
 
 for n in xrange(len(waveform_names)):
@@ -379,6 +379,10 @@ for n in xrange(len(waveform_names)):
                 reconstruct_signal(magPCs_low, magBetas_low[n,:], \
                 phasePCs_low, phaseBetas_low[n,:], use_npcs)
 
+        low_rec_spectrum_0 = \
+                reconstruct_signal(magPCs_low, magBetas_low[n,:], \
+                phasePCs_low, phaseBetas_low[n,:], 0)
+
         high_rec_simple = \
                 reconstruct_signal(magPCs_high, magBetas_high[n,:], \
                 phasePCs_high, phaseBetas_high[n,:], use_npcs)
@@ -394,17 +398,22 @@ for n in xrange(len(waveform_names)):
         # XXX: Look closely at frequency ranges for matches
 
         # Low-Freq component: compute match
+        #low_matches[n,u] = comp_match(low_rec_spectrum, early_full_cat[:,n],
         low_matches[n,u] = comp_match(low_rec_spectrum, full_cat[:,n],
                 flow=low_comp[0], fhigh=low_comp[1], weighted=True)
+                #flow=1000, fhigh=8192, weighted=True)
 
         low_dots[n,u] = \
                 np.vdot(low_rec_spectrum/np.linalg.norm(low_rec_spectrum),
                         low_cat[:,n]/np.linalg.norm(low_cat[:,n]))
 
         # High-Freq component: compute match around the peak
+        #high_matches[n,u] = comp_match(high_rec_spectrum, late_full_cat[:,n],
         high_matches[n,u] = comp_match(high_rec_spectrum, full_cat[:,n],
                 flow=fpeaks[n]-0.5*peak_width, fhigh=fpeaks[n]+0.5*peak_width,
                 weighted=True)
+                #flow=1000, fhigh=8192,
+                #weighted=True)
 
         high_dots[n,u] = \
                 np.vdot(high_rec_simple/np.linalg.norm(high_rec_simple),
@@ -412,7 +421,7 @@ for n in xrange(len(waveform_names)):
 
         # Full-spectrum (naive)
         full_matches[n,u] = comp_match(full_rec_spectrum, full_cat[:,n],
-                flow=low_comp[0], fhigh=high_comp[1], weighted=True)
+                flow=1000, fhigh=8192, weighted=True)
 
         full_dots[n,u] = \
                 np.vdot(full_rec_spectrum/np.linalg.norm(full_rec_spectrum),
@@ -420,7 +429,7 @@ for n in xrange(len(waveform_names)):
  
         # Full synthesised signal: compute match
         synth_matches[n,u] = comp_match(synth_rec_spectrum, full_cat[:,n],
-                flow=low_comp[0], weighted=True)
+                flow=1000, fhigh=8192, weighted=True)
 #
 # PCA diagnostics
 #
