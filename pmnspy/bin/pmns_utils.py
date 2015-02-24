@@ -757,8 +757,11 @@ def fpeak_to_R16(fpeak,jitterwidth=None):
 
     R16=np.zeros(np.size(fpeak))
 
-    R16[np.argwhere(fpeak/1000<fbreak)] = (fpeak/1000.-blow)/alow
-    R16[np.argwhere(fpeak/1000>fbreak)] = (fpeak/1000.-bhigh)/ahigh
+    for f in xrange(len(R16)):
+        if fpeak/1000 < fbreak:
+            R16[f] = (fpeak/1000.-blow)/alow
+        else:
+            R16[f] = (fpeak/1000.-bhigh)/ahigh
 
     if jitterwidth is not None:
         R16_jitter = -0.5*jitterwidth+jitterwidth*np.random.rand(np.size(R16))
