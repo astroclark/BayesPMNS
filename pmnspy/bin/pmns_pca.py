@@ -55,7 +55,7 @@ def pca(catalogue):
     return PCs, V, S**2 #Betas
 
 def apply_window(data):
-    win = lal.CreateTukeyREAL8Window(len(data), 0.9)
+    win = lal.CreateTukeyREAL8Window(len(data), 0.1)
     return data*win.data.data
 
 def eigenenergy(eigenvalues):
@@ -112,19 +112,18 @@ def build_hf_component(signal_freqs, peak_width, PCs, Betas, use_npcs, fpeak):
     return hf_component
 
 
-def comp_match(timeseries1, timeseries2, delta_t=1./16384, flow=10., fhigh=8192,
+def comp_match(freqseries1, freqseries2, delta_f=2.0, flow=10., fhigh=8192,
         weighted=False):
     """ 
     """
 
-    tmp1 = pycbc.types.TimeSeries(initial_array=timeseries1, delta_t=delta_t)
-    tmp2 = pycbc.types.TimeSeries(initial_array=timeseries2, delta_t=delta_t)
+    tmp1 = pycbc.types.FrequencySeries(initial_array=freqseries1, delta_f=delta_f)
+    tmp2 = pycbc.types.FrequencySeries(initial_array=freqseries2, delta_f=delta_f)
 
     if weighted:
 
         # make psd
-        flen = len(tmp1.to_frequencyseries())
-        delta_f = np.diff(tmp1.to_frequencyseries().sample_frequencies)[0]
+        flen = len(tmp1)
         psd = aLIGOZeroDetHighPower(flen, delta_f, low_freq_cutoff=flow)
 
 
@@ -145,7 +144,8 @@ def taper(input_data):
             1.0/16384, lal.StrainUnit, int(len(input_data)))
 
     lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
-        lalsim.SIM_INSPIRAL_TAPER_START)
+        lalsim.SIM_INSPIRAL_TAPER_STARTEND)
+        #lalsim.SIM_INSPIRAL_TAPER_START)
 
     return timeseries.data.data
 
@@ -168,24 +168,20 @@ def stitch_highlow(lf_component, hf_component):
     full_spectrum[lf_nonzero] = lf_component[lf_nonzero]
     full_spectrum[hf_nonzero] += hf_component[hf_nonzero]
 
-    # if components intersect...
-#    intersect_idx = np.intersect1d(lf_nonzero, hf_nonzero)
-
-#    if len(intersect_idx)>0:
-
-
-    #full_spectrum = \
-    #        movingaverage(full_spectrum, 10)
-
-    #for i in intersect_idx:
-    #    full_spectrum[i] = np.mean([lf_component[i], hf_component[i]])
-
     return full_spectrum
 
 def movingaverage(interval, window_size):
     window = np.ones(int(window_size))/float(window_size)
     return np.convolve(interval, window, 'same')
 
+
+def align_peaks(data, outlen):
+    aligned_data = np.zeros(outlen, dtype=complex)
+    peak_idx = np.argmax(abs(data))
+    start_idx = align_idx - peak_idx
+    aligned_data[start_idx:start_idx+len(data)] = np.copy(data)
+    
+    return aligned_data
 
 
 #def pmns_template(low_component, high_component, high_location):
@@ -239,11 +235,9 @@ for w, name in enumerate(waveform_names):
     # Use unit-norm waveforms
     waveform.hplus.data /= waveform.hrss_plus
 
+
     # High-pass at 1 kHz
     waveform.hplus = pycbc.filter.highpass(waveform.hplus, 1000)
-
-    # window for a smooth start
-    #htmp.data=apply_window(htmp.data)
 
     # Zero-pad
     signal = pycbc.types.TimeSeries(np.zeros(8192), delta_t=waveform.hplus.delta_t)
@@ -259,19 +253,33 @@ for w, name in enumerate(waveform_names):
             (signal_spectrum.sample_frequencies.data<waveform.fpeak+0.5*peak_width)
 
     # Chop out the high-frequency part and align the peak
-    high_part= signal_spectrum[idx_high]
+    high_component = signal_spectrum[idx_high]
+    low_component  = signal_spectrum[idx_low]
 
-    # align peaks for high-frequency component
-    aligned = np.zeros(4097, dtype=complex)
+    #
+    # Feature Alignment
+    #
+    peak_spectrum = align_peaks(high_component, 4097)
 
-    peak_idx=np.argmax(abs(high_part))
-    start_idx = align_idx - peak_idx
-    aligned[start_idx:start_idx+len(high_part)] = high_part
+    #
+    # Smooth out edges introduced from truncating features
+    # 
+    smooth=False
+    if smooth:
+
+        peak_spectrum = apply_window(peak_spectrum[idx_high])
+        peak_spectrum = align_peaks(peak_spectrum, 4097)
+
+        low_component = apply_window(low_component,)
+
+    # Build the low-freq-only spectrum
+    low_spectrum  = np.zeros(4097,dtype=complex)
+    low_spectrum[idx_low] = np.copy(low_component)
 
     # Populate the catalogues
-    low_cat[idx_low,w] = np.copy(signal_spectrum[idx_low])
-    high_cat[:,w] = np.copy(aligned)
-    full_cat[:len(signal_spectrum),w] = np.copy(signal_spectrum.data)
+    low_cat[:,w]  = np.copy(low_spectrum)
+    high_cat[:,w] = np.copy(peak_spectrum)
+    full_cat[:,w] = np.copy(signal_spectrum.data)
 
     # PCA conditioning
 #   for n in xrange(np.shape(low_cat)[1]):
@@ -290,13 +298,18 @@ PCs_low,  Betas_low,  S_low  = pca(low_cat)
 PCs_high, Betas_high, S_high = pca(high_cat)
 PCs_full, Betas_full, S_full = pca(full_cat)
 
-# PCs in time-domain for testing / diagnostics
-low_TD_reconstruction = np.zeros(shape=(8192, len(waveform_names)))
+# Amplitude & Phase-maximised match
 low_matches = np.zeros(shape=(len(waveform_names),npcs))
+high_matches = np.zeros(shape=(len(waveform_names),npcs))
+synth_matches = np.zeros(shape=(len(waveform_names),npcs))
+
+# Dot products (for sanity)
+low_dots = np.zeros(shape=(len(waveform_names),npcs))
+high_dots = np.zeros(shape=(len(waveform_names),npcs))
+synth_dots = np.zeros(shape=(len(waveform_names),npcs))
 
 freqaxis = signal_spectrum.sample_frequencies.data
 
-sys.exit()
 for n in xrange(len(waveform_names)):
 
     print '%d of %d'%(n, len(waveform_names))
@@ -307,23 +320,56 @@ for n in xrange(len(waveform_names)):
         low_rec_spectrum = \
                 reconstruct_signal(PCs_low, Betas_low[n,:], use_npcs)
 
-        # Transform to time domain
-        tmp = pycbc.types.FrequencySeries(low_rec_spectrum,
-                delta_f=signal_spectrum.delta_f)
-        low_TD_reconstruction[:,n] = np.copy(tmp.to_timeseries())
+        high_rec_simple = \
+                reconstruct_signal(PCs_high, Betas_high[n,:], use_npcs)
 
-        low_matches[n,u] = comp_match(low_TD_reconstruction[:,n], time_cat[:,n],
+        high_rec_spectrum = \
+                build_hf_component(freqaxis, peak_width, PCs_high,
+                        Betas_high[n,:], use_npcs, fpeaks[n])
+
+        synth_rec_spectrum = stitch_highlow(low_rec_spectrum, high_rec_spectrum)
+
+        # XXX: Look closely at frequency ranges for matches
+
+        # Low-Freq component: compute match
+        low_matches[n,u] = comp_match(low_rec_spectrum, full_cat[:,n],
                 flow=low_comp[0], fhigh=low_comp[1], weighted=True)
+
+        low_dots[n,u] = \
+                np.vdot(low_rec_spectrum/np.linalg.norm(low_rec_spectrum),
+                        low_cat[:,n]/np.linalg.norm(low_cat[:,n]))
+
+        # High-Freq component: compute match
+        high_matches[n,u] = comp_match(high_rec_spectrum, full_cat[:,n],
+                flow=high_comp[0], fhigh=high_comp[1], weighted=True)
+
+        high_dots[n,u] = \
+                np.vdot(high_rec_simple/np.linalg.norm(high_rec_simple),
+                        high_cat[:,n]/np.linalg.norm(high_cat[:,n]))
+ 
+        # Full synthesised signal: compute match
+        synth_matches[n,u] = comp_match(synth_rec_spectrum, full_cat[:,n],
+                flow=low_comp[0], weighted=True)
 
 # Get minimal matches
 low_minimal_match = np.zeros(npcs)
 for m in xrange(npcs):
     low_minimal_match[m] = min(low_matches[:,m])
 
+high_minimal_match = np.zeros(npcs)
+for m in xrange(npcs):
+    high_minimal_match[m] = min(high_matches[:,m])
+
+synth_minimal_match = np.zeros(npcs)
+for m in xrange(npcs):
+    synth_minimal_match[m] = min(synth_matches[:,m])
+
 
 #####################################################
 # Plotting
 
+
+sys.exit()
 #
 # PCA diagnostics
 #
