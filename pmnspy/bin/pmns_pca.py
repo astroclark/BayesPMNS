@@ -91,27 +91,6 @@ def catwave_to_spectrum(catwave, catfreqs, freqaxis, freq_low, freq_high):
     return full_spectrum
 
 
-def build_hf_component(signal_freqs, peak_width, PCs, Betas, use_npcs, fpeak):
-
-    # Reconstruct the peak
-    reconstruction = reconstruct_signal(PCs, Betas, use_npcs)
-
-    # Determine the range of frequencies spanned by the data in catalogue form
-    delta_f = np.diff(signal_freqs)[0]
-    catfreq_low  = fpeak - 0.5*len(reconstruction)*delta_f
-    catfreq_high = fpeak + 0.5*len(reconstruction)*delta_f
-    cat_freqs = np.arange(catfreq_low, catfreq_high, delta_f)
-
-    # Determine the desired range of frequencies
-    freq_low  = fpeak - 0.5*peak_width
-    freq_high = fpeak + 0.5*peak_width
-
-    hf_component = catwave_to_spectrum(reconstruction, cat_freqs, signal_freqs,
-            freq_low, freq_high)
-
-    return hf_component
-
-
 def comp_match(freqseries1, freqseries2, delta_f=2.0, flow=10., fhigh=8192,
         weighted=False):
     """ 
@@ -150,13 +129,39 @@ def taper(input_data):
     return timeseries.data.data
 
 
-def reconstruct_signal(PCs, Betas, nPCs):
+def reconstruct_signal(magPCs, magBetas, phasePCs, phaseBetas, nPCs):
 
-    reconstruction = np.zeros(np.shape(PCs)[0], dtype=complex)
+    mag = np.zeros(np.shape(magPCs)[0], dtype=complex)
+    phase = np.zeros(np.shape(phasePCs)[0], dtype=complex)
     for n in xrange(nPCs):
-        reconstruction += Betas[n] * PCs[:,n]
+        mag += magBetas[n] * magPCs[:,n]
+        phase += phaseBetas[n] * phasePCs[:,n]
+
+    reconstruction = mag*np.exp(1j*phase)
 
     return reconstruction/scipy.linalg.norm(reconstruction)
+
+def build_hf_component(signal_freqs, peak_width, \
+        magPCs, magBetas, phasePCs, phaseBetas, use_npcs, fpeak):
+
+    # Reconstruct the peak
+    reconstruction = reconstruct_signal(magPCs, magBetas, phasePCs,
+            phaseBetas, use_npcs)
+
+    # Determine the range of frequencies spanned by the data in catalogue form
+    delta_f = np.diff(signal_freqs)[0]
+    catfreq_low  = fpeak - 0.5*len(reconstruction)*delta_f
+    catfreq_high = fpeak + 0.5*len(reconstruction)*delta_f
+    cat_freqs = np.arange(catfreq_low, catfreq_high, delta_f)
+
+    # Determine the desired range of frequencies
+    freq_low  = fpeak - 0.5*peak_width
+    freq_high = fpeak + 0.5*peak_width
+
+    hf_component = catwave_to_spectrum(reconstruction, cat_freqs, signal_freqs,
+            freq_low, freq_high)
+
+    return hf_component
 
 def stitch_highlow(lf_component, hf_component):
     full_spectrum = np.zeros(len(lf_component), dtype=complex)
@@ -174,7 +179,6 @@ def movingaverage(interval, window_size):
     window = np.ones(int(window_size))/float(window_size)
     return np.convolve(interval, window, 'same')
 
-
 def align_peaks(data, outlen):
     aligned_data = np.zeros(outlen, dtype=complex)
     peak_idx = np.argmax(abs(data))
@@ -183,8 +187,15 @@ def align_peaks(data, outlen):
     
     return aligned_data
 
+def complex_to_polar(catalogue):
 
-#def pmns_template(low_component, high_component, high_location):
+    magnitudes = np.zeros(shape=np.shape(catalogue))
+    phases = np.zeros(shape=np.shape(catalogue))
+    for c in xrange(np.shape(catalogue)[1]):
+        magnitudes[:,c] = abs(catalogue[:,c])
+        phases[:,c] = np.unwrap(np.angle(catalogue[:,c]))
+
+    return magnitudes, phases
 
 
 #
@@ -264,13 +275,15 @@ for w, name in enumerate(waveform_names):
     #
     # Smooth out edges introduced from truncating features
     # 
-    smooth=False
+    smooth=True
     if smooth:
 
-        peak_spectrum = apply_window(peak_spectrum[idx_high])
-        peak_spectrum = align_peaks(peak_spectrum, 4097)
+        idx = range(int(align_idx-0.5*peak_width/signal_spectrum.delta_f),
+                int(align_idx+0.5*peak_width/signal_spectrum.delta_f))
 
-        low_component = apply_window(low_component,)
+        peak_spectrum = apply_window(peak_spectrum[idx])
+        peak_spectrum = align_peaks(peak_spectrum, 4097)
+        #low_component = apply_window(low_component)
 
     # Build the low-freq-only spectrum
     low_spectrum  = np.zeros(4097,dtype=complex)
@@ -293,22 +306,63 @@ for w, name in enumerate(waveform_names):
 
 #
 # PCA
-#
-PCs_low,  Betas_low,  S_low  = pca(low_cat)
-PCs_high, Betas_high, S_high = pca(high_cat)
-PCs_full, Betas_full, S_full = pca(full_cat)
+
+low_mags, low_phases = complex_to_polar(low_cat)
+magPCs_low,  magBetas_low,  magS_low = pca(low_mags)
+phasePCs_low,  phaseBetas_low,  phaseS_low = pca(low_phases)
+
+high_mags, high_phases = complex_to_polar(high_cat)
+magPCs_high,  magBetas_high,  magS_high = pca(high_mags)
+phasePCs_high,  phaseBetas_high,  phaseS_high = pca(high_phases)
+
+full_mags, full_phases = complex_to_polar(full_cat)
+magPCs_full,  magBetas_full,  magS_full = pca(full_mags)
+phasePCs_full,  phaseBetas_full,  phaseS_full = pca(full_phases)
+
+### XXXXXXX: FILTER IN THE TIME DOMAIN!
 
 # Amplitude & Phase-maximised match
 low_matches = np.zeros(shape=(len(waveform_names),npcs))
 high_matches = np.zeros(shape=(len(waveform_names),npcs))
+full_matches = np.zeros(shape=(len(waveform_names),npcs))
 synth_matches = np.zeros(shape=(len(waveform_names),npcs))
 
 # Dot products (for sanity)
 low_dots = np.zeros(shape=(len(waveform_names),npcs))
 high_dots = np.zeros(shape=(len(waveform_names),npcs))
+full_dots = np.zeros(shape=(len(waveform_names),npcs))
 synth_dots = np.zeros(shape=(len(waveform_names),npcs))
 
 freqaxis = signal_spectrum.sample_frequencies.data
+
+#########
+# DEVEL #
+
+use_npcs=9
+n=0
+low_rec_spectrum = \
+        reconstruct_signal(magPCs_low, magBetas_low[n,:], \
+        phasePCs_low, phaseBetas_low[n,:], use_npcs)
+
+high_rec_simple = \
+        reconstruct_signal(magPCs_high, magBetas_high[n,:], \
+        phasePCs_high, phaseBetas_high[n,:], use_npcs)
+
+high_rec_spectrum = \
+        build_hf_component(freqaxis, peak_width, \
+        magPCs_high, magBetas_high[n,:], \
+        phasePCs_high, phaseBetas_high[n,:], \
+        use_npcs, fpeaks[n])
+
+magTest_high = abs(high_rec_spectrum)
+phaseTest_high = np.unwrap(np.angle(high_rec_spectrum))
+
+magTest_low = abs(low_rec_spectrum)
+phaseTest_low = np.unwrap(np.angle(low_rec_spectrum))
+
+#sys.exit()
+# ----
+
 
 for n in xrange(len(waveform_names)):
 
@@ -317,15 +371,23 @@ for n in xrange(len(waveform_names)):
     # Loop over the number of pcs to use
     for u, use_npcs in enumerate(xrange(1,11)):
 
+        full_rec_spectrum = \
+                reconstruct_signal(magPCs_full, magBetas_full[n,:], \
+                phasePCs_full, phaseBetas_full[n,:], use_npcs)
+
         low_rec_spectrum = \
-                reconstruct_signal(PCs_low, Betas_low[n,:], use_npcs)
+                reconstruct_signal(magPCs_low, magBetas_low[n,:], \
+                phasePCs_low, phaseBetas_low[n,:], use_npcs)
 
         high_rec_simple = \
-                reconstruct_signal(PCs_high, Betas_high[n,:], use_npcs)
+                reconstruct_signal(magPCs_high, magBetas_high[n,:], \
+                phasePCs_high, phaseBetas_high[n,:], use_npcs)
 
         high_rec_spectrum = \
-                build_hf_component(freqaxis, peak_width, PCs_high,
-                        Betas_high[n,:], use_npcs, fpeaks[n])
+                build_hf_component(freqaxis, peak_width, \
+                magPCs_high, magBetas_high[n,:], \
+                phasePCs_high, phaseBetas_high[n,:], \
+                use_npcs, fpeaks[n])
 
         synth_rec_spectrum = stitch_highlow(low_rec_spectrum, high_rec_spectrum)
 
@@ -339,17 +401,35 @@ for n in xrange(len(waveform_names)):
                 np.vdot(low_rec_spectrum/np.linalg.norm(low_rec_spectrum),
                         low_cat[:,n]/np.linalg.norm(low_cat[:,n]))
 
-        # High-Freq component: compute match
+        # High-Freq component: compute match around the peak
         high_matches[n,u] = comp_match(high_rec_spectrum, full_cat[:,n],
-                flow=high_comp[0], fhigh=high_comp[1], weighted=True)
+                flow=fpeaks[n]-0.5*peak_width, fhigh=fpeaks[n]+0.5*peak_width,
+                weighted=True)
 
         high_dots[n,u] = \
                 np.vdot(high_rec_simple/np.linalg.norm(high_rec_simple),
                         high_cat[:,n]/np.linalg.norm(high_cat[:,n]))
+
+        # Full-spectrum (naive)
+        full_matches[n,u] = comp_match(full_rec_spectrum, full_cat[:,n],
+                flow=low_comp[0], fhigh=high_comp[1], weighted=True)
+
+        full_dots[n,u] = \
+                np.vdot(full_rec_spectrum/np.linalg.norm(full_rec_spectrum),
+                        full_cat[:,n]/np.linalg.norm(full_cat[:,n]))
  
         # Full synthesised signal: compute match
         synth_matches[n,u] = comp_match(synth_rec_spectrum, full_cat[:,n],
                 flow=low_comp[0], weighted=True)
+#
+# PCA diagnostics
+#
+mag_low_eigenergies = eigenenergy(magS_low)
+mag_high_eigenergies = eigenenergy(magS_high)
+mag_full_eigenergies = eigenenergy(magS_full)
+phase_low_eigenergies = eigenenergy(phaseS_low)
+phase_high_eigenergies = eigenenergy(phaseS_high)
+phase_full_eigenergies = eigenenergy(phaseS_full)
 
 # Get minimal matches
 low_minimal_match = np.zeros(npcs)
@@ -360,6 +440,10 @@ high_minimal_match = np.zeros(npcs)
 for m in xrange(npcs):
     high_minimal_match[m] = min(high_matches[:,m])
 
+full_minimal_match = np.zeros(npcs)
+for m in xrange(npcs):
+    full_minimal_match[m] = min(full_matches[:,m])
+
 synth_minimal_match = np.zeros(npcs)
 for m in xrange(npcs):
     synth_minimal_match[m] = min(synth_matches[:,m])
@@ -368,33 +452,31 @@ for m in xrange(npcs):
 #####################################################
 # Plotting
 
-
-sys.exit()
-#
-# PCA diagnostics
-#
-low_eigenergies = eigenenergy(S_low)
-high_eigenergies = eigenenergy(S_high)
-full_eigenergies = eigenenergy(S_full)
-
 f, ax = pl.subplots(nrows=2, figsize=(8,6), sharex=True)
 npcs_axis = range(1,11)
 
 # Eignenergies
-ax[0].plot(npcs_axis, full_eigenergies, label='full spectrum')
-ax[0].plot(npcs_axis, low_eigenergies, label='low-F component')
-ax[0].plot(npcs_axis, high_eigenergies, label='high-F component')
+ax[0].plot(npcs_axis, mag_full_eigenergies, label='full spectrum', color='b')
+ax[0].plot(npcs_axis, mag_low_eigenergies, label='low-F component', color='g')
+ax[0].plot(npcs_axis, mag_high_eigenergies, label='high-F component', color='r')
+
+ax[0].plot(npcs_axis, phase_full_eigenergies, color='b', linestyle='--')
+ax[0].plot(npcs_axis, phase_low_eigenergies, color='g', linestyle='--')
+ax[0].plot(npcs_axis, phase_high_eigenergies, color='r', linestyle='--')
 
 ax[0].legend(loc='lower right')
-ax[0].set_ylim(0,1)
+#ax[0].set_ylim(0,1)
 #ax[0].set_xlabel('Number of PCs')
 ax[0].set_ylabel('Eigenenergy')
 ax[0].minorticks_on()
 
 # Minimal match
+ax[1].plot(npcs_axis, full_minimal_match, label='full spectrum')
 ax[1].plot(npcs_axis, low_minimal_match, label='low-F component')
+ax[1].plot(npcs_axis, high_minimal_match, label='high-F component')
+ax[1].plot(npcs_axis, synth_minimal_match, label='synthesised waveform')
 ax[1].legend(loc='lower right')
-ax[1].set_ylim(0,1)
+#ax[1].set_ylim(0,1)
 ax[1].set_xlabel('Number of PCs')
 ax[1].set_ylabel('Minimal Match')
 ax[1].minorticks_on()
