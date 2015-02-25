@@ -492,10 +492,13 @@ def plot_oneDposterior(posterior, param, cl_intervals,
         ax.axvline(parvals[param], color='r', label='Target %s'%param)
 
     # Show the median and 90% confidence interval
-    ax.axvline(cl_intervals[0], color='k', linestyle='--')
-    ax.axvline(cl_intervals[1], color='k', linestyle='--', label=r'$\alpha=0.9$')
-    ax.axvline(posterior[param].median, color='k', linestyle='-',
-            label=r'median')
+    try:
+        ax.axvline(cl_intervals[0], color='k', linestyle='--')
+        ax.axvline(cl_intervals[1], color='k', linestyle='--', label=r'$\alpha=0.9$')
+        ax.axvline(posterior[param].median, color='k', linestyle='-',
+                label=r'median')
+    except RunTimeError:
+        pass
 
     # set axis limits
     ax.set_xlim(get_extent(posterior,param,parvals))
