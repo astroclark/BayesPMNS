@@ -135,47 +135,68 @@ fmax=8192
 # Generate Signal Data
 #
 
+
+waveform_names=['apr_135135_lessvisc',
+                'shen_135135_lessvisc',
+                'dd2_135135_lessvisc' ,
+                'dd2_165165_lessvisc' ,
+                'nl3_135135_lessvisc' ,
+                'nl3_1919_lessvisc'   ,
+                'tm1_135135_lessvisc' ,
+                'tma_135135_lessvisc' ,
+                'sfhx_135135_lessvisc',
+                'sfho_135135_lessvisc']
+
+
 #
 # Waveform
 #
 print ''
 print '--- %s ---'%sys.argv[1]
-waveform = pmns_utils.Waveform('%s_lessvisc'%sys.argv[1])
+#waveform = pmns_utils.Waveform('%s_lessvisc'%sys.argv[1])
+matches=[]
+for name in waveform_names:
+    waveform = pmns_utils.Waveform(name)
+    waveform.compute_characteristics()
 
-# Get optimal hplus
-waveform.reproject_waveform()
+    # Get optimal hplus
+    waveform.reproject_waveform()
 
-h = apply_taper(waveform.hplus)
-h_s = pycbc.filter.sigma(h, low_frequency_cutoff=fmin,
-        high_frequency_cutoff=fmax)
+    h = apply_taper(waveform.hplus)
+    h_s = pycbc.filter.sigma(h, low_frequency_cutoff=fmin,
+            high_frequency_cutoff=fmax)
 
-#
-# Spectrum
-#
-H = abs(h.to_frequencyseries())**2
-freqs = h.to_frequencyseries().sample_frequencies.data
+    #
+    # Spectrum
+    #
+    H = abs(h.to_frequencyseries())**2
+    freqs = h.to_frequencyseries().sample_frequencies.data
 
 
-# reduce
-H=H[(freqs>=fmin)*(freqs<=fmax)]
-freqs=freqs[(freqs>=fmin)*(freqs<=fmax)]
+    # reduce
+    H=H[(freqs>=fmin)*(freqs<=fmax)]
+    freqs=freqs[(freqs>=fmin)*(freqs<=fmax)]
 
-# --------------------------------------------------------------------
-#
-# Match Calculations
-#
-init_guess={}
-idx=(freqs>f0low)*(freqs<f0upp)
-init_guess['frequency'] = freqs[idx][np.argmax(H[idx])]
-init_guess['quality']   = 100
+    # --------------------------------------------------------------------
+    #
+    # Match Calculations
+    #
+    init_guess={}
 
-# Get match for full waveform
-mismatch_full = min_mismatch(init_guess, h)
+    idx=(freqs>f0low)*(freqs<f0upp)
+    init_guess['frequency'] = freqs[idx][np.argmax(H[idx])]
+    init_guess['quality']   = 100
 
-print '---------------------------'
-print 'Full Waveform:'
-print mismatch_full
+    # Get match for full waveform
+    mismatch_full = min_mismatch(init_guess, h)
 
+    print '---------------------------'
+    print 'Full Waveform:'
+    print mismatch_full
+    matches.append(1-mismatch_full['fun'])
+
+
+sys.exit()
 # best fitting template
 match_tmplt = SG_template(mismatch_full['x'][0], mismatch_full['x'][1])
 match_tmplt.data *= h_s
