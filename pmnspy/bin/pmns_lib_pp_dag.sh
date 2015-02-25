@@ -104,6 +104,7 @@ do
 
     echo "JOB ${jobname} ${subfile}" >> ${dagfile}
     echo "VARS ${jobname} macroid=\"${jobname}\" macroarguments=\"${jobargs}\"" >> ${dagfile}
+    echo "RETRY ${jobname} 3" >> ${dagfile}
     echo "" >> ${dagfile}
 
     #

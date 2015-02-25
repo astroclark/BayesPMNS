@@ -802,6 +802,10 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
 
     histbinswidth = 3.5*np.std(samples) / len(samples)**(1./3)
     histbins = np.arange(min(samples), max(samples), histbinswidth)
+    
+    if len(histbins)==1:
+        histbins = np.linspace(min(samples), max(samples), 10)
+
     (n, bins, patches) = ax.hist(samples, histbins, normed='true',
             histtype='step', facecolor='grey', color='k')
 
