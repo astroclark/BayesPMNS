@@ -497,7 +497,7 @@ def plot_oneDposterior(posterior, param, cl_intervals,
         ax.axvline(cl_intervals[1], color='k', linestyle='--', label=r'$\alpha=0.9$')
         ax.axvline(posterior[param].median, color='k', linestyle='-',
                 label=r'median')
-    except RunTimeError:
+    except RuntimeError:
         pass
 
     # set axis limits
@@ -836,7 +836,7 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
 # =========================================================================
 
 def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096,
-        nrec=500):
+        nrec=10):
     """
     return the reconstructed F-domain sine-Gaussians from the posterior samples
     in posterior, as well as the max-posterior reconstruction and the matches
@@ -946,7 +946,7 @@ def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096,
 
     return reconstruction
 
-def plot_sampled_psd(reconstruction):
+def plot_sampled_psd(reconstruction, Nplot=10):
     """
     Produce power spectrum showing a subset of PSDs of the posterior-sampled
     waveforms, the MAP PSD and the target PSD
@@ -954,11 +954,10 @@ def plot_sampled_psd(reconstruction):
 
     fig, ax = pl.subplots(figsize=(6,4))
 
-    Nplot=500
     if len(reconstruction['SampledMatches'])>Nplot:
         decidx = np.random.randint(0, len(reconstruction['SampledMatches']), Nplot)
     else:
-        decidx = xrange(100)
+        decidx = xrange(Nplot)
 
     # Plot samples
     i=0
