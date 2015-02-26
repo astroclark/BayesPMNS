@@ -198,6 +198,8 @@ class Waveform:
         Dictionary of labels to use for each waveform name
         """
         labels={
+                'av15'                         :r'$\textrm{av15}$',
+                'av16'                         :r'$\textrm{av16}$',
                 'apr_135135_lessvisc'          :r'$\textrm{APR}$',
                 'shen_135135_lessvisc'         :r'$\textrm{Shen}$',
                 'dd2_135135_lessvisc'          :r'$\textrm{DD2}$',
@@ -232,6 +234,8 @@ class Waveform:
         Dictionary of R16 values for each waveform
         """
         R16={
+                'av15'                         : 13.26,
+                'av16'                         : 13.26,
                 'apr_135135'                   : 11.25,
                 'apr_135135_lessvisc'          : 11.25,
                 'shen_135135'                  : 14.53,
@@ -296,6 +300,8 @@ class Waveform:
     def allowed_radii(self):
 
         self.allowed_radii=[
+                'av15',
+                'av16',
                 'apr_135135',
                 'apr_135135_lessvisc',
                 'dd2_135135',
