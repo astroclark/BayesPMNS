@@ -269,8 +269,7 @@ def complex_to_polar(catalogue):
 #
 # Waveform catalogue
 #
-waveform_names=[
-                'apr_135135_lessvisc',
+waveform_names=['apr_135135_lessvisc',
                 'shen_135135_lessvisc',
                 'dd2_135135_lessvisc' ,
                 'dd2_165165_lessvisc' ,
@@ -553,21 +552,22 @@ for m in xrange(npcs+1):
 #####################################################
 # Ad Hoc matches
 
-test_waveform = pmns_utils.Waveform('shen_135135_lessvisc')
+test_waveform = pmns_utils.Waveform('apr_135135_lessvisc')
 
 test_waveform.reproject_waveform()
 test_waveform.compute_characteristics()
 test_signal = pycbc.types.TimeSeries(np.zeros(16384), delta_t=waveform.hplus.delta_t)
-test_signal.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+test_signal.data[:len(test_waveform.hplus)] = np.copy(test_waveform.hplus.data)
 
 for w in range(len(waveform_names)):
+
     low_rec_spectrum = reconstruct_signal(magPCs_low, magBetas_low[w,:],
-            phasePCs_low, phaseBetas_low[n,:], low_use_n_mag_pcs,
+            phasePCs_low, phaseBetas_low[w,:], 1,
             low_use_n_phase_pcs)
 
     high_rec_spectrum = build_hf_component(freqaxis, peak_width, magPCs_high,
             magBetas_high[w,:], phasePCs_high, phaseBetas_high[w,:],
-            high_use_n_mag_pcs, high_use_n_phase_pcs, waveform.fpeak)
+            high_use_n_mag_pcs, 1, waveform.fpeak)
 
     #high_rec_spectrum = np.zeros(len(low_rec_spectrum))
 
