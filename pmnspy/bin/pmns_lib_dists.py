@@ -1240,10 +1240,19 @@ for param in truevals.keys():
     all_summaries.append(measurement_summary('%s-MAP'%param, measured_vals))
 
     # Error bars for this parameter
+    # XXX: handle empty or zero sized error bars without too many headaches
     try:
-        error_bars = np.transpose([
-            all_cl_intervals[p][param]-allposteriors[p].maxP[1][param] for p in
-            xrange(len(allposteriors)) ])
+        error_bars = []
+        for p in xrange(len(allposteriors)):
+            val = all_cl_intervals[p][param]-allposteriors[p].maxP[1][param]
+            if len(np.shape(val))!=1 or np.diff(val):
+                error_bars.append(np.array([0, 0]))
+            else:
+                error_bars.append(val)
+        error_bars = np.transpose(error_bars)
+        #error_bars = np.transpose([
+        #    all_cl_intervals[p][param]-allposteriors[p].maxP[1][param] for p in
+        #    xrange(len(allposteriors)) ])
     except KeyError: continue
 
     # param vs statistic
