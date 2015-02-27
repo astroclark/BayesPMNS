@@ -1347,15 +1347,15 @@ write_results_page(outputdirectory, injection_dirs, allposteriors,
 
 # Dump a text file with the summaries
 f=open(os.path.join(outputdirectory, "summary.txt"), "w")
-f.write("# name mean std median 5thPercentile 90thPercentile\n")
+f.write("# name mean std median 25thPercentile 75thPercentile\n")
 for summary in all_summaries:
     f.write("{name} {mean} {std} {median} {pc5} {pc90}\n".format(
                 name=summary['name'],
                 mean=summary['mean'],
                 std=summary['std'],
                 median=summary['median'],
-                pc5=summary['5thPercentile'],
-                pc90=summary['90thPercentile'],
+                pc5=summary['25thPercentile'],
+                pc90=summary['75thPercentile'],
                 ))
 f.write("efficiency {0} {1} 0 0 0\n".format( epsilon, stdev_epsilon ))
 f.close()
