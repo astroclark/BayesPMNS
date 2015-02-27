@@ -27,7 +27,7 @@ waveform=${1}
 inputdir="${2}"
 outputdir="${3}"
 
-thresholds="0 1 2 3 4 5 6 7 8 9 10"
+thresholds="-100 0 1 2 3 4 5 6 7 8 9 10"
 
 # --- End Input
 if [ ! -d ${outputdir} ]
@@ -75,6 +75,7 @@ arguments  = \$(macroarguments)
 output     = condor_logs/libdists-\$(macroid)-\$(cluster)-\$(process).out
 error      = condor_logs/libdists-\$(macroid)-\$(cluster)-\$(process).err
 log        = condor_logs/libdists.log
+request_memory = 2000
 getenv     = True
 
 queue
