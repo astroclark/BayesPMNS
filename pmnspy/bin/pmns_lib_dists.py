@@ -98,7 +98,7 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
             <td><b>Mean</b></td>
             <td><b>Std</b></td>
             <td><b>Median</b></td>
-            <td><b>5th, 95th percentile</b></td>
+            <td><b>25th, 75th percentile</b></td>
         </tr>
         """.format(outdir=outdir, bsn_thresh=BSN_threshold, epsilon=epsilon,
                 stdev_epsilon=stdev_epsilon)
@@ -110,15 +110,15 @@ def write_results_page(outdir, injection_dirs, posteriors, all_cl_intervals,
                 <td>{mean}</td>
                 <td>{std}</td>
                 <td>{median}</td>
-                <td>{pc5}, {pc90}</td>
+                <td>{pc25}, {pc75}</td>
             </tr>
             """.format(
                     name=summary['name'],
                     mean=summary['mean'],
                     std=summary['std'],
                     median=summary['median'],
-                    pc5=summary['5thPercentile'],
-                    pc90=summary['90thPercentile'],
+                    pc25=summary['25thPercentile'],
+                    pc75=summary['75thPercentile'],
                     )
 
     htmlstr+="""
@@ -840,7 +840,7 @@ def make_oneDhist(samples, param=None, xlabel='', ylabel=''):
 # =========================================================================
 
 def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096,
-        nrec=10):
+        nrec=100):
     """
     return the reconstructed F-domain sine-Gaussians from the posterior samples
     in posterior, as well as the max-posterior reconstruction and the matches
@@ -950,7 +950,7 @@ def reconstructed_SineGaussianF(posterior, waveform, flow=1000, fupp=4096,
 
     return reconstruction
 
-def plot_sampled_psd(reconstruction, Nplot=10):
+def plot_sampled_psd(reconstruction, Nplot=100):
     """
     Produce power spectrum showing a subset of PSDs of the posterior-sampled
     waveforms, the MAP PSD and the target PSD
@@ -1046,8 +1046,8 @@ def measurement_summary(name, values):
     summary['mean'] = np.mean(values)
     summary['median'] = np.median(values)
     summary['std'] = np.std(values)
-    summary['5thPercentile'] = np.percentile(values, 5)
-    summary['90thPercentile'] = np.percentile(values, 90)
+    summary['25thPercentile'] = np.percentile(values, 25)
+    summary['75thPercentile'] = np.percentile(values, 75)
 
     return summary
 
@@ -1097,7 +1097,9 @@ else:
 currentdir=os.path.join(outputdirectory,'summaryfigs')
 
 # --- Construct the injected waveform
-waveform = pmns_utils.Waveform('%s_lessvisc'%waveform_name)
+if waveform_name not in ["av15", "av16"]:
+    waveform_name += "_lessvisc"
+waveform = pmns_utils.Waveform('%s'%waveform_name)
 waveform.reproject_waveform(0,0)
 waveform.compute_characteristics()
 
@@ -1345,15 +1347,15 @@ write_results_page(outputdirectory, injection_dirs, allposteriors,
 
 # Dump a text file with the summaries
 f=open(os.path.join(outputdirectory, "summary.txt"), "w")
-f.write("# name mean std median 5thPercentile 90thPercentile\n")
+f.write("# name mean std median 25thPercentile 75thPercentile\n")
 for summary in all_summaries:
-    f.write("{name} {mean} {std} {median} {pc5} {pc90}\n".format(
+    f.write("{name} {mean} {std} {median} {pc25} {pc75}\n".format(
                 name=summary['name'],
                 mean=summary['mean'],
                 std=summary['std'],
                 median=summary['median'],
-                pc5=summary['5thPercentile'],
-                pc90=summary['90thPercentile'],
+                pc25=summary['25thPercentile'],
+                pc75=summary['75thPercentile'],
                 ))
 f.write("efficiency {0} {1} 0 0 0\n".format( epsilon, stdev_epsilon ))
 f.close()
