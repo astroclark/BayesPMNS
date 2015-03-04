@@ -26,6 +26,7 @@ from glue.ligolw.utils import process as ligolw_process
 
 from pylal import git_version
 from pylal.SimInspiralUtils import ExtractSimInspiralTableLIGOLWContentHandler
+lsctables.use_in(ExtractSimInspiralTableLIGOLWContentHandler)
 
 #
 # Filenames: move sources in sys.argv[1] to locations in sys.argv[2]
