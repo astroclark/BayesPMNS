@@ -1,0 +1,1 @@
+time	ra	quality	psi	logw	loghrss	logprior	logl	frequency	deltaloglv1	deltalogll1	deltaloglh1	deltalogl	dec	alpha	lal_approximant	
