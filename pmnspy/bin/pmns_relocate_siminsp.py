@@ -32,6 +32,7 @@ from pylal.SimInspiralUtils import ExtractSimInspiralTableLIGOLWContentHandler
 #
 original_sim_file=sys.argv[1]
 location_sim_file=sys.argv[2]
+outputname=sys.argv[3]#original_sim_file.replace(".xml","_relocated.xml")
 
 #
 # Read inspinj files
@@ -72,7 +73,7 @@ for sim, location in zip(original_sim_table, locations_table):
 # Write the new file
 #
 
-outputname = original_sim_file.replace('INJECTIONS', 'INJECTIONS_ABOVE_SNR')
+#outputname = original_sim_file.replace('INJECTIONS', 'INJECTIONS_ABOVE_SNR')
 f = open(outputname,'w')
 xmldoc.write(f)
 f.close()
