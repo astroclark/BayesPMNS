@@ -68,6 +68,7 @@ def kde_sklearn(x, x_grid, bandwidth=0.2, **kwargs):
     log_pdf = kde_skl.score_samples(x_grid[:, np.newaxis])
     return np.exp(log_pdf)
 
+
 def get_extent(posterior,name,truevals):
     """
     Get the extent of the axes for this parameter
@@ -204,7 +205,7 @@ def plot_oneDposterior(posterior, param, cl_intervals,
     ax.legend()
     pl.tight_layout()
 
-    return fig
+    return fig, ax
 
 def single_injection_results(outdir, posterior_file, bsn_file, snr_file,
         waveform):
@@ -279,8 +280,8 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file,
     # ----------------------------------------------------------
 
     # --- Corner plot
-    corner_fig = plot_corner(pos, [0.05, 0.5, 0.95], parvals=truevals)
-    corner_fig.savefig(os.path.join(currentdir,'corner.png'))
+    #corner_fig = plot_corner(pos, [0.05, 0.5, 0.95], parvals=truevals)
+    #corner_fig.savefig(os.path.join(currentdir,'corner.png'))
 
     # --- 1D Posterior results (see cbcBayesBurstPostProc.py:733)
 
@@ -317,14 +318,15 @@ def single_injection_results(outdir, posterior_file, bsn_file, snr_file,
 
 
         # --- Plotting
-        fig = plot_oneDposterior(pos, par_name, cl_intervals[1],
-                truevals, plotkde=False)
-        
-        figname=par_name+'.png'
-        oneDplotPath=os.path.join(currentdir,figname)
-        fig.savefig(oneDplotPath)
+       #fig, ax = plot_oneDposterior(pos, par_name, cl_intervals[1],
+       #        truevals, plotkde=False)
+       #
+       #figname=par_name+'.png'
+       #oneDplotPath=os.path.join(currentdir,figname)
+       #fig.savefig(oneDplotPath)
 
-    pl.close('all')
+    #pl.close(fig)
+    #pl.close(corner_fig)
     return currentdir, BSN, SNR, pos, cl_intervals_allparams, \
             staccs_allparams, accs_allparams, pos
 
@@ -372,8 +374,13 @@ bsn_file = sys.argv[2]
 snr_file = sys.argv[3]
 
 waveform=pmns_utils.Waveform("shen_135135_lessvisc")
+#waveform=pmns_utils.Waveform("apr_135135_lessvisc")
 waveform.compute_characteristics()
 waveform.reproject_waveform()
+H = waveform.hplus.to_frequencyseries()
+
+fw, axw = pl.subplots()
+axw.plot(H.sample_frequencies, abs(H), color='r')
 
 oneDMenu, twoDMenu, binSizes = oneD_bin_params()
 
@@ -393,10 +400,87 @@ injdir, BSN, SNR, thisposterior, cl_intervals, staccs, accs, poss \
                 snr_file, waveform)
 
 # plot
-fig = plot_oneDposterior(poss, 'frequency', cl_intervals['frequency'],
-        truevals, plotkde=True)
+fig, ax = plot_oneDposterior(poss, 'frequency', cl_intervals['frequency'],
+        truevals, plotkde=False)
+
+#
+#
+#
+
+
+from sklearn import mixture
+print >> sys.stderr, "FITTING GMM"
+
+#Zt = np.vstack([np.concatenate(poss['frequency'].samples),
+#        np.concatenate(poss['quality'].samples)])
+#Z = Zt.T
+
+#bw = 1.06*np.std(poss['frequency'].samples)* len(poss['frequency'].samples)**(-1./5)
+#kde = KernelDensity(bandwidth=bw)
+#kde.fit(np.concatenate(poss['frequency'].samples))
+
+#Z = kde.sample()[0]
+Z = poss['frequency'].samples
+#Z = Z[Z>1550]
+
+bic=np.zeros(3)
+min_bic=np.inf
+for c in xrange(3):
+    print c
+    g = mixture.GMM(n_components=c+1)#, n_iter=1000, covariance_type='full')
+    g.fit(Z)
+    bic[c] = g.bic(Z)
+
+    # Check that clusters satisfy minimum membership requirement
+    labels = g.predict(Z)
+    print 'trying %d clusters'%c
+    min_membership=0.01
+    for label in xrange(c+1):
+        membership=float(sum(labels==label))/len(labels) 
+        print 'cluster %d membership: %.2f'%(\
+                label, membership)
+        if membership<min_membership:
+            bic[c] = np.inf
+            continue
+ 
+    if bic[c] < min_bic:
+        min_bic=bic[c]
+        best_g = g 
+
+best_g.fit(Z)
+labels=best_g.predict(Z)
+
+nclusters=np.argmin(bic)+1
+print 'favoured # of clusters:', nclusters
+
+print 'Cluster membership:'
+for label in xrange(nclusters):
+    print 'cluster %d: %.2f percent'%(label,
+            float(sum(labels==label))/len(labels) )
+
+print 'Means, Covars:'
+print best_g.means_
+print np.sqrt(best_g.covars_)
+
+
+cols=['r','b','g','k','m','c']
+i=0
+for m,c in zip(best_g.means_, best_g.covars_):
+    ax.axvline(m, color=cols[i])
+    ax.axvline(m-np.sqrt(c), color=cols[i], linestyle='--')
+    ax.axvline(m+np.sqrt(c), color=cols[i], linestyle='--')
+
+    axw.axvline(m, color=cols[i])
+    axw.axvline(m-np.sqrt(c), color=cols[i], linestyle='--')
+    axw.axvline(m+np.sqrt(c), color=cols[i], linestyle='--')
+    i+=1
+
+
 
 pl.show()
+
+
+
 
 
 
