@@ -1069,6 +1069,16 @@ def compute_efficiency(k,N,b=True):
             stdev_classify_efficiencyilon=np.sqrt(classify_efficiencyilon*(1-classify_efficiencyilon)/N)
     return (classify_efficiencyilon,stdev_classify_efficiencyilon)
 
+
+def gmm_peaks(Z, min_membership=0.01):
+    """
+    Fit a Gaussian mixture model to samples and return the means and covariances
+    of the resulting Gaussians
+
+    We do not allow clusters to have membership smaller than 1%
+    """
+
+
 # ********************************************************************************
 # MAIN SCRIPT
 
