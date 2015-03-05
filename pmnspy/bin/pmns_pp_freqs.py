@@ -152,13 +152,15 @@ def get_modes(posfiles, plot=False):
 
         # Get GMM for frequency posterior
         gmmresult = gmm_peaks(posterior['frequency'].samples)
+        means = np.concatenate(gmmresult.means_)
+        covars = np.concatenate(gmmresult.covars_)
 
         # Populate the fpeaks array such that the highest frequency is the first
         # column
-        idx = np.argsort(gmmresult.means_)[::-1]
+        idx = np.argsort(means)[::-1]
         for i in xrange(len(idx)):
-            fmeans[p, i] = gmmresult.means_[idx][i]
-            fcovars[p, i] = gmmresult.covars_[idx][i]
+            fmeans[p, i] = means[idx][i]
+            fcovars[p, i] = means[idx][i]
 
         if plot:
             outdir = os.path.dirname(posfile)
@@ -399,11 +401,8 @@ def main():
     # Summarise the results
     #
     freq_acc_summary = measurement_summary('GMMfpeakAccuracy', freq_acc)
-
     fmax_mu_summary = measurement_summary('GMMfmax',freq_mode_means[:,0])
-
     fmid_mu_summary = measurement_summary('GMMfmid',freq_mode_means[:,1])
-
     fmin_mu_summary = measurement_summary('GMMfmin',freq_mode_means[:,2])
 
     dump_summary(os.path.join(outdir, 'GMMfreqsSummary.txt'), [freq_acc_summary,
