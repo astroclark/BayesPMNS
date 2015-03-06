@@ -351,7 +351,7 @@ freqaxis = original_signal_spectrum.sample_frequencies.data
 #pl.plot(freqaxis, abs(low_cat))
 #pl.show()
 
-sys.exit()
+#sys.exit()
 #
 # Polar data
 #
@@ -628,4 +628,4 @@ ax.set_xlabel('# of low-freq PCs')
 ax.set_ylabel('# of high-freq PCs')
 
 pl.show()
-sys.exit()
+#sys.exit()

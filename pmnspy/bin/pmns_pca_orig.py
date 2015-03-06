@@ -385,7 +385,7 @@ low_mags, low_phases = complex_to_polar(low_cat)
 high_mags, high_phases = complex_to_polar(high_cat_aligned)
 full_mags, full_phases = complex_to_polar(full_cat)
 
-sys.exit()
+#sys.exit()
 #
 # Phase fit
 #
