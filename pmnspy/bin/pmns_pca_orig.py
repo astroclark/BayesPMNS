@@ -22,7 +22,6 @@ import os,sys
 import numpy as np
 import scipy.linalg
 import scipy.sparse.linalg
-from scipy import signal
 
 import matplotlib
 #matplotlib.use("Agg")
@@ -114,18 +113,13 @@ def pcacov(catalogue):
 
     return U, V, S
 
-def taper(input_data):
-    """  
+def apply_window(data, padding):
     """
-
-    timeseries = lal.CreateREAL8TimeSeries('blah', 0.0, 0,
-            1.0/16384, lal.StrainUnit, int(len(input_data)))
-
-    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
-        lalsim.SIM_INSPIRAL_TAPER_STARTEND)
-        #lalsim.SIM_INSPIRAL_TAPER_START)
-
-    return timeseries.data.data
+    Padding: number of samples for roll-off
+    """
+    beta = 2*float(padding) / len(data)
+    win = lal.CreateTukeyREAL8Window(len(data), beta)
+    return data*win.data.data
 
 def eigenenergy(eigenvalues):
     """
@@ -141,6 +135,24 @@ def eigenenergy(eigenvalues):
     gj/=gp
 
     return gj
+
+def catwave_to_spectrum(catwave, freqaxis, freq_low, peakwidthsamples):
+    """
+    Reconstruct the original spectrum from the data in catwave which may have
+    been shifted
+    """
+
+    # populate a new spectrum with the waveform data at the correct location
+    full_spectrum = np.zeros(len(freqaxis), dtype=complex)
+
+    # Indices for location of spectral data
+    startidx = np.argwhere(freqaxis>=freq_low)[0][0]
+    peakidx = np.argmax(abs(catwave))
+
+    full_spectrum[startidx:startidx+peakwidthsamples] = \
+            catwave[peakidx-0.5*peakwidthsamples:peakidx+0.5*peakwidthsamples]
+
+    return full_spectrum
 
 
 def comp_match(freqseries1, freqseries2, delta_f=1.0, flow=10., fhigh=8192,
@@ -167,6 +179,18 @@ def comp_match(freqseries1, freqseries2, delta_f=1.0, flow=10., fhigh=8192,
                 high_frequency_cutoff=fhigh)[0]
 
 
+def taper(input_data):
+    """  
+    """
+
+    timeseries = lal.CreateREAL8TimeSeries('blah', 0.0, 0,
+            1.0/16384, lal.StrainUnit, int(len(input_data)))
+
+    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
+        lalsim.SIM_INSPIRAL_TAPER_STARTEND)
+        #lalsim.SIM_INSPIRAL_TAPER_START)
+
+    return timeseries.data.data
 
 
 def reconstruct_signal(magPCs, magBetas, phasePCs, phaseBetas, nMagPCs, nPhasePCs):
@@ -183,6 +207,53 @@ def reconstruct_signal(magPCs, magBetas, phasePCs, phaseBetas, nMagPCs, nPhasePC
 
     return reconstruction#/scipy.linalg.norm(reconstruction)
 
+def build_hf_component(signal_freqs, peak_width, magPCs, magBetas, phasePCs,
+        phaseBetas, use_n_mag_pcs, use_n_phase_pcs, fpeak):
+
+    # Reconstruct the peak
+    reconstruction = reconstruct_signal(magPCs, magBetas, phasePCs,
+            phaseBetas, use_n_mag_pcs, use_n_phase_pcs)
+
+    # Determine the range of frequencies spanned by the data in catalogue form
+    delta_f = np.diff(signal_freqs)[0]
+    catfreq_low  = fpeak - 0.5*len(reconstruction)*delta_f
+    catfreq_high = fpeak + 0.5*len(reconstruction)*delta_f
+    cat_freqs = np.arange(catfreq_low, catfreq_high, delta_f)
+
+    # Determine the desired range of frequencies
+    freq_low  = fpeak - 0.5*peak_width
+    freq_high = fpeak + 0.5*peak_width
+
+    #hf_component = catwave_to_spectrum(reconstruction, cat_freqs, signal_freqs,
+    #        freq_low, freq_high)
+    hf_component = catwave_to_spectrum(reconstruction, signal_freqs, freq_low,
+            peak_width/delta_f)
+
+    return hf_component
+
+def stitch_highlow(lf_component, hf_component):
+    full_spectrum = np.zeros(len(lf_component), dtype=complex)
+
+    lf_nonzero = np.argwhere(abs(lf_component)>0)
+    hf_nonzero = np.argwhere(abs(hf_component)>0)
+
+    # populate output array
+    full_spectrum[lf_nonzero] = lf_component[lf_nonzero]
+    full_spectrum[hf_nonzero] += hf_component[hf_nonzero]
+
+    return full_spectrum
+
+def movingaverage(interval, window_size):
+    window = np.ones(int(window_size))/float(window_size)
+    return np.convolve(interval, window, 'same')
+
+def align_peaks(data, outlen):
+    aligned_data = np.zeros(outlen, dtype=complex)
+    peak_idx = np.argmax(abs(data))
+    start_idx = align_idx - peak_idx
+    aligned_data[start_idx:start_idx+len(data)] = np.copy(data)
+    
+    return aligned_data
 
 def complex_to_polar(catalogue):
 
@@ -194,39 +265,6 @@ def complex_to_polar(catalogue):
 
     return magnitudes, phases
 
-def build_hf_component(magPCs, magBetas, phasePCs, phaseBetas, nMagPCs,
-        nPhasePCs, fpeak, delta_f, fhet=4000.0):
-
-    # Reconstruct:
-    reconstruction = reconstruct_signal(magPCs, magBetas, phasePCs, phaseBetas,
-            nMagPCs, nPhasePCs)
-
-    # Re-position the spectrum
-    reconstruction_FD = pycbc.types.FrequencySeries(reconstruction,
-            delta_f=delta_f)
-
-    specdata = np.zeros(len(reconstruction), dtype=complex)
-
-    # Find where the peak should be
-    peakidx = np.argmin(abs(reconstruction_FD.sample_frequencies-fpeak))
-
-    # Start populating the output spectrum at this location
-    false_freqs = reconstruction_FD.sample_frequencies.data - (fhet-fpeak)
-    specdata[:sum(false_freqs>=0)] = reconstruction[false_freqs>=0]
-#
-#    pl.figure()
-#   pl.plot(reconstruction_FD.sample_frequencies, abs(reconstruction))
-#    pl.plot(false_freqs, abs(reconstruction))
-#    pl.plot(false_freqs[pos_false_freqs], abs(reconstruction[pos_false_freqs]))
-#    pl.plot(reconstruction_FD.sample_frequencies, abs(specdata))
-#    pl.axvline(fpeak, color='r')
-#    pl.show()
-#    sys.exit()
-#
-#   print specdata
-
-
-    return specdata
 
 #
 # Waveform catalogue
@@ -240,7 +278,8 @@ waveform_names=['apr_135135_lessvisc',
                 'tm1_135135_lessvisc' ,
                 'tma_135135_lessvisc' ,
                 'sfhx_135135_lessvisc',
-                'sfho_135135_lessvisc']#,
+                'sfho_135135_lessvisc']
+
 #               'gs1_135135',
 #               'gs2_135135',
 #               'ls220_135135',
@@ -256,22 +295,20 @@ low_cat  = np.zeros(shape=(8193, len(waveform_names)), dtype=complex)
 high_cat_aligned = np.zeros(shape=(8193, len(waveform_names)), dtype=complex)
 high_cat = np.zeros(shape=(8193, len(waveform_names)), dtype=complex)
 full_cat = np.zeros(shape=(8193, len(waveform_names)), dtype=complex)
+early_full_cat = np.zeros(shape=(8193, len(waveform_names)), dtype=complex)
+late_full_cat = np.zeros(shape=(8193, len(waveform_names)), dtype=complex)
 time_cat = np.zeros(shape=(16384, len(waveform_names)))
+early_time_cat = np.zeros(shape=(16384, len(waveform_names)))
+late_time_cat = np.zeros(shape=(16384, len(waveform_names)))
 
+low_comp = [100., 2000.]
+high_comp = [2000., 8192.]
 
-fhet = 4096.0
 peak_width = 500.
-
-knee_freq=2000
-butter_b_low, butter_a_low = signal.butter(8, knee_freq / 8192.0, btype='lowpass')
-butter_b_band, butter_a_band = signal.butter(8, \
-        [(fhet-0.5*peak_width) / 8192.0, (fhet+0.5*peak_width) / 8192.0],
-            btype='bandpass')
+delay = 1e-3
 
 align_idx=4096
 for w, name in enumerate(waveform_names):
-
-    print 'loading ', name
 
     # Create waveform
     waveform = pmns_utils.Waveform(name)
@@ -283,82 +320,72 @@ for w, name in enumerate(waveform_names):
     # Use unit-norm waveforms
     waveform.hplus.data /= waveform.hrss_plus
 
+    # Find merger
+    tpeak = np.floor(np.argmax(waveform.hplus.data) +
+            delay/waveform.hplus.delta_t)
+
     # High-pass at 1 kHz
-    waveform.hplus = pycbc.filter.highpass(waveform.hplus, 1000)
+    #waveform.hplus = pycbc.filter.highpass(waveform.hplus, 1000)
 
-    # Zero-pad
-    rawdata = np.zeros(16384)
-    tmptimes = np.arange(0,1,1./16384)
-    rawdata[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
-    time_cat[:,w] = np.copy(rawdata)
+    # Zero-pad / divide into early / late signals
+    signal = pycbc.types.TimeSeries(np.zeros(16384), delta_t=waveform.hplus.delta_t)
+    signal.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+    time_cat[:,w] = np.copy(signal.data)
 
-    original_signal = pycbc.types.TimeSeries(np.copy(rawdata), delta_t = waveform.hplus.delta_t)
-    original_signal_spectrum = original_signal.to_frequencyseries()
+    early_signal = pycbc.types.TimeSeries(np.zeros(16384), delta_t=waveform.hplus.delta_t)
+    early_signal.data[0:tpeak] = np.copy(waveform.hplus.data[0:tpeak])
+    early_signal.data = apply_window(early_signal.data, delay/waveform.hplus.delta_t)
+    early_time_cat[:,w] = np.copy(early_signal.data)
 
-    # --- Construct Low frequency catalogue
-    lowdata = signal.filtfilt(butter_b_low, butter_a_low, np.copy(rawdata))
-    low_signal = pycbc.types.TimeSeries(lowdata, delta_t=waveform.hplus.delta_t)
-    low_signal_spectrum = low_signal.to_frequencyseries()
+    late_signal = pycbc.types.TimeSeries(np.zeros(16384), delta_t=waveform.hplus.delta_t)
+    late_signal.data[tpeak:tpeak+len(waveform.hplus.data[tpeak:-1])] = \
+            np.copy(waveform.hplus.data[tpeak:-1])
+    late_signal.data = apply_window(late_signal.data, delay/waveform.hplus.delta_t)
+    late_time_cat[:,w] = np.copy(late_signal.data)
 
-    # --- Construct High frequency catalogue
-    # Heterodyne
-    highdata = np.copy(rawdata)
-    fmix = fhet - waveform.fpeak
-    mixsignal = np.sin(2*np.pi*fmix*tmptimes)
-    highdata *= mixsignal
+    signal_spectrum = signal.to_frequencyseries() 
+    early_signal_spectrum = early_signal.to_frequencyseries() 
+    late_signal_spectrum  = late_signal.to_frequencyseries() 
 
-    high_signal = pycbc.types.TimeSeries(highdata,
-            delta_t=waveform.hplus.delta_t)
+    # Select out the low and high frequency parts
+    idx_low = (signal_spectrum.sample_frequencies.data>=low_comp[0])*\
+            (signal_spectrum.sample_frequencies.data<low_comp[1])
+    idx_high = (signal_spectrum.sample_frequencies.data>waveform.fpeak-0.5*peak_width) *\
+            (signal_spectrum.sample_frequencies.data<waveform.fpeak+0.5*peak_width)
 
-    # f-domain filter
-    high_signal_spectrum = high_signal.to_frequencyseries() 
-    idx_passfreqs = (high_signal_spectrum.sample_frequencies.data>fhet-0.5*peak_width) *\
-            (high_signal_spectrum.sample_frequencies.data<fhet+0.5*peak_width)
-    high_signal_spectrum.data[~idx_passfreqs] = 0.0
+    high_component = signal_spectrum[idx_high]
+    low_component  = signal_spectrum[idx_low]
+    #high_component = late_signal_spectrum[idx_high]
+    #low_component  = early_signal_spectrum[idx_low]
 
-    # t-domain filter
-#   high_signal = signal.filtfilt(butter_b_band, butter_a_band,
-#       mixsignal*rawdata)
-#    high_signal = pycbc.filter.highpass(high_signal, fhet-0.5*peak_width,
-#           filter_order=12)
-#   high_signal = pycbc.types.TimeSeries(high_signal,
-#           delta_t=waveform.hplus.delta_t)
-#   high_signal_spectrum = high_signal.to_frequencyseries() 
-#
+    #
+    # Feature Alignment
+    #
+    peak_spectrum = align_peaks(high_component, 8193)
+
+    # Build the low-freq-only spectrum
+    low_spectrum  = np.zeros(8193,dtype=complex)
+    low_spectrum[idx_low] = np.copy(low_component)
+
     # Populate the catalogues
-    low_cat[:,w]  = np.copy(low_signal_spectrum.data)
-    high_cat[:,w]  = np.copy(high_signal_spectrum.data)
-    full_cat[:,w] = np.copy(original_signal_spectrum.data)
+    low_cat[:,w]  = np.copy(low_spectrum)
+    high_cat_aligned[:,w] = np.copy(peak_spectrum)
+    high_cat[idx_high,w] = np.copy(high_component)
+    full_cat[:,w] = np.copy(signal_spectrum.data)
+    early_full_cat[:,w] = np.copy(early_signal_spectrum.data)
+    late_full_cat[:,w] = np.copy(late_signal_spectrum.data)
 
-    # Tidy up
-    del waveform, rawdata, highdata, lowdata
 
+freqaxis = signal_spectrum.sample_frequencies.data
 
-freqaxis = original_signal_spectrum.sample_frequencies.data
-
-#pl.figure()
-#pl.plot(freqaxis, abs(full_cat))
-#pl.plot(freqaxis, abs(low_cat))
-#pl.plot(freqaxis, abs(high_cat))
-#pl.show()
-#sys.exit()
-#
-#pl.figure()
-#pl.plot(freqaxis, abs(high_cat))
-#pl.show()
-#
-#pl.figure()
-#pl.plot(freqaxis, abs(low_cat))
-#pl.show()
-
-sys.exit()
 #
 # Polar data
 #
 low_mags, low_phases = complex_to_polar(low_cat)
-high_mags, high_phases = complex_to_polar(high_cat)
+high_mags, high_phases = complex_to_polar(high_cat_aligned)
 full_mags, full_phases = complex_to_polar(full_cat)
 
+sys.exit()
 #
 # Phase fit
 #
@@ -385,6 +412,7 @@ low_dots = np.zeros(shape=(len(waveform_names),npcs))
 high_dots = np.zeros(shape=(len(waveform_names),npcs))
 full_dots = np.zeros(shape=(len(waveform_names),npcs))
 
+
 for n in xrange(len(waveform_names)):
 
     print '%d of %d'%(n, len(waveform_names))
@@ -396,30 +424,30 @@ for n in xrange(len(waveform_names)):
         use_n_phase_pcs = np.copy(use_npcs)
 
         full_rec_spectrum = \
-                reconstruct_signal(magPCs_full, magBetas_full[n,:],
+                reconstruct_signal(magPCs_full, magBetas_full[n,:], \
                 phasePCs_full, phaseBetas_full[n,:], use_n_mag_pcs,
                 use_n_phase_pcs)
 
         low_rec_spectrum = \
-                reconstruct_signal(magPCs_low, magBetas_low[n,:],
+                reconstruct_signal(magPCs_low, magBetas_low[n,:], \
                 phasePCs_low, phaseBetas_low[n,:], use_n_mag_pcs,
                 use_n_phase_pcs)
 
-        high_rec_spectrum = build_hf_component(magPCs_high, magBetas_high[n,:],
-                phasePCs_high, phaseBetas_high[n,:], use_n_mag_pcs,
-                use_n_phase_pcs, fpeaks[n], delta_f =
-                high_signal_spectrum.delta_f)
-
-        # Also reconstruct the high-freq part without frequency shifting, so we
-        # can assess the high-freq only reconstruction fidelity
-        high_rec_spectrum_simple = \
-                reconstruct_signal(magPCs_high, magBetas_high[n,:],
+        high_rec_simple = \
+                reconstruct_signal(magPCs_high, magBetas_high[n,:], \
                 phasePCs_high, phaseBetas_high[n,:], use_n_mag_pcs,
                 use_n_phase_pcs)
 
-        synth_rec_spectrum = low_rec_spectrum + high_rec_spectrum
+        high_rec_spectrum = \
+                build_hf_component(freqaxis, peak_width, \
+                magPCs_high, magBetas_high[n,:], \
+                phasePCs_high, phaseBetas_high[n,:], \
+                use_n_mag_pcs, use_n_phase_pcs, fpeaks[n])
+
+        synth_rec_spectrum = stitch_highlow(low_rec_spectrum, high_rec_spectrum)
 
         # Low-Freq component: compute match
+        #low_matches[n,u] = comp_match(low_rec_spectrum, early_full_cat[:,n],
         low_matches[n,u] = comp_match(low_rec_spectrum, low_cat[:,n],
                 flow=1000, fhigh=8192, weighted=False)
 
@@ -428,22 +456,23 @@ for n in xrange(len(waveform_names)):
                         low_cat[:,n]/np.linalg.norm(low_cat[:,n]))
 
         # High-Freq component: compute match around the peak
-        high_matches[n,u] = comp_match(high_rec_spectrum_simple, high_cat[:,n],
+        #high_matches[n,u] = comp_match(high_rec_spectrum, late_full_cat[:,n],
+        high_matches[n,u] = comp_match(high_rec_spectrum, high_cat[:,n],
                 flow=1000, fhigh=8192,
                 weighted=True)
 
         high_dots[n,u] = \
-                np.vdot(high_rec_spectrum_simple/np.linalg.norm(high_rec_spectrum_simple),
-                        high_cat[:,n]/np.linalg.norm(high_cat[:,n]))
+                np.vdot(high_rec_simple/np.linalg.norm(high_rec_simple),
+                        high_cat_aligned[:,n]/np.linalg.norm(high_cat_aligned[:,n]))
 
         # Full-spectrum (naive)
-        full_matches[n,u] = comp_match(full_rec_spectrum, full_cat[:,n],
+        full_matches[n,u] = comp_match(full_rec_spectrum, low_cat[:,n],
                 flow=1000, fhigh=8192, weighted=True)
 
         full_dots[n,u] = \
                 np.vdot(full_rec_spectrum/np.linalg.norm(full_rec_spectrum),
                         full_cat[:,n]/np.linalg.norm(full_cat[:,n]))
-
+ 
 #
 # PCA diagnostics
 #
@@ -466,6 +495,91 @@ for m in xrange(npcs):
 full_minimal_match = np.zeros(npcs)
 for m in xrange(npcs):
     full_minimal_match[m] = min(full_matches[:,m])
+
+#
+# Now look at fully synthesised results
+#
+synth_matches = np.zeros(shape=(len(waveform_names), len(waveform_names)+1,
+    len(waveform_names)+1))
+
+for n in xrange(len(waveform_names)):
+
+    print '%d of %d'%(n, len(waveform_names))
+
+    # Loop over the number of pcs to use for low and high parts
+    for u, low_use_npcs in enumerate(xrange(0,npcs+1)):
+
+        low_use_n_mag_pcs = np.copy(low_use_npcs)
+        low_use_n_phase_pcs = np.copy(low_use_npcs)
+
+        for v, high_use_npcs in enumerate(xrange(0,npcs+1)):
+
+            high_use_n_mag_pcs = np.copy(high_use_npcs)
+            high_use_n_phase_pcs = np.copy(high_use_npcs)
+
+            if u==0 and v==0:
+                synth_matches[n,u,v] = 0.0
+            else:
+                if u==0:
+                    low_rec_spectrum = np.zeros(8193)
+                else:
+                    low_rec_spectrum = \
+                            reconstruct_signal(magPCs_low, magBetas_low[n,:], \
+                            phasePCs_low, phaseBetas_low[n,:],
+                            low_use_n_mag_pcs, low_use_n_phase_pcs)
+
+
+                if v==0:
+                    high_rec_spectrum = np.zeros(8193)
+                else:
+                    high_rec_spectrum = \
+                            build_hf_component(freqaxis, peak_width, \
+                            magPCs_high, magBetas_high[n,:], \
+                            phasePCs_high, phaseBetas_high[n,:], \
+                            high_use_n_mag_pcs, high_use_n_phase_pcs, fpeaks[n])
+
+                # Full synthesised signal: compute match
+                synth_rec_spectrum = stitch_highlow(low_rec_spectrum, high_rec_spectrum)
+
+                synth_matches[n,u,v] = comp_match(synth_rec_spectrum, full_cat[:,n],
+                        flow=1000, fhigh=8192, weighted=True)
+
+synth_minimal_match = np.zeros(shape=(npcs+1,npcs+1))
+for m in xrange(npcs+1):
+    for n in xrange(npcs+1):
+        synth_minimal_match[m,n] = min(synth_matches[:,m,n])
+        print waveform_names[np.argmin(synth_matches[:,m,n])],synth_minimal_match[m,n]
+
+#####################################################
+# Ad Hoc matches
+
+test_waveform = pmns_utils.Waveform('apr_135135_lessvisc')
+
+test_waveform.reproject_waveform()
+test_waveform.compute_characteristics()
+test_signal = pycbc.types.TimeSeries(np.zeros(16384), delta_t=waveform.hplus.delta_t)
+test_signal.data[:len(test_waveform.hplus)] = np.copy(test_waveform.hplus.data)
+
+for w in range(len(waveform_names)):
+
+    low_rec_spectrum = reconstruct_signal(magPCs_low, magBetas_low[w,:],
+            phasePCs_low, phaseBetas_low[w,:], 1,
+            low_use_n_phase_pcs)
+
+    high_rec_spectrum = build_hf_component(freqaxis, peak_width, magPCs_high,
+            magBetas_high[w,:], phasePCs_high, phaseBetas_high[w,:],
+            high_use_n_mag_pcs, 1, waveform.fpeak)
+
+    #high_rec_spectrum = np.zeros(len(low_rec_spectrum))
+
+    synth_rec_spectrum = stitch_highlow(low_rec_spectrum, high_rec_spectrum)
+
+    print comp_match(synth_rec_spectrum, test_signal.to_frequencyseries(),
+                            flow=1000, fhigh=8192, weighted=True)
+
+#####################################################
+# Plotting
+
 
 oneD=True
 if oneD:
@@ -495,108 +609,6 @@ if oneD:
     ax[1].set_xlabel('Number of PCs')
     ax[1].set_ylabel('Minimal Match')
     ax[1].minorticks_on()
-
-    pl.show()
-
-#sys.exit()
-
-#
-# Now look at fully synthesised results
-#
-synth_matches = np.zeros(shape=(len(waveform_names), len(waveform_names)+1,
-    len(waveform_names)+1))
-
-for n in xrange(len(waveform_names)):
-
-    print '%d of %d'%(n, len(waveform_names))
-
-    # Loop over the number of pcs to use for low and high parts
-    for u, low_use_npcs in enumerate(xrange(0,npcs+1)):
-
-        low_use_n_mag_pcs = np.copy(low_use_npcs)
-        low_use_n_phase_pcs = np.copy(low_use_npcs)
-
-        for v, high_use_npcs in enumerate(xrange(0,npcs+1)):
-
-        #for n in xrange(9):
-
-            high_use_n_mag_pcs = np.copy(high_use_npcs)
-            high_use_n_phase_pcs = np.copy(high_use_npcs)
-
-        #   low_use_n_mag_pcs = 3
-        #   low_use_n_phase_pcs = 3
-        #   high_use_n_mag_pcs = 3
-        #   high_use_n_phase_pcs = 3
-
-            if u==0 and v==0:
-                synth_matches[n,u,v] = 0.0
-            else:
-                if u==0:
-                    low_rec_spectrum = np.zeros(8193)
-                else:
-                    low_rec_spectrum = \
-                            reconstruct_signal(magPCs_low, magBetas_low[n,:], \
-                            phasePCs_low, phaseBetas_low[n,:],
-                            low_use_n_mag_pcs, low_use_n_phase_pcs)
-
-
-                if v==0:
-                    high_rec_spectrum = np.zeros(8193)
-                else:
-                    high_rec_spectrum = \
-                            build_hf_component(magPCs_high, magBetas_high[n,:],
-                                    phasePCs_high, phaseBetas_high[n,:],
-                                    high_use_n_mag_pcs, high_use_n_phase_pcs,
-                                    fpeaks[n], delta_f =
-                                    high_signal_spectrum.delta_f)
-
-                # Full synthesised signal: compute match
-                if v>0:
-                    peak_height = abs(full_cat[np.argmin(abs(freqaxis-fpeaks[n])), n])
-                    high_rec_spectrum *= peak_height/max(abs(high_rec_spectrum))
-                synth_rec_spectrum = low_rec_spectrum + high_rec_spectrum
-
-            synth_matches[n,u,v] = comp_match(synth_rec_spectrum, full_cat[:,n],
-                    flow=1000, fhigh=8192, weighted=True)
-
-synth_minimal_match = np.zeros(shape=(npcs+1,npcs+1))
-for m in xrange(npcs+1):
-    for n in xrange(npcs+1):
-        synth_minimal_match[m,n] = min(synth_matches[:,m,n])
-        print waveform_names[np.argmin(synth_matches[:,m,n])],synth_minimal_match[m,n]
-
-if 0:
-    #####################################################
-    # Ad Hoc matches
-
-    test_waveform = pmns_utils.Waveform('apr_135135_lessvisc')
-
-    test_waveform.reproject_waveform()
-    test_waveform.compute_characteristics()
-    test_signal = pycbc.types.TimeSeries(np.zeros(16384), delta_t=waveform.hplus.delta_t)
-    test_signal.data[:len(test_waveform.hplus)] = np.copy(test_waveform.hplus.data)
-
-    for w in range(len(waveform_names)):
-
-        low_rec_spectrum = reconstruct_signal(magPCs_low, magBetas_low[w,:],
-                phasePCs_low, phaseBetas_low[w,:], 1,
-                low_use_n_phase_pcs)
-
-        high_rec_spectrum = build_hf_component(freqaxis, peak_width, magPCs_high,
-                magBetas_high[w,:], phasePCs_high, phaseBetas_high[w,:],
-                high_use_n_mag_pcs, 1, waveform.fpeak)
-
-        #high_rec_spectrum = np.zeros(len(low_rec_spectrum))
-
-        synth_rec_spectrum = stitch_highlow(low_rec_spectrum, high_rec_spectrum)
-
-        print comp_match(synth_rec_spectrum, test_signal.to_frequencyseries(),
-                                flow=1000, fhigh=8192, weighted=True)
-
-#####################################################
-# Plotting
-
-
 
 # 2D-Minimal Match for synthesised waveforms
 fig, ax = pl.subplots()
