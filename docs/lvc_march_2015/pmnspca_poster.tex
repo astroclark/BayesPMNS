@@ -173,7 +173,7 @@ libero, quis tristique purus urna nec nibh.
   \label{fig:}%
 }\qquad%
 \subfloat[Catalogue Phases]{%
-  \includegraphics[width=0.4\linewidth]{catalogue_phase_overlay.pdf}%
+  \includegraphics[width=0.4\linewidth]{pcs_magnitude_overlay.pdf}%
   \label{fig:}%
 }
 \caption{Magnitude and phase spectra of our training data}
@@ -190,7 +190,7 @@ libero, quis tristique purus urna nec nibh.
 \makeatother
 \centering
 \subfloat[PC Magnitudes]{%
-  \includegraphics[width=0.4\linewidth]{pcs_magnitude_overlay.pdf}%
+  \includegraphics[width=0.4\linewidth]{catalogue_phase_overlay.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[PC Phases]{%
@@ -198,6 +198,19 @@ libero, quis tristique purus urna nec nibh.
   \label{fig:}%
 }
 \caption{Magnitude and phase spectra of our principle component basis}
+\end{minipage}
+
+
+\begin{minipage}{\columnwidth}
+\makeatletter
+\newcommand{\@captype}{figure}
+\makeatother
+\centering
+\subfloat[Explained Variance]{%
+    \includegraphics[width=0.4\linewidth]{eigenenergy.pdf}%
+  \label{fig:}%
+}\qquad%
+\caption{Explained variances.}
 \end{minipage}
 
 %
@@ -208,18 +221,18 @@ libero, quis tristique purus urna nec nibh.
 \newcommand{\@captype}{figure}
 \makeatother
 \centering
-\subfloat[Cumulative Eigenenergy]{%
-  \includegraphics[width=0.4\linewidth]{eigenenergy.pdf}%
-  \label{fig:}%
-}\qquad%
 \subfloat[Idealised match for full-spectrum PCs]{%
   \includegraphics[width=0.4\linewidth]{fullspec_ideal_matches.pdf}%
   \label{fig:}%
+}\qquad%
+\subfloat[Idealised match for full-spectrum PCs]{%
+  \includegraphics[width=0.4\linewidth]{shiftspec_ideal_matches.pdf}%
+  \label{fig:}%
 }
-\caption{\emph{Left}: Cumulative eigenenergies for the three sets of principle
-components; \emph{Right}: matches for waveforms reconstructed using PCs based on
+\caption{\emph{Left}: matches for waveforms reconstructed using PCs based on
 the full, unadulterated frequency content of the catalogue (no feature
-alignment).}
+alignment); \emph{Right}: matches for waveforms reconstructed using PCs based on
+the full, \emph{shifted} frequency content of the catalogue}
 \end{minipage}
 
 \begin{minipage}{\columnwidth}
@@ -235,7 +248,23 @@ alignment).}
   \includegraphics[width=0.4\linewidth]{highfreq_ideal_matches.pdf}%
   \label{fig:}%
 }
-\caption{Magnitude and phase spectra of our training data}
+\caption{Separate high and low frequency matches}
+\end{minipage}
+
+\begin{minipage}{\columnwidth}
+\makeatletter
+\newcommand{\@captype}{figure}
+\makeatother
+\centering
+\subfloat[Idealised match for `stiched' PCs]{%
+  \includegraphics[width=0.4\linewidth]{stitchedspec_ideal_matches.pdf}%
+  \label{fig:}%
+}\qquad%
+\subfloat[Idealised match for `shifted' PCs]{%
+  \includegraphics[width=0.4\linewidth]{unshiftspec_ideal_matches.pdf}%
+  \label{fig:}%
+}
+\caption{Separate high and low frequency matches}
 \end{minipage}
 
 %----------------------------------------------------------------------------------------
