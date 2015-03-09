@@ -40,9 +40,10 @@ class Waveform:
 
         # waveform labels and directory setup
         self.waveform_name  = waveform_name
-        self.set_tex_label(waveform_name)
-        self.set_R16(waveform_name)
-        self.allowed_radii()
+        # XXX
+        #self.set_tex_label(waveform_name)
+        #self.set_R16(waveform_name)
+        #self.allowed_radii()
         self.theta = theta
         self.phi = phi
         self.noise_curve = noise_curve
@@ -166,7 +167,7 @@ class Waveform:
 #            self.delta_fpeak = abs(self.fpeak - self.fpeak_fit)
 
             # Expected R16 measurement
-            self.set_R16_fpeak()
+            #self.set_R16_fpeak()
 
 
 

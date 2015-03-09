@@ -60,10 +60,13 @@ def pca_by_svd(catalogue):
 
     return PCs, V, S**2 
 
-def pca_magphase(catalogue):
+def pca_magphase(catalogue, freqs, flow=1000):
     """
     Do PCA with magnitude and phase parts of the complex waveforms in catalogue
     """
+
+    # 'highpass'
+    catalogue[freqs<flow] = 0.0
 
     magnitudes, phases = complex_to_polar(catalogue)
 
@@ -161,6 +164,7 @@ def build_catalogues(waveform_names):
     times=np.arange(0, delta_t*nTsamples, delta_t)
 
     fcenter = 4096.0  # center high-frequency peaks here
+    #fcenter = 2000.0  # center high-frequency peaks here
     peak_width = 500. # retain this much data around the peak for the high-freq
                       # component
 
@@ -200,23 +204,39 @@ def build_catalogues(waveform_names):
 
         del waveform
 
-        # Unit-normalise
-        rawdata /= np.linalg.norm(rawdata)
-
         original_signal = pycbc.types.TimeSeries(np.copy(rawdata),
                 delta_t=delta_t) 
         original_signal_spectrum = original_signal.to_frequencyseries()
+        original_signal_spectrum /= pycbc.filter.sigma(original_signal_spectrum)
 
-        full_cat[:,w] = np.copy(original_signal_spectrum.data)
+        # Frequency shift:
+        tmpdata = np.copy(original_signal_spectrum.data)
+
+        fshift = fcenter / fpeaks[w]
+        false_freqs = original_signal_spectrum.sample_frequencies.data * fshift
+        original_freqs = original_signal_spectrum.sample_frequencies.data
+
+        shiftedspec_real = np.interp(original_freqs, false_freqs,
+                np.real(tmpdata))
+        shiftedspec_imag = np.interp(original_freqs, false_freqs,
+                np.imag(tmpdata))
+        full_cat[:,w] = shiftedspec_real + 1j*shiftedspec_imag
+
+        # No shift
+        #full_cat[:,w] = original_signal_spectrum.data \
+        #        pycbc.filter.sigma(original_signal_spectrum)
 
         #
         # Extract low frequency data
         #
 
         # TD filter:
-        low_cat[:,w] = pycbc.types.TimeSeries(
+        lowdata = pycbc.types.TimeSeries(
                 signal.filtfilt(butter_b_low, butter_a_low, rawdata),
                 delta_t=delta_t).to_frequencyseries() 
+        lowdata_sigma = pycbc.filter.sigma(lowdata)
+
+        low_cat[:,w] = lowdata.data / lowdata_sigma
 
         #
         # Extract high frequency data
@@ -236,7 +256,12 @@ def build_catalogues(waveform_names):
         highdata_td = highdata_fd.to_timeseries()
         highdata_td.data = signal.filtfilt(butter_b_band, butter_a_band,
                 highdata_td.data)
-        high_cat[:,w] = highdata_td.to_frequencyseries()
+
+        # Unit-normalise
+        highdata_sigma = pycbc.filter.sigma(highdata_td)
+
+        # Populate catalogue
+        high_cat[:,w] = highdata_td.to_frequencyseries().data / highdata_sigma
 
 
     return (original_signal_spectrum.sample_frequencies, 
@@ -348,9 +373,9 @@ def main():
     # PCA
     #
     print "Performing PCA"
-    high_pca = pca_magphase(high_cat)
-    low_pca = pca_magphase(low_cat)
-    full_pca = pca_magphase(full_cat)
+    high_pca = pca_magphase(high_cat, freqaxis, flow=1000)
+    low_pca = pca_magphase(low_cat, freqaxis, flow=1000)
+    full_pca = pca_magphase(full_cat, freqaxis, flow=1000)
 
 
     #
@@ -366,13 +391,10 @@ def main():
 
 
 
-
-
-
-
     # ******** #
     # Plotting #
     # ******** #
+    imageformats=['png','eps','pdf']
 
 
     #
@@ -380,7 +402,7 @@ def main():
     #
 
     # Magnitude
-    f, ax = pl.subplots(nrows=3)
+    f, ax = pl.subplots(nrows=3,figsize=(7,10))
     ax[0].plot(freqaxis, full_mag, label='full spectrum')
     ax[0].set_xlim(900, 5000)
     ax[0].set_xlabel('Frequency [Hz]')
@@ -393,19 +415,21 @@ def main():
     ax[1].set_xlabel('Frequency [Hz]')
     ax[1].set_ylabel('|H(f)|')
     ax[1].minorticks_on()
-    ax[1].set_title('Low Frequency Components (magnitude)')
+    ax[1].set_title('Low Frequencies (magnitude)')
 
     ax[2].plot(freqaxis, high_mag, label='high-frequency components')
     ax[2].set_xlim(3500, 4500)
     ax[2].set_xlabel('Frequency [Hz]')
     ax[2].set_ylabel('|H(f)|')
     ax[2].minorticks_on()
-    ax[2].set_title('High Frequency Components, aligned to 4096 Hz (magnitude)')
+    ax[2].set_title('High Frequencies, aligned to 4096 Hz (magnitude)')
     
     f.tight_layout()
+    for fileformat in imageformats:
+        f.savefig('catalogue_magnitude_overlay.%s'%fileformat)
 
     # Phase
-    f, ax = pl.subplots(nrows=3)
+    f, ax = pl.subplots(nrows=3,figsize=(7,10))
     ax[0].plot(freqaxis, full_phase, label='full spectrum')
     ax[0].set_xlim(900, 5000)
     ax[0].set_xlabel('Frequency [Hz]')
@@ -418,23 +442,25 @@ def main():
     ax[1].set_xlabel('Frequency [Hz]')
     ax[1].set_ylabel('arg[H(f)]')
     ax[1].minorticks_on()
-    ax[1].set_title('Low Frequency Components (phase)')
+    ax[1].set_title('Low Frequencies (phase)')
 
     ax[2].plot(freqaxis, high_phase, label='high-frequency components')
     ax[2].set_xlim(3500, 4500)
     ax[2].set_xlabel('Frequency [Hz]')
     ax[2].set_ylabel('arg[H(f)]')
     ax[2].minorticks_on()
-    ax[2].set_title('High Frequency Components, aligned to 4096 Hz (phase)')
+    ax[2].set_title('High Frequencies, aligned to 4096 Hz (phase)')
 
     f.tight_layout()
+    for fileformat in imageformats:
+        f.savefig('catalogue_phase_overlay.%s'%fileformat)
 
-    pl.show()
+    #pl.show()
 
     #
     # Plot Magnitude PCs
     #
-    f, ax = pl.subplots(nrows=3)
+    f, ax = pl.subplots(nrows=3,figsize=(7,10))
     ax[0].plot(freqaxis, abs(full_pca['magnitude_pcs']), label='full spectrum')
     ax[0].set_xlim(900, 5000)
     ax[0].set_xlabel('Frequency [Hz]')
@@ -456,12 +482,14 @@ def main():
     ax[2].minorticks_on()
     ax[2].set_title('High-frequency Principle Components (magnitude)')
     f.tight_layout()
-    pl.show()
+    for fileformat in imageformats:
+        f.savefig('pcs_magnitude_overlay.%s'%fileformat)
+    #pl.show()
 
     #
     # Plot Phase PCs
     #
-    f, ax = pl.subplots(nrows=3)
+    f, ax = pl.subplots(nrows=3,figsize=(7,10))
     ax[0].plot(freqaxis, full_pca['phase_pcs'], label='full spectrum')
     ax[0].set_xlim(900, 5000)
     ax[0].set_xlabel('Frequency [Hz]')
@@ -484,7 +512,9 @@ def main():
     ax[2].minorticks_on()
     ax[2].set_title('High-frequency Principle Components (phase)')
     f.tight_layout()
-    pl.show()
+    for fileformat in imageformats:
+        f.savefig('pcs_phase_overlay.%s'%fileformat)
+    #pl.show()
 
     #
     # PCA Diagnostics
@@ -511,7 +541,9 @@ def main():
     ax.minorticks_on()
 
     f.tight_layout()
-    pl.show()
+    for fileformat in imageformats:
+        f.savefig('eigenenergy.%s'%fileformat)
+    #pl.show()
 
     # -----
 
@@ -549,7 +581,11 @@ def main():
 
     fig.tight_layout()
     c=pl.colorbar(im, ticks=np.arange(0.75,1.05,0.05))
-    pl.show()
+
+    for fileformat in imageformats:
+        fig.savefig('fullspec_ideal_matches.%s'%fileformat)
+
+    #pl.show()
 
     #
     # Low spectrum Matches: rows=npcs, cols=waveforms
@@ -587,7 +623,10 @@ def main():
 
     fig.tight_layout()
     c=pl.colorbar(im, ticks=np.arange(0.75,1.05,0.05))
-    pl.show()
+    #pl.show()
+
+    for fileformat in imageformats:
+        fig.savefig('lowfreq_ideal_matches.%s'%fileformat)
 
 
     #
@@ -627,8 +666,12 @@ def main():
     fig.tight_layout()
     c=pl.colorbar(im, ticks=np.arange(0.75,1.05,0.05))
 
-    pl.show()
+    #pl.show()
 
+    for fileformat in imageformats:
+        fig.savefig('highfreq_ideal_matches.%s'%fileformat)
+
+    pl.close('all')
     return 0
 
 
