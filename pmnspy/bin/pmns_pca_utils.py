@@ -187,7 +187,7 @@ def stitch_catalogue(low_pcs, nlowpcs, high_pcs, nhighpcs, fpeaks, low_sigmas,
     return synth_cat
 
 def unshift_waveform(shifted_pcs, npcs, fpeak, target_freqs, waveform_num=0,
-        fcenter=4096., delta_f=1.0):
+        fcenter=3000., delta_f=1.0):
     """
     Reconstruct the shifted waveform and shift it back to the original peak
     frequency.  npcs is a tuple with the number of [mag, phase] PCs to use
@@ -221,7 +221,8 @@ def taper(input_data, delta_t=1./16384):
             delta_t, lal.StrainUnit, int(len(input_data)))
 
     lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
-        lalsim.SIM_INSPIRAL_TAPER_STARTEND)
+        lalsim.SIM_INSPIRAL_TAPER_START)
+        #lalsim.SIM_INSPIRAL_TAPER_STARTEND)
 
     return timeseries.data.data
 
@@ -274,6 +275,10 @@ def build_catalogues(waveform_names):
         waveform.compute_characteristics()
         fpeaks[w] = np.copy(waveform.fpeak)
 
+        # window
+        win=lal.CreateTukeyREAL8Window(len(waveform.hplus),0.25)
+        waveform.hplus.data *= win.data.data
+
         # Zero-pad
         rawdata = np.zeros(nTsamples)
         rawdata[:len(waveform.hplus)] = taper(waveform.hplus.data)
@@ -291,7 +296,8 @@ def build_catalogues(waveform_names):
         # Frequency shift:
         tmpdata = np.copy(original_signal_spectrum.data)
 
-        fshift = fcenter / fpeaks[w]
+        #fshift = fcenter / fpeaks[w]
+        fshift = 3000 / fpeaks[w]
         false_freqs = original_signal_spectrum.sample_frequencies.data * fshift
         original_freqs = original_signal_spectrum.sample_frequencies.data
 
@@ -380,7 +386,7 @@ def idealised_matches(catalogue, principle_components, delta_f=1.0, flow=1000,
 
     return matches
 
-def shifted_rec_cat(pcs, npcs, fpeaks, freqaxis):
+def unshifted_rec_cat(pcs, npcs, fpeaks, freqaxis, fcenter):
 
     """
     Reconstruct the catalogue using npcs and the shifted waveforms
@@ -390,11 +396,13 @@ def shifted_rec_cat(pcs, npcs, fpeaks, freqaxis):
 
     for w in xrange(len(fpeaks)):
 
-        rec_cat[:, w] = unshift_waveform(pcs, [npcs[0], npcs[1]], fpeaks[w], freqaxis)
+        rec_cat[:, w] = unshift_waveform(pcs, [npcs[0], npcs[1]], fpeaks[w],
+                freqaxis, waveform_num=w, fcenter=fcenter)
 
     return rec_cat
 
-def shifted_matches(catalogue, pcs, fpeaks, freqaxis, delta_f=1.0, flow=1000, fhigh=8192):
+def shifted_matches(catalogue, pcs, fpeaks, freqaxis, delta_f=1.0, flow=1000,
+        fhigh=8192, fcenter=3000):
     """
     Compute the matches between the waveforms in the catalogue and the
     shifted spectrum reconstructions, where we use the training data as the test and
@@ -410,8 +418,8 @@ def shifted_matches(catalogue, pcs, fpeaks, freqaxis, delta_f=1.0, flow=1000, fh
     # Loop over the number of pcs to use
     for u, use_npcs in enumerate(xrange(1,nwaveforms+1)):
 
-        rec_cat = shifted_rec_cat(pcs, [use_npcs, use_npcs],
-                fpeaks, freqaxis)
+        rec_cat = unshifted_rec_cat(pcs, [use_npcs, use_npcs],
+                fpeaks, freqaxis, fcenter=fcenter)
 
         # Loop over waveforms
         for column_idx in xrange(nwaveforms):
@@ -513,9 +521,7 @@ def main():
     # Build Catalogues
     #
     print "building catalogues"
-    (freqaxis, low_cat, high_cat, shift_cat, original_cat, \
-            fpeaks, low_sigmas, high_sigmas) = \
-            build_catalogues(waveform_names)
+    (freqaxis, low_cat, high_cat, shift_cat, original_cat, fpeaks, low_sigmas, high_sigmas) = build_catalogues(waveform_names)
     delta_f = np.diff(freqaxis)[0]
 
     # Convert to magnitude/phase
@@ -529,11 +535,10 @@ def main():
     # PCA
     #
     print "Performing PCA"
-    high_pca = pca_magphase(high_cat, freqaxis, flow=1500)
-    low_pca = pca_magphase(low_cat, freqaxis, flow=1500)
-    shift_pca = pca_magphase(shift_cat, freqaxis, flow=1500)
-    full_pca = pca_magphase(original_cat, freqaxis, flow=1500)
-
+    high_pca = pca_magphase(high_cat, freqaxis, flow=1000)
+    low_pca = pca_magphase(low_cat, freqaxis, flow=1000)
+    shift_pca = pca_magphase(shift_cat, freqaxis, flow=1000)
+    full_pca = pca_magphase(original_cat, freqaxis, flow=1000)
 
     
 
@@ -541,13 +546,13 @@ def main():
     # Compute idealised minimal matches
     #
     print "Computing all matches"
-    full_matches_ideal = idealised_matches(original_cat, full_pca, delta_f=delta_f, flow=1500)
-    shift_matches_ideal = idealised_matches(shift_cat, shift_pca, delta_f=delta_f, flow=1500)
-    low_matches_ideal = idealised_matches(low_cat, low_pca, delta_f=delta_f, flow=1500)
-    high_matches_ideal = idealised_matches(high_cat, high_pca, delta_f=delta_f, flow=1500)
+    full_matches_ideal = idealised_matches(original_cat, full_pca, delta_f=delta_f, flow=1000)
+    shift_matches_ideal = idealised_matches(shift_cat, shift_pca, delta_f=delta_f, flow=1000)
+    low_matches_ideal = idealised_matches(low_cat, low_pca, delta_f=delta_f, flow=1000)
+    high_matches_ideal = idealised_matches(high_cat, high_pca, delta_f=delta_f, flow=1000)
 
     unshift_matches_ideal = shifted_matches(original_cat, shift_pca, fpeaks,
-            freqaxis)
+            freqaxis, fcenter=3000)
 
     stitched_matches_ideal = stitched_matches(original_cat, low_pca, low_sigmas,
             high_pca, high_sigmas, fpeaks)
@@ -913,13 +918,10 @@ def main():
     fig.tight_layout()
     c=pl.colorbar(im, ticks=np.arange(0.75,1.05,0.05))
 
-    pl.show()
 
     for fileformat in imageformats:
         fig.savefig('highfreq_ideal_matches.%s'%fileformat)
 
-    #pl.close('all')
-    return 0
 
     # -----
 
@@ -1004,7 +1006,8 @@ def main():
 
 
     pl.show()
-    sys.exit()
+
+    return 0
 
 
 
