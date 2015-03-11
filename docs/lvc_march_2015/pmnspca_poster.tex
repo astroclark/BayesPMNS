@@ -64,11 +64,11 @@
 % The widths of these boxes can be easily edited to accommodate your content as you see fit
 
 \begin{minipage}[b]{0.7\linewidth}
-\veryHuge \color{NavyBlue} \textbf{Principle Component Analysis Of Post-Merger
-Gravitational Wave Burst Signals From Binary Neutron Star Coalescene} \color{Black}\\ \\% Title
-\huge \textbf{James A. Clark$^{1}$, Andreas Bauswein$^{2}$}\\ \\% Author(s)
+\veryHuge \color{NavyBlue} \textbf{Binary Neutron Star Coalescence: Modelling
+The Merger Signal With Principal Component Analysis} \color{Black}\\ \\% Title
+\huge \textbf{James A. Clark$^{1}$, Andreas Bauswein$^{2}$ \& Nikolaos Stergioulas$^{2}$}\\ \\% Author(s)
 \large 1. Georgia Institude of Technology\\ % University/organization
-\large 2. University of Thessaloniki\\ % University/organization
+\large 2. Aristotle University of Thessaloniki\\ % University/organization
 \end{minipage}
 %
 \hspace{10cm}
@@ -146,6 +146,12 @@ libero, quis tristique purus urna nec nibh.
 
 \section*{BNS \& High-frequency GW Bursts}
 
+% Example Waveform: Shen 1.35+1.35
+\begin{minipage}{\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{example_waveform.pdf}%
+\end{minipage}
+
 
 \subsection*{Previous and On-Going Analyses}
 
@@ -173,7 +179,7 @@ libero, quis tristique purus urna nec nibh.
   \label{fig:}%
 }\qquad%
 \subfloat[Catalogue Phases]{%
-  \includegraphics[width=0.4\linewidth]{pcs_magnitude_overlay.pdf}%
+  \includegraphics[width=0.4\linewidth]{catalogue_phase_overlay.pdf}%
   \label{fig:}%
 }
 \caption{Magnitude and phase spectra of our training data}
@@ -190,7 +196,7 @@ libero, quis tristique purus urna nec nibh.
 \makeatother
 \centering
 \subfloat[PC Magnitudes]{%
-  \includegraphics[width=0.4\linewidth]{catalogue_phase_overlay.pdf}%
+  \includegraphics[width=0.4\linewidth]{pcs_magnitude_overlay.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[PC Phases]{%
@@ -201,18 +207,6 @@ libero, quis tristique purus urna nec nibh.
 \end{minipage}
 
 
-\begin{minipage}{\columnwidth}
-\makeatletter
-\newcommand{\@captype}{figure}
-\makeatother
-\centering
-\subfloat[Explained Variance]{%
-    \includegraphics[width=0.4\linewidth]{eigenenergy.pdf}%
-  \label{fig:}%
-}\qquad%
-\caption{Explained variances.}
-\end{minipage}
-
 %
 % Eigenergy and Ideal matches
 %
@@ -222,11 +216,11 @@ libero, quis tristique purus urna nec nibh.
 \makeatother
 \centering
 \subfloat[Idealised match for full-spectrum PCs]{%
-  \includegraphics[width=0.4\linewidth]{fullspec_ideal_matches.pdf}%
+    \includegraphics[width=0.4\linewidth]{eigenergy.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[Idealised match for full-spectrum PCs]{%
-  \includegraphics[width=0.4\linewidth]{shiftspec_ideal_matches.pdf}%
+  \includegraphics[width=0.45\linewidth]{fullspec_ideal_matches.pdf}%
   \label{fig:}%
 }
 \caption{\emph{Left}: matches for waveforms reconstructed using PCs based on
@@ -235,17 +229,18 @@ alignment); \emph{Right}: matches for waveforms reconstructed using PCs based on
 the full, \emph{shifted} frequency content of the catalogue}
 \end{minipage}
 
+
 \begin{minipage}{\columnwidth}
 \makeatletter
 \newcommand{\@captype}{figure}
 \makeatother
 \centering
-\subfloat[Idealised match for low-frequency PCs]{%
-  \includegraphics[width=0.4\linewidth]{lowfreq_ideal_matches.pdf}%
+\subfloat[Idealised match for `stiched' PCs]{%
+  \includegraphics[width=0.45\linewidth]{shiftspec_ideal_matches.pdf}%
   \label{fig:}%
 }\qquad%
-\subfloat[Idealised match for high-frequency PCs]{%
-  \includegraphics[width=0.4\linewidth]{highfreq_ideal_matches.pdf}%
+\subfloat[Idealised match for `shifted' PCs]{%
+  \includegraphics[width=0.45\linewidth]{unshiftspec_ideal_matches.pdf}%
   \label{fig:}%
 }
 \caption{Separate high and low frequency matches}
@@ -257,11 +252,11 @@ the full, \emph{shifted} frequency content of the catalogue}
 \makeatother
 \centering
 \subfloat[Idealised match for `stiched' PCs]{%
-  \includegraphics[width=0.4\linewidth]{stitchedspec_ideal_matches.pdf}%
+  \includegraphics[width=0.4\linewidth]{firstPC_example_waveform_reconstruction.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[Idealised match for `shifted' PCs]{%
-  \includegraphics[width=0.4\linewidth]{unshiftspec_ideal_matches.pdf}%
+  \includegraphics[width=0.4\linewidth]{allPCs_example_waveform_reconstruction.pdf}%
   \label{fig:}%
 }
 \caption{Separate high and low frequency matches}
