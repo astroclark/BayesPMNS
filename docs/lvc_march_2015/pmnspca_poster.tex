@@ -63,19 +63,20 @@
 % The third is 19% wide and houses a logo for your university/organization or a photo of you
 % The widths of these boxes can be easily edited to accommodate your content as you see fit
 
-\begin{minipage}[b]{0.7\linewidth}
-\veryHuge \color{NavyBlue} \textbf{Binary Neutron Star Coalescence: Modelling
-The Merger Signal With Principal Component Analysis} \color{Black}\\ \\% Title
+\begin{minipage}[b]{0.72\linewidth}
+\veryHuge \color{NavyBlue} \textbf{Binary Neutron Star Gravitational Wave
+Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \huge \textbf{James A. Clark$^{1}$, Andreas Bauswein$^{2}$ \& Nikolaos Stergioulas$^{2}$}\\ \\% Author(s)
 \large 1. Georgia Institude of Technology\\ % University/organization
 \large 2. Aristotle University of Thessaloniki\\ % University/organization
 \end{minipage}
 %
-\hspace{10cm}
+\hspace{2.5cm}
 %
-\begin{minipage}[b]{0.2\linewidth}
-\includegraphics[height=5cm]{cra.png} \\ \\% Logo or a photo of you, adjust its dimensions here
-\includegraphics[height=5cm]{thessaloniki.jpg} \\ \\% Logo or a photo of you, adjust its dimensions here
+\begin{minipage}[b]{0.25\linewidth}
+    \includegraphics[height=5cm]{cra.png} \hspace{1cm}
+\includegraphics[height=5cm]{thessaloniki.png} % Logo or a photo of you, adjust its dimensions here
+~\\~\\~\\~\\~\\ 
 \end{minipage}
 
 \vspace{1cm} % A bit of extra whitespace between the header and poster content
@@ -88,23 +89,25 @@ The Merger Signal With Principal Component Analysis} \color{Black}\\ \\% Title
 %	ABSTRACT
 %----------------------------------------------------------------------------------------
 
-\color{Navy} % Navy color for the abstract
+    \begin{comment}
+        \color{Navy} % Navy color for the abstract
 
-\begin{abstract}
+        \begin{abstract}
 
-Sed fringilla tempus hendrerit. Vestibulum ante ipsum primis in faucibus orci
-luctus et ultrices posuere cubilia Curae; Etiam ut elit sit amet metus lobortis
-consequat sit amet in libero. Lorem ipsum dolor sit amet, consectetur adipiscing
-elit. Phasellus vel sem magna. Nunc at convallis urna. isus ante. Pellentesque
-condimentum dui. Etiam sagittis purus non tellus tempor volutpat. Donec et dui
-non massa tristique adipiscing. Quisque vestibulum eros eu. Phasellus imperdiet,
-tortor vitae congue bibendum, felis enim sagittis lorem, et volutpat ante orci
-sagittis mi. Morbi rutrum laoreet semper. Morbi accumsan enim nec tortor
-consectetur non commodo nisi sollicitudin. Proin sollicitudin. Pellentesque eget
-orci eros. Fusce ultricies, tellus et pellentesque fringilla, ante massa luctus
-libero, quis tristique purus urna nec nibh.
+            Sed fringilla tempus hendrerit. Vestibulum ante ipsum primis in faucibus orci
+            luctus et ultrices posuere cubilia Curae; Etiam ut elit sit amet metus lobortis
+            consequat sit amet in libero. Lorem ipsum dolor sit amet, consectetur adipiscing
+            elit. Phasellus vel sem magna. Nunc at convallis urna. isus ante. Pellentesque
+            condimentum dui. Etiam sagittis purus non tellus tempor volutpat. Donec et dui
+            non massa tristique adipiscing. Quisque vestibulum eros eu. Phasellus imperdiet,
+            tortor vitae congue bibendum, felis enim sagittis lorem, et volutpat ante orci
+            sagittis mi. Morbi rutrum laoreet semper. Morbi accumsan enim nec tortor
+            consectetur non commodo nisi sollicitudin. Proin sollicitudin. Pellentesque eget
+            orci eros. Fusce ultricies, tellus et pellentesque fringilla, ante massa luctus
+            libero, quis tristique purus urna nec nibh.
 
-\end{abstract}
+        \end{abstract}
+    \end{comment}
 
 %----------------------------------------------------------------------------------------
 %	INTRODUCTION
@@ -127,7 +130,7 @@ libero, quis tristique purus urna nec nibh.
 
 \color{DarkSlateGray} % DarkSlateGray color for the rest of the content
 
-\section*{This Work}
+\section*{\centering Outline}
 
 \begin{enumerate}
 \item Lorem ipsum dolor sit amet, consectetur.
@@ -144,19 +147,23 @@ libero, quis tristique purus urna nec nibh.
 %	MATERIALS AND METHODS
 %----------------------------------------------------------------------------------------
 
-\section*{BNS \& High-frequency GW Bursts}
+\section*{\centering BNS \& High-frequency GW Bursts}
 
 % Example Waveform: Shen 1.35+1.35
-\begin{minipage}{\columnwidth}
-    \centering
+\begin{center}%\vspace{1cm}
     \includegraphics[width=\linewidth]{example_waveform.pdf}%
-\end{minipage}
+    \captionof{figure}{\label{fig:example1} Example BNS-Burst Waveform}
+\end{center}%\vspace{1cm}
 
 
 \subsection*{Previous and On-Going Analyses}
 
+\begin{center}%\vspace{1cm}
+    \includegraphics[width=0.5\linewidth]{distances.pdf}
+    \captionof{figure}{\label{fig:distances} Burst \& Matched Filter Ranges}
+\end{center}%\vspace{1cm}
 
-\section*{Principle Component Analysis \& Approximate Waveform Modelling}
+\section*{\centering Principle Component Analysis \& Approximate Waveform Modelling}
 
 \subsection*{Waveform Catalogue: Training Data}
 
@@ -208,26 +215,13 @@ libero, quis tristique purus urna nec nibh.
 
 
 %
-% Eigenergy and Ideal matches
+% Eigenergy
 %
-\begin{minipage}{\columnwidth}
-\makeatletter
-\newcommand{\@captype}{figure}
-\makeatother
-\centering
-\subfloat[Idealised match for full-spectrum PCs]{%
-    \includegraphics[width=0.4\linewidth]{eigenergy.pdf}%
-  \label{fig:}%
-}\qquad%
-\subfloat[Idealised match for full-spectrum PCs]{%
-  \includegraphics[width=0.45\linewidth]{fullspec_ideal_matches.pdf}%
-  \label{fig:}%
-}
-\caption{\emph{Left}: matches for waveforms reconstructed using PCs based on
-the full, unadulterated frequency content of the catalogue (no feature
-alignment); \emph{Right}: matches for waveforms reconstructed using PCs based on
-the full, \emph{shifted} frequency content of the catalogue}
-\end{minipage}
+\begin{center}%\vspace{1cm}
+    %\includegraphics[width=15cm]{theta_dist_grbfrac.png}
+    \includegraphics[width=0.5\linewidth]{eigenergy.pdf}
+    \captionof{figure}{\label{fig:eigenergy} Explained Variance}
+\end{center}%\vspace{1cm}
 
 
 \begin{minipage}{\columnwidth}
@@ -236,7 +230,8 @@ the full, \emph{shifted} frequency content of the catalogue}
 \makeatother
 \centering
 \subfloat[Idealised match for `stiched' PCs]{%
-  \includegraphics[width=0.45\linewidth]{shiftspec_ideal_matches.pdf}%
+  %\includegraphics[width=0.45\linewidth]{shiftspec_ideal_matches.pdf}%
+  \includegraphics[width=0.45\linewidth]{fullspec_ideal_matches.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[Idealised match for `shifted' PCs]{%
@@ -266,7 +261,7 @@ the full, \emph{shifted} frequency content of the catalogue}
 %	CONCLUSIONS
 %----------------------------------------------------------------------------------------
 
-\color{SaddleBrown} % SaddleBrown color for the conclusions to make them stand out
+%\color{SaddleBrown} % SaddleBrown color for the conclusions to make them stand out
 
 \section*{Applications \& Future Directions}
 
@@ -277,24 +272,24 @@ the full, \emph{shifted} frequency content of the catalogue}
 \item Nunc at convallis urna. isus ante. Pellentesque condimentum dui. Etiam sagittis purus non tellus tempor volutpat. Donec et dui non massa tristique adipiscing.
 \end{itemize}
 
-\color{DarkSlateGray} % Set the color back to DarkSlateGray for the rest of the content
+%\color{DarkSlateGray} % Set the color back to DarkSlateGray for the rest of the content
 
 
  %----------------------------------------------------------------------------------------
 %	REFERENCES
 %----------------------------------------------------------------------------------------
 
-\nocite{*} % Print all references regardless of whether they were cited in the poster or not
+%\nocite{*} % Print all references regardless of whether they were cited in the poster or not
 \bibliographystyle{plain} % Plain referencing style
-\bibliography{sample} % Use the example bibliography file sample.bib
+\bibliography{pmnspca_poster} % Use the example bibliography file sample.bib
 
 %----------------------------------------------------------------------------------------
 %	ACKNOWLEDGEMENTS
 %----------------------------------------------------------------------------------------
 
-\section*{Acknowledgements}
+%\section*{Acknowledgements}
 
-Etiam fermentum, arcu ut gravida fringilla, dolor arcu laoreet justo, ut imperdiet urna arcu a arcu. Donec nec ante a dui tempus consectetur. Cras nisi turpis, dapibus sit amet mattis sed, laoreet.
+%Etiam fermentum, arcu ut gravida fringilla, dolor arcu laoreet justo, ut imperdiet urna arcu a arcu. Donec nec ante a dui tempus consectetur. Cras nisi turpis, dapibus sit amet mattis sed, laoreet.
 
 %----------------------------------------------------------------------------------------
 
