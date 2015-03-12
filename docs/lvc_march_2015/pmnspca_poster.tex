@@ -26,6 +26,9 @@
 \usepackage{wrapfig} % Allows wrapping text around tables and figures
 \usepackage{tcolorbox}
 \usepackage{subfig}
+%\usepackage[margin={5cm,2.5cm}]{geometry}
+\usepackage{bm}
+\usepackage[parfill]{parskip}
 
 %\newcommand{\gw}{gravitational wave }
 %\newcommand{\gws}{gravitational waves }
@@ -36,6 +39,12 @@
 \newcommand{\cbcrate}{{{\mathcal R}}}
 \newcommand{\diff}{{\mathrm d}}
 \newcommand{\rhostar}{{\rho^*}}
+
+\newcommand{\matr}[1]{\mathbf{#1}}
+\newcommand{\tran}[1]{#1^{\top}}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
 
 \def\imbh#1{intermediate mass black hole#1(IMBH#1)\gdef\imbh{IMBH}}
 \def\smbh#1{supermassive black hole#1(SMBH#1)\gdef\smbh{SMBH}}
@@ -63,9 +72,9 @@
 % The third is 19% wide and houses a logo for your university/organization or a photo of you
 % The widths of these boxes can be easily edited to accommodate your content as you see fit
 
-\begin{minipage}[b]{0.72\linewidth}
+\begin{minipage}[b]{0.73\linewidth}
 \veryHuge \color{NavyBlue} \textbf{Binary Neutron Star Gravitational Wave
-Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
+Bursts:  \\A Post-Merger Model Using Principal Component Analysis} \color{Black}\\ \\% Title
 \huge \textbf{James A. Clark$^{1}$, Andreas Bauswein$^{2}$ \& Nikolaos Stergioulas$^{2}$}\\ \\% Author(s)
 \large 1. Georgia Institude of Technology\\ % University/organization
 \large 2. Aristotle University of Thessaloniki\\ % University/organization
@@ -76,7 +85,7 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \begin{minipage}[b]{0.25\linewidth}
     \includegraphics[height=5cm]{cra.png} \hspace{1cm}
 \includegraphics[height=5cm]{thessaloniki.png} % Logo or a photo of you, adjust its dimensions here
-~\\~\\~\\~\\~\\ 
+~\\~\\~\\~\\~\\~\\
 \end{minipage}
 
 \vspace{1cm} % A bit of extra whitespace between the header and poster content
@@ -133,14 +142,18 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \section*{\centering Outline}
 
 \begin{enumerate}
-\item Lorem ipsum dolor sit amet, consectetur.
-\item Nullam at mi nisl. Vestibulum est purus, ultricies cursus volutpat sit amet, vestibulum eu.
-\item Praesent tortor libero, vulputate quis elementum a, iaculis.
-\item Phasellus a quam mauris, non varius mauris. Fusce tristique, enim tempor varius porta, elit purus commodo velit, pretium mattis ligula nisl nec ante.
-\item Ut adipiscing accumsan sapien, sit amet pretium.
-\item Estibulum est purus, ultricies cursus volutpat
-\item Nullam at mi nisl. Vestibulum est purus, ultricies cursus volutpat sit amet, vestibulum eu.
-\item Praesent tortor libero, vulputate quis elementum a, iaculis.
+\item Binary neutron star mergers are likely to result in the formation of a
+    stable / quasi-stable, differentially rotating neutron star remnant~\cite{}.
+\item Transient non-axisymmetric deformations and $f$-mode oscillations
+    $\rightarrow$ short (10--100\,ms) burst of high-frequency ($\sim $\,kHz)
+    \gw{} emission.
+\item Spectral properties of this burst carry finger prints of neutron star
+    equation of state~\cite{Bauswein38Eos}.
+\item 
+\item Merger \& post-merger phase are not currently well-modelled; unmodelled
+    burst searches struggle with non-contiguous time-frequency structure of
+    these signals.
+\item 
 \end{enumerate}
 
 %----------------------------------------------------------------------------------------
@@ -156,22 +169,74 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \end{center}%\vspace{1cm}
 
 
-\subsection*{Previous and On-Going Analyses}
+%   \begin{center}%\vspace{1cm}
+%       \includegraphics[width=0.5\linewidth]{distances.pdf}
+%       \captionof{figure}{\label{fig:distances} Comparison of burst \& optimal
+%   matched-filter Ranges, taken from the study reported
+%   in~\cite{2014PhRvD..90f2004C}.}
+%   \end{center}%\vspace{1cm}
 
-\begin{center}%\vspace{1cm}
-    \includegraphics[width=0.5\linewidth]{distances.pdf}
-    \captionof{figure}{\label{fig:distances} Burst \& Matched Filter Ranges}
-\end{center}%\vspace{1cm}
+\section*{\centering Principal Component Analysis \& Approximate Waveform Modelling}
 
-\section*{\centering Principle Component Analysis \& Approximate Waveform Modelling}
+{\bf \textsc{Objective}}: Given a collection of numerical waveforms, with no analytic
+model, construct a \emph{reduced} set of basis functions from which we can
+construct any one waveform to reasonable accuracy
 
-\subsection*{Waveform Catalogue: Training Data}
+\begin{enumerate}
+    \item Organise $N$ waveforms, each containing $M$ samples, from
+        numerical simulations of binary neutron star mergers into an $M\times N$
+        data matrix, $\matr{X}$
+    \item Align dominant features (see below), and center the data (subtract the
+        mean waveform, $\matr{h}$) to get centered data matrix
+        $\matr{Y}=\matr{X}-\matr{h}$
+    \item Find the eigenvectors $\matr{W}$ of the covariance matrix
+        $\matr{C} = \tran{\matr{Y}}\matr{Y}$ so that we can find the principal component
+        decomposition of $\matr{X}$,
+        \begin{equation}\label{eq:pca}
+            \matr{Z} = \matr{X} \matr{W},
+        \end{equation}
+        where $\matr{W}$ has been sorted in order of descending eigenvalues, and
+        $\matr{Z}$ is the \emph{score matrix}.  The first $p<N$ columns of
+        $\matr{Z}+\matr{h}$ represent our reduced basis.
+    \item Implemented via singular value decomposition, $\matr{X} =
+        \matr{U}\matr{\Sigma}\tran{\matr{W}}$ so that,
+        \begin{equation}
+            \matr{Z} = \matr{X} \matr{W} =
+            \matr{U}\matr{\Sigma}\matr{W}\tran{\matr{W}} = \matr{U}\matr{\Sigma}
+        \end{equation}
+\end{enumerate}
 
-\subsection*{Method: Feature Alignment \& PCA}
 
-%
-% Catalogue T-domain
-%
+\subsection*{\centering Data Domain \& Feature Alignment}
+Waveforms may have common, but misaligned, features (e.g., peak times).  Goal is
+to use PCA to model variance in data matrix $\matr{X}$ $\rightarrow$ important
+to align common features so that PCA picks out true \emph{differences} in
+waveforms.
+
+BNS merger waveforms exhibit varied broadband frequency content \& large
+($\sim$\,kHz) differences between post-merger oscillations frequencies (though
+similar peak shapes).  It is natural then, to work in the frequency domain with
+amplitude and phase spectra.
+
+{\bf Key component to our analysis: align the magnitude (and phase) spectra} to
+a common reference frequency, prior to PCA.   Alignment procedure:
+\begin{enumerate}
+    \item Construct spectrum of waveform, $H(f) = A(f)\exp[i\phi(f)]$
+    \item Compute a new set of frequencies to scale $H(f)$ such that the
+        dominant post-merger peak lies at $f_{\rm ref}$:
+        \begin{equation}
+            f_{\rm shift} = \frac{f_{\rm ref}}{f_{\rm peak}}  f
+        \end{equation}
+    \item Interpolate the spectrum $H(f)\rightarrow H(f_{\rm shift})$ \& yield a
+        new, shifted spectrum whose dominant post-merger oscillation frequency
+        lies at $f_{\rm ref}$
+    \item Perform PCA for magnitude \& phase spectra (separately)
+    \item The original waveform can then be reconstructructed by summation of
+        the chosen principal component basis waveforms, followed by the inverse
+        of the frequency shift operation to the desired $f_{\rm peak}$.
+\end{enumerate}
+
+\subsection*{\centering Waveform Catalog, $\matr{X}$}
 
 %
 % Catalogue F-domain
@@ -181,19 +246,22 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \newcommand{\@captype}{figure}
 \makeatother
 \centering
-\subfloat[Catalogue Magnitudes]{%
+\subfloat[Magnitude Spectra]{%
   \includegraphics[width=0.4\linewidth]{catalogue_magnitude_overlay.pdf}%
   \label{fig:}%
 }\qquad%
-\subfloat[Catalogue Phases]{%
+\subfloat[Phase Spectra]{%
   \includegraphics[width=0.4\linewidth]{catalogue_phase_overlay.pdf}%
   \label{fig:}%
 }
-\caption{Magnitude and phase spectra of our training data}
+\caption{Magnitude (left) and phase (right) spectra of our waveform catalogue
+    $\matr{X}$.  \emph{Top row}: spectra of the original waveforms.  Note the
+    wide range in peak locations.  \emph{Bottom row}: spectra following the
+    frequency shifting procedure.  Waveform frequencies have been scaled such
+    that the peaks align at 3\,kHz (red vertical line).}
 \end{minipage}
 
-\subsection*{Results}
-
+\subsection*{\centering Principal Component Basis, $\matr{Z}$}
 %
 % PCs F-domain
 %
@@ -210,9 +278,33 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
   \includegraphics[width=0.4\linewidth]{pcs_phase_overlay.pdf}%
   \label{fig:}%
 }
-\caption{Magnitude and phase spectra of our principle component basis}
+\caption{Principal component scores for the magnitude (left) and phase (right)
+    spectra of our catalogue.  Note that the data matrices have been centered,
+    prior to the PCA; these figures demonstrate the dominant features in the
+    waveforms \emph{after mean subtraction}.  \emph{Top row}: principal
+    component scores for the original, unaligned data. \emph{Bottom row}:
+principal component scores for the scaled and aligned spectra.}
 \end{minipage}
 
+
+\section*{\centering Characterisation}
+Two common figures of merit are useful for characterising the performance of the
+decomposition and reconstruction performance of our method:
+\begin{description}
+    \item [Explained Variance] (a.k.a, `eigen-energy'): The eigenvalues of the
+        covariance matrix describe how much variance of the data matrix is
+        represented by each principal component.  The normalised, cumulative sum
+        is then the fraction of variance in the catalogue explained by number of
+        principal components.
+    \item [Template match]: the usual figure of merit for assessing the quality
+        of a matched-filter template,
+        \begin{equation}
+            \text{match} = \frac{(a|b)}{\sqrt{(a|a) (b|b)}},~\text{where}~
+            (a|b) = \int \frac{a(f)b^*(f)}{S(f)}~\diff f
+        \end{equation}
+        Match is maximised over the relative start time and phase-offsets of $a$
+        and $b$.
+\end{description}
 
 %
 % Eigenergy
@@ -220,8 +312,15 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \begin{center}%\vspace{1cm}
     %\includegraphics[width=15cm]{theta_dist_grbfrac.png}
     \includegraphics[width=0.5\linewidth]{eigenergy.pdf}
-    \captionof{figure}{\label{fig:eigenergy} Explained Variance}
+    \captionof{figure}{ Explained Variance.}
+    \label{fig:eigenergy}
 \end{center}%\vspace{1cm}
+
+Figure~\ref{fig:eigenergy} compares the explained variance as a function of
+number of principal components for the original and shifted spectra.  We see
+that we require about half as many principal components after applying our
+shifting procedure.   Much of the variance in the original catalogue then,
+arises from a feature, the location of $f_{\rm peak}$ which is easily aligned.
 
 
 \begin{minipage}{\columnwidth}
@@ -229,33 +328,28 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 \newcommand{\@captype}{figure}
 \makeatother
 \centering
-\subfloat[Idealised match for `stiched' PCs]{%
+\subfloat[Matches from PCA models using the original spectra]{%
   %\includegraphics[width=0.45\linewidth]{shiftspec_ideal_matches.pdf}%
   \includegraphics[width=0.45\linewidth]{fullspec_ideal_matches.pdf}%
   \label{fig:}%
 }\qquad%
-\subfloat[Idealised match for `shifted' PCs]{%
+\subfloat[Matches from PCA models using the shifted spectra]{%
   \includegraphics[width=0.45\linewidth]{unshiftspec_ideal_matches.pdf}%
   \label{fig:}%
 }
-\caption{Separate high and low frequency matches}
+\caption{Match as a function of number of basis functions used for all waveforms
+in the catalogue (vertical axes).  Matches $\sim 90\%$ are acheiveable with even
+a small number of components.}
+\label{fig:matches}
 \end{minipage}
 
-\begin{minipage}{\columnwidth}
-\makeatletter
-\newcommand{\@captype}{figure}
-\makeatother
-\centering
-\subfloat[Idealised match for `stiched' PCs]{%
-  \includegraphics[width=0.4\linewidth]{firstPC_example_waveform_reconstruction.pdf}%
-  \label{fig:}%
-}\qquad%
-\subfloat[Idealised match for `shifted' PCs]{%
-  \includegraphics[width=0.4\linewidth]{allPCs_example_waveform_reconstruction.pdf}%
-  \label{fig:}%
-}
-\caption{Separate high and low frequency matches}
-\end{minipage}
+
+Finally, figure~\ref{fig:matches} compares the matches for the waveforms in our
+catalogue using the original and shifted spectra.  Provided we follow the
+frequency shifting procedure outlined, we find that {\bf matches of
+    $\mathbf{\sim 90\%}$ and above are easily realised using a small number of
+    principal components}, far fewer than would be required using the un-shifted
+data.
 
 %----------------------------------------------------------------------------------------
 %	CONCLUSIONS
@@ -263,13 +357,19 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 
 %\color{SaddleBrown} % SaddleBrown color for the conclusions to make them stand out
 
-\section*{Applications \& Future Directions}
+\section*{Conclustions}
 
 \begin{itemize}
-\item Pellentesque eget orci eros. Fusce ultricies, tellus et pellentesque fringilla, ante massa luctus libero, quis tristique purus urna nec nibh. Phasellus fermentum rutrum elementum. Nam quis justo lectus.
-\item Vestibulum sem ante, hendrerit a gravida ac, blandit quis magna.
-\item Donec sem metus, facilisis at condimentum eget, vehicula ut massa. Morbi consequat, diam sed convallis tincidunt, arcu nunc.
-\item Nunc at convallis urna. isus ante. Pellentesque condimentum dui. Etiam sagittis purus non tellus tempor volutpat. Donec et dui non massa tristique adipiscing.
+\item Have demonstrated an ability to construct a low-dimensional and reasonably
+    accurate model using principal component analysis and a novel feature
+    alignment scheme.
+\item Some caveats: small catalogue \& have only demonstrated ability to
+    reconstruct \emph{training} data; more waveforms, further testing required
+    before deployment as a (nearly) matched-filter.
+\item Obvious application: burst parameter estimation follow-ups of BNS inspiral
+    detections.
+\item Particularly useful for Monte-Carlo simulations in un-modelled analysis
+    and construction of ad hoc models for machine learning algorithms.
 \end{itemize}
 
 %\color{DarkSlateGray} % Set the color back to DarkSlateGray for the rest of the content
@@ -280,8 +380,10 @@ Bursts:  A Post-Merger Model} \color{Black}\\ \\% Title
 %----------------------------------------------------------------------------------------
 
 %\nocite{*} % Print all references regardless of whether they were cited in the poster or not
+\footnotesize{
 \bibliographystyle{plain} % Plain referencing style
 \bibliography{pmnspca_poster} % Use the example bibliography file sample.bib
+}
 
 %----------------------------------------------------------------------------------------
 %	ACKNOWLEDGEMENTS
