@@ -183,7 +183,7 @@ Bursts:  \\A Post-Merger Model Using Principal Component Analysis} \color{Black}
 %   in~\cite{2014PhRvD..90f2004C}.}
 %   \end{center}%\vspace{1cm}
 
-\vspace{-2.5cm}
+%\vspace{-2.5cm}
 \section*{\centering Principal Component Analysis \& Approximate Waveform Modelling}
 
 {\bf \textsc{Objective}}: Given a collection of numerical waveforms, with no analytic
@@ -196,16 +196,23 @@ construct any one waveform to reasonable accuracy
         data matrix, $\matr{X}$
     \item Align dominant features (see below), and center the data (subtract the
         mean waveform, $\matr{h}$) to get centered data matrix
-        $\matr{Y}=\matr{X}-\matr{h}$
+        \begin{equation}
+        \matr{Y}=\matr{X}-\matr{h}
+    \end{equation}
     \item Find the eigenvectors $\matr{W}$ of the covariance matrix
-        $\matr{C} = \tran{\matr{Y}}\matr{Y}$ so that we can find the principal component
+        \begin{equation}
+        \matr{C} = \tran{\matr{Y}}\matr{Y},
+    \end{equation}
+\item Using $\matr{W}$, we can find the principal component
         decomposition of $\matr{X}$,
         \begin{equation}\label{eq:pca}
             \matr{Z} = \matr{X} \matr{W},
         \end{equation}
         where $\matr{W}$ has been sorted in order of descending eigenvalues, and
-        $\matr{Z}$ is the \emph{score matrix}.  The first $p<N$ columns of
-        $\matr{Z}+\matr{h}$ represent our reduced basis.
+        $\matr{Z}$ is the \emph{score matrix}, first $p<N$ columns of
+        which represent our reduced basis\footnote{One takes care, of course, to
+        add the mean waveform $\matr{h}$ back on to the waveform reconstructed
+    from $\matr{Z}$}.
     \item Implemented via singular value decomposition, $\matr{X} =
         \matr{U}\matr{\Sigma}\tran{\matr{W}}$ so that,
         \begin{equation}
