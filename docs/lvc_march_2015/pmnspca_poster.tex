@@ -183,6 +183,7 @@ Bursts:  \\A Post-Merger Model Using Principal Component Analysis} \color{Black}
 %   in~\cite{2014PhRvD..90f2004C}.}
 %   \end{center}%\vspace{1cm}
 
+\vspace{-2.5cm}
 \section*{\centering Principal Component Analysis \& Approximate Waveform Modelling}
 
 {\bf \textsc{Objective}}: Given a collection of numerical waveforms, with no analytic
@@ -214,8 +215,8 @@ construct any one waveform to reasonable accuracy
 \end{enumerate}
 
 
-%\vspace{5cm}
-\subsection*{\centering Data Domain \& Feature Alignment}
+\vspace{9cm}
+\subsection*{\centering Feature Alignment}
 Goal is to use PCA to model \emph{variance} in data matrix $\matr{X}$
 $\rightarrow$ important to align common features so that PCA picks out true
 \emph{differences} in waveforms.
@@ -240,16 +241,15 @@ a common reference frequency, prior to PCA.   Alignment procedure:
         of the frequency shift operation to the desired $f_{\rm peak}$.
 \end{enumerate}
 
-\vspace{-0.5cm}
+%\vspace{-0.5cm}
 \section*{\centering Waveform Catalogue \& Decomposition}
-To demonstrate the effectiveness of the proposed method, we use the sample of
-numerical waveforms discussed in~\cite{2014PhRvD..90f2004C}.  The sample
-consists of {\bf ten waveforms with 8 equations of state}.  For the purposes of this
-study, the salient detail is that these {\bf waveforms span the full space of
-frequencies, while sharing a generally similar morphology}.
-Figure~\ref{fig:catalogue} shows the spectra of full catalogue overlaid with
-each other.  An example of a typical waveform in the time domain can be found in
-figure~\ref{fig:example}.
+Here, we use the sample of numerical waveforms discussed
+in~\cite{2014PhRvD..90f2004C},  which consists of {\bf ten waveforms with 8
+equations of state}.  For the purposes of this study, the salient detail is that
+these {\bf waveforms span the full space of frequencies, while sharing a
+generally similar morphology}.  Figure~\ref{fig:catalogue} shows the spectra of
+full catalogue overlaid with each other.  An example of a typical waveform in
+the time domain can be found in figure~\ref{fig:example}.
 
 %
 % Catalogue F-domain
@@ -261,7 +261,7 @@ figure~\ref{fig:example}.
 \centering
 \subfloat[Magnitude Spectra]{%
   \includegraphics[width=0.45\linewidth]{catalogue_magnitude_overlay.pdf}%
-  \label{fig:}%
+  \label{fig:catalogue}%
 }\qquad%
 \subfloat[Phase Spectra]{%
   %\includegraphics[width=0.45\linewidth]{catalogue_phase_overlay.pdf}%
@@ -273,7 +273,7 @@ scores (right) of the original waveforms.  Note the wide range in peak
 locations and variety of peak locations in the scores.  \emph{Bottom row}:
 spectra following the frequency shifting procedure and the corresponding PC
 scores.  Waveform frequencies have been scaled such that the peaks align at
-1\,kHz (red vertical line).  Only a few scores now dominate.\label{fig:catalogue}}
+1\,kHz (red vertical line).  Only a few scores now dominate.}
 \end{minipage}
 
 %   \subsection*{\centering Principal Component Basis, $\matr{Z}$}
@@ -413,7 +413,7 @@ data.
 %----------------------------------------------------------------------------------------
 
 %\nocite{*} % Print all references regardless of whether they were cited in the poster or not
-\footnotesize{
+\small{
 \bibliographystyle{unsrt} % Plain referencing style
 \bibliography{pmnspca_poster} % Use the example bibliography file sample.bib
 }
