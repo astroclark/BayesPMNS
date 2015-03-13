@@ -154,8 +154,9 @@ Bursts:  \\A Post-Merger Model Using Principal Component Analysis} \color{Black}
     equation of state, particularly the dominant peak frequency $f_{\rm
     peak}$~\cite{hotokezaka:13,Bauswein38Eos}.
 \item May be observable to $\sim$10--100\,Mpc, with a matched filter.
-\item Merger \& post-merger phase are \emph{not well-modelled}, unmodelled burst
-    searches struggle to reconstruct the full time-frequency structure .
+\item Merger \& post-merger phase are \emph{not well-modelled} \& unmodelled
+    burst searches currently struggle to reconstruct the full time-frequency
+    structure, which can be disjoint in the TF-plane.
 \item We {\bf propose a method to construct a phenomelogical waveform model,
     based on principal component analysis of numerical merger simulations},
     to allow more {\bf robust identification and characterisation} of this
@@ -234,17 +235,17 @@ a common reference frequency, prior to PCA.   Alignment procedure:
         new, shifted spectrum whose dominant post-merger oscillation frequency
         lies at $f_{\rm ref}$
     \item Perform PCA for magnitude \& phase spectra (separately)
-    \item The original waveform can then be reconstructructed by summation of
+    \item The original waveform can then be reconstructed by summation of
         the chosen principal component basis waveforms, followed by the inverse
         of the frequency shift operation to the desired $f_{\rm peak}$.
 \end{enumerate}
 
-%\vspace{-5cm}
-\subsection*{\centering Waveform Catalogue, $\matr{X}$}
+\vspace{-0.5cm}
+\section*{\centering Waveform Catalogue \& Decomposition}
 To demonstrate the effectiveness of the proposed method, we use the sample of
 numerical waveforms discussed in~\cite{2014PhRvD..90f2004C}.  The sample
 consists of {\bf ten waveforms with 8 equations of state}.  For the purposes of this
-study, the salient detail is that these {\bf waveforms span the full, broad, space of
+study, the salient detail is that these {\bf waveforms span the full space of
 frequencies, while sharing a generally similar morphology}.
 Figure~\ref{fig:catalogue} shows the spectra of full catalogue overlaid with
 each other.  An example of a typical waveform in the time domain can be found in
@@ -263,42 +264,44 @@ figure~\ref{fig:example}.
   \label{fig:}%
 }\qquad%
 \subfloat[Phase Spectra]{%
-  \includegraphics[width=0.45\linewidth]{catalogue_phase_overlay.pdf}%
-  \label{fig:}%
-}
-\caption{Magnitude (left) and phase (right) spectra of our waveform catalogue
-    $\matr{X}$.  \emph{Top row}: spectra of the original waveforms.  Note the
-    wide range in peak locations.  \emph{Bottom row}: spectra following the
-    frequency shifting procedure.  Waveform frequencies have been scaled such
-that the peaks align at 1\,kHz (red vertical line).\label{fig:catalogue}}
-\end{minipage}
-
-\subsection*{\centering Principal Component Basis, $\matr{Z}$}
-%
-% PCs F-domain
-%
-\begin{minipage}{\columnwidth}
-\makeatletter
-\newcommand{\@captype}{figure}
-\makeatother
-\centering
-\subfloat[PC Magnitudes]{%
+  %\includegraphics[width=0.45\linewidth]{catalogue_phase_overlay.pdf}%
   \includegraphics[width=0.45\linewidth]{pcs_magnitude_overlay.pdf}%
   \label{fig:}%
-}\qquad%
-\subfloat[PC Phases]{%
-  \includegraphics[width=0.45\linewidth]{pcs_phase_overlay.pdf}%
-  \label{fig:}%
 }
-\caption{Principal component scores for the magnitude (left) and phase (right)
-    spectra of our catalogue.  Note that the data matrices have been centered,
-    prior to the PCA; these figures demonstrate the dominant features in the
-    waveforms \emph{after mean subtraction}.  \emph{Top row}: principal
-    component scores for the original, unaligned data. \emph{Bottom row}:
-principal component scores for the scaled and aligned spectra.}
+\caption{\emph{Top row}: magnitude spectra (left) and principal component
+scores (right) of the original waveforms.  Note the wide range in peak
+locations and variety of peak locations in the scores.  \emph{Bottom row}:
+spectra following the frequency shifting procedure and the corresponding PC
+scores.  Waveform frequencies have been scaled such that the peaks align at
+1\,kHz (red vertical line).  Only a few scores now dominate.\label{fig:catalogue}}
 \end{minipage}
 
-\subsection*{\centering Demonstration}
+%   \subsection*{\centering Principal Component Basis, $\matr{Z}$}
+%   %
+%   % PCs F-domain
+%   %
+%   \begin{minipage}{\columnwidth}
+%   \makeatletter
+%   \newcommand{\@captype}{figure}
+%   \makeatother
+%   \centering
+%   \subfloat[PC Magnitudes]{%
+%     \includegraphics[width=0.45\linewidth]{pcs_magnitude_overlay.pdf}%
+%     \label{fig:}%
+%   }\qquad%
+%   \subfloat[PC Phases]{%
+%     %\includegraphics[width=0.45\linewidth]{pcs_phase_overlay.pdf}%
+%     \label{fig:}%
+%   }
+%   \caption{Principal component scores for the magnitude (left) and phase (right)
+%       spectra of our catalogue.  Note that the data matrices have been centered,
+%       prior to the PCA; these figures demonstrate the dominant features in the
+%       waveforms \emph{after mean subtraction}.  \emph{Top row}: principal
+%       component scores for the original, unaligned data. \emph{Bottom row}:
+%   principal component scores for the scaled and aligned spectra.}
+%   \end{minipage}
+
+\section*{\centering Demonstration}
 \begin{minipage}{\columnwidth}
 \makeatletter
 \newcommand{\@captype}{figure}
@@ -312,7 +315,7 @@ principal component scores for the scaled and aligned spectra.}
   \includegraphics[width=0.4\linewidth]{allPCs_example_waveform_reconstruction.pdf}%
   \label{fig:}%
 }
-\caption{Example: reconstrucing the Shen 1.35+1.35 ${\rm M}_{\odot}$ waveform
+\caption{Example: reconstructing the Shen 1.35+1.35 ${\rm M}_{\odot}$ waveform
 using only the first principal component (left) and all principal components
 (right). \label{fig:example}}
 \end{minipage}
@@ -369,7 +372,7 @@ location of $f_{\rm peak}$, which is easily aligned.
   \label{fig:}%
 }
 \caption{Match as a function of number of basis functions used for all waveforms
-in the catalogue (vertical axes).  Matches $\sim 90\%$ are acheiveable with even
+in the catalogue (vertical axes).  Matches $\sim 90\%$ are achievable with even
 a small number of components.}
 \label{fig:matches}
 \end{minipage}
@@ -391,7 +394,7 @@ data.
 \section*{Conclusions}
 
 \begin{itemize}
-\item Have demonstrated an ability to construct a low-dimensional and reasonably
+\item Have demonstrated an method to construct a low-dimensional and reasonably
     accurate model using principal component analysis and a novel feature
     alignment scheme.
 \item {\bf Some caveats}: small catalogue \& have only demonstrated ability to
@@ -411,7 +414,7 @@ data.
 
 %\nocite{*} % Print all references regardless of whether they were cited in the poster or not
 \footnotesize{
-\bibliographystyle{plain} % Plain referencing style
+\bibliographystyle{unsrt} % Plain referencing style
 \bibliography{pmnspca_poster} % Use the example bibliography file sample.bib
 }
 
