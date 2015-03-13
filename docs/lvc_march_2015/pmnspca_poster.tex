@@ -60,6 +60,8 @@
 \def\isco#1{innermost stable circular orbit#1 (ISCO#1)\gdef\isco{ISCO}}
 \def\cwb#1{Coherent WaveBurst#1 (CWB#1)\gdef\cwb{CWB}}
 
+\def\prd{Phys. Rev. D.}
+
 \begin{document}
 
 %----------------------------------------------------------------------------------------
@@ -143,32 +145,36 @@ Bursts:  \\A Post-Merger Model Using Principal Component Analysis} \color{Black}
 
 \begin{enumerate}
 \item Binary neutron star mergers are likely to result in the formation of a
-    stable / quasi-stable, differentially rotating neutron star remnant~\cite{}.
+    stable / quasi-stable, differentially rotating neutron star
+    remnant~\cite{shibata:06bns, giacomazzo:11, hotokezaka:11, bauswein:12}.
 \item Transient non-axisymmetric deformations and $f$-mode oscillations
     $\rightarrow$ short (10--100\,ms) burst of high-frequency ($\sim $\,kHz)
     \gw{} emission.
 \item Spectral properties of this burst carry finger prints of neutron star
-    equation of state~\cite{Bauswein38Eos}.
-\item 
-\item Merger \& post-merger phase are not currently well-modelled; unmodelled
-    burst searches struggle with non-contiguous time-frequency structure of
-    these signals.
-\item We propose a method to construct a phenomelogical
+    equation of state, particularly the dominant peak frequency $f_{\rm
+    peak}$~\cite{hotokezaka:13,Bauswein38Eos}.
+\item May be observable to $\sim$10--100\,Mpc, with a matched filter.
+\item Merger \& post-merger phase are \emph{not well-modelled}, unmodelled burst
+    searches struggle to reconstruct the full time-frequency structure .
+\item We {\bf propose a method to construct a phenomelogical waveform model,
+    based on principal component analysis of numerical merger simulations},
+    to allow more {\bf robust identification and characterisation} of this
+    high frequency component of the \gw{} signal from binary neutron star coalescence.
 \end{enumerate}
 
 %----------------------------------------------------------------------------------------
 %	MATERIALS AND METHODS
 %----------------------------------------------------------------------------------------
 
-\section*{\centering BNS \& High-frequency GW Bursts}
-
+%\section*{\centering BNS \& High-frequency GW Bursts}
+%
 % Example Waveform: Shen 1.35+1.35
-\begin{center}%\vspace{1cm}
-    \includegraphics[width=\linewidth]{example_waveform.pdf}%
-    \captionof{figure}{\label{fig:example1} Example BNS-Burst Waveform}
-\end{center}%\vspace{1cm}
-
-
+%\begin{center}%\vspace{1cm}
+%    \includegraphics[width=\linewidth]{example_waveform.pdf}%
+%    \captionof{figure}{\label{fig:example1} Example BNS-Burst Waveform}
+%\end{center}%\vspace{1cm}
+%
+%
 %   \begin{center}%\vspace{1cm}
 %       \includegraphics[width=0.5\linewidth]{distances.pdf}
 %       \captionof{figure}{\label{fig:distances} Comparison of burst \& optimal
@@ -207,16 +213,15 @@ construct any one waveform to reasonable accuracy
 \end{enumerate}
 
 
+%\vspace{5cm}
 \subsection*{\centering Data Domain \& Feature Alignment}
-Waveforms may have common, but misaligned, features (e.g., peak times).  Goal is
-to use PCA to model variance in data matrix $\matr{X}$ $\rightarrow$ important
-to align common features so that PCA picks out true \emph{differences} in
-waveforms.
+Goal is to use PCA to model \emph{variance} in data matrix $\matr{X}$
+$\rightarrow$ important to align common features so that PCA picks out true
+\emph{differences} in waveforms.
 
 BNS merger waveforms exhibit varied broadband frequency content \& large
-($\sim$\,kHz) differences between post-merger oscillations frequencies (though
-similar peak shapes).  It is natural then, to work in the frequency domain with
-amplitude and phase spectra.
+($\sim$\,kHz) differences between post-merger oscillations frequencies.  Natural
+to work in the frequency domain with amplitude and phase spectra.
 
 {\bf Key component to our analysis: align the magnitude (and phase) spectra} to
 a common reference frequency, prior to PCA.   Alignment procedure:
@@ -224,9 +229,7 @@ a common reference frequency, prior to PCA.   Alignment procedure:
     \item Construct spectrum of waveform, $H(f) = A(f)\exp[i\phi(f)]$
     \item Compute a new set of frequencies to scale $H(f)$ such that the
         dominant post-merger peak lies at $f_{\rm ref}$:
-        \begin{equation}
-            f_{\rm shift} = \frac{f_{\rm ref}}{f_{\rm peak}}  f
-        \end{equation}
+            $f_{\rm shift} = \frac{f_{\rm ref}}{f_{\rm peak}}  f$
     \item Interpolate the spectrum $H(f)\rightarrow H(f_{\rm shift})$ \& yield a
         new, shifted spectrum whose dominant post-merger oscillation frequency
         lies at $f_{\rm ref}$
@@ -236,7 +239,16 @@ a common reference frequency, prior to PCA.   Alignment procedure:
         of the frequency shift operation to the desired $f_{\rm peak}$.
 \end{enumerate}
 
-\subsection*{\centering Waveform Catalog, $\matr{X}$}
+%\vspace{-5cm}
+\subsection*{\centering Waveform Catalogue, $\matr{X}$}
+To demonstrate the effectiveness of the proposed method, we use the sample of
+numerical waveforms discussed in~\cite{2014PhRvD..90f2004C}.  The sample
+consists of {\bf ten waveforms with 8 equations of state}.  For the purposes of this
+study, the salient detail is that these {\bf waveforms span the full, broad, space of
+frequencies, while sharing a generally similar morphology}.
+Figure~\ref{fig:catalogue} shows the spectra of full catalogue overlaid with
+each other.  An example of a typical waveform in the time domain can be found in
+figure~\ref{fig:example}.
 
 %
 % Catalogue F-domain
@@ -247,18 +259,18 @@ a common reference frequency, prior to PCA.   Alignment procedure:
 \makeatother
 \centering
 \subfloat[Magnitude Spectra]{%
-  \includegraphics[width=0.4\linewidth]{catalogue_magnitude_overlay.pdf}%
+  \includegraphics[width=0.45\linewidth]{catalogue_magnitude_overlay.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[Phase Spectra]{%
-  \includegraphics[width=0.4\linewidth]{catalogue_phase_overlay.pdf}%
+  \includegraphics[width=0.45\linewidth]{catalogue_phase_overlay.pdf}%
   \label{fig:}%
 }
 \caption{Magnitude (left) and phase (right) spectra of our waveform catalogue
     $\matr{X}$.  \emph{Top row}: spectra of the original waveforms.  Note the
     wide range in peak locations.  \emph{Bottom row}: spectra following the
     frequency shifting procedure.  Waveform frequencies have been scaled such
-    that the peaks align at 3\,kHz (red vertical line).}
+that the peaks align at 1\,kHz (red vertical line).\label{fig:catalogue}}
 \end{minipage}
 
 \subsection*{\centering Principal Component Basis, $\matr{Z}$}
@@ -271,11 +283,11 @@ a common reference frequency, prior to PCA.   Alignment procedure:
 \makeatother
 \centering
 \subfloat[PC Magnitudes]{%
-  \includegraphics[width=0.4\linewidth]{pcs_magnitude_overlay.pdf}%
+  \includegraphics[width=0.45\linewidth]{pcs_magnitude_overlay.pdf}%
   \label{fig:}%
 }\qquad%
 \subfloat[PC Phases]{%
-  \includegraphics[width=0.4\linewidth]{pcs_phase_overlay.pdf}%
+  \includegraphics[width=0.45\linewidth]{pcs_phase_overlay.pdf}%
   \label{fig:}%
 }
 \caption{Principal component scores for the magnitude (left) and phase (right)
@@ -284,6 +296,25 @@ a common reference frequency, prior to PCA.   Alignment procedure:
     waveforms \emph{after mean subtraction}.  \emph{Top row}: principal
     component scores for the original, unaligned data. \emph{Bottom row}:
 principal component scores for the scaled and aligned spectra.}
+\end{minipage}
+
+\subsection*{\centering Demonstration}
+\begin{minipage}{\columnwidth}
+\makeatletter
+\newcommand{\@captype}{figure}
+\makeatother
+\centering
+\subfloat[First principal component]{%
+  \includegraphics[width=0.4\linewidth]{firstPC_example_waveform_reconstruction.pdf}%
+  \label{fig:}%
+}\qquad%
+\subfloat[All principal components]{%
+  \includegraphics[width=0.4\linewidth]{allPCs_example_waveform_reconstruction.pdf}%
+  \label{fig:}%
+}
+\caption{Example: reconstrucing the Shen 1.35+1.35 ${\rm M}_{\odot}$ waveform
+using only the first principal component (left) and all principal components
+(right). \label{fig:example}}
 \end{minipage}
 
 
@@ -317,10 +348,10 @@ decomposition and reconstruction performance of our method:
 \end{center}%\vspace{1cm}
 
 Figure~\ref{fig:eigenergy} compares the explained variance as a function of
-number of principal components for the original and shifted spectra.  We see
-that we require about half as many principal components after applying our
-shifting procedure.   Much of the variance in the original catalogue then,
-arises from a feature, the location of $f_{\rm peak}$ which is easily aligned.
+number of principal components for the original and shifted spectra.  We require
+about half as many principal components after applying our shifting procedure.
+Much of the variance in the original catalogue arises from a feature, the
+location of $f_{\rm peak}$, which is easily aligned.
 
 
 \begin{minipage}{\columnwidth}
@@ -357,19 +388,18 @@ data.
 
 %\color{SaddleBrown} % SaddleBrown color for the conclusions to make them stand out
 
-\section*{Conclustions}
+\section*{Conclusions}
 
 \begin{itemize}
 \item Have demonstrated an ability to construct a low-dimensional and reasonably
     accurate model using principal component analysis and a novel feature
     alignment scheme.
-\item Some caveats: small catalogue \& have only demonstrated ability to
-    reconstruct \emph{training} data; more waveforms, further testing required
-    before deployment as a (nearly) matched-filter.
-\item Obvious application: burst parameter estimation follow-ups of BNS inspiral
-    detections.
-\item Particularly useful for Monte-Carlo simulations in un-modelled analysis
-    and construction of ad hoc models for machine learning algorithms.
+\item {\bf Some caveats}: small catalogue \& have only demonstrated ability to
+    reconstruct \emph{training} data.
+\item Applications include: burst parameter estimation follow-ups of BNS inspiral
+    detections, Monte-Carlo simulations in un-modelled analysis
+    and machine learning algorithms \& astrophysical interpretation waveform
+    reconstructions from other burst algorithms.
 \end{itemize}
 
 %\color{DarkSlateGray} % Set the color back to DarkSlateGray for the rest of the content
