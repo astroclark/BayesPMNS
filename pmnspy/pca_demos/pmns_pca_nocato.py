@@ -69,9 +69,8 @@ npcs = len(waveform_names)
 #
 fshift_center=1000
 print "building catalogues"
-(freqaxis, low_cat, high_cat, shift_cat, original_cat, fpeaks, low_sigmas,
-        high_sigmas) = pmns_pca_utils.build_catalogues(waveform_names,
-                fshift_center)
+(freqaxis, shift_cat, original_cat, fpeaks) = \
+        pmns_pca_utils.build_catalogues(waveform_names, fshift_center)
 delta_f = np.diff(freqaxis)[0]
 
 # Convert to magnitude/phase
@@ -136,21 +135,21 @@ print 'doing reconstructions'
 # Reconstruct
 #
 
-mag_rec_shift = np.copy(shift_pca['mean_mag'])
-phase_rec_shift = np.copy(shift_pca['mean_phase'])
-for s in xrange(len(waveform_names)):
-    mag_rec_shift += nocat_mag_betas[s] * magpcs[:,s] 
-
-mag_rec_shift   /= np.sqrt(np.dot(mag_rec_shift,mag_rec_shift))
-nocat_mag_shift /= np.sqrt(np.dot(nocat_mag_shift,nocat_mag_shift))
-nocat_mag_cent  /= np.sqrt(np.dot(nocat_mag_cent,nocat_mag_cent))
-
-f, ax= pl.subplots(nrows=1)
-ax.plot(freqaxis, nocat_mag_shift, color='r', linewidth=2)
-#ax.plot(freqaxis, nocat_mag_cent, color='r', linewidth=2)
-ax.plot(freqaxis, mag_rec_shift, color='k')
-ax.set_xlim(0,1500)
-
+#   mag_rec_shift = np.copy(shift_pca['mean_mag'])
+#   phase_rec_shift = np.copy(shift_pca['mean_phase'])
+#   for s in xrange(len(waveform_names)):
+#       mag_rec_shift += nocat_mag_betas[s] * magpcs[:,s] 
+#
+#   mag_rec_shift   /= np.sqrt(np.dot(mag_rec_shift,mag_rec_shift))
+#   nocat_mag_shift /= np.sqrt(np.dot(nocat_mag_shift,nocat_mag_shift))
+#   nocat_mag_cent  /= np.sqrt(np.dot(nocat_mag_cent,nocat_mag_cent))
+#
+#   f, ax= pl.subplots(nrows=1)
+#   ax.plot(freqaxis, nocat_mag_shift, color='r', linewidth=2)
+#   #ax.plot(freqaxis, nocat_mag_cent, color='r', linewidth=2)
+#   ax.plot(freqaxis, mag_rec_shift, color='k')
+#   ax.set_xlim(0,1500)
+#
 #pl.show()
 #sys.exit()
 
@@ -170,11 +169,16 @@ for n in xrange(len(waveform_names)):
     mag_rec = pmns_pca_utils.unshift_vec(mag_rec_shift, freqaxis,
             noncat_waveform.fpeak)
 
-    #ax[n].plot(freqaxis, abs(zpdata_spec)/max(abs(zpdata_spec)), color='r', linewidth=2)
-    #ax[n].plot(freqaxis, mag_rec/max(mag_rec), color='k')
+    mag_rec_shift   /= np.sqrt(np.dot(mag_rec_shift,mag_rec_shift))
+    nocat_mag_shift /= np.sqrt(np.dot(nocat_mag_shift,nocat_mag_shift))
+
+    mag_rec         /= np.sqrt(np.dot(mag_rec, mag_rec))
+
 
     ax[n].plot(freqaxis, nocat_mag_shift, color='r', linewidth=2)
     ax[n].plot(freqaxis, mag_rec_shift, color='k')
+
+    ax[n].set_xlim(0,1500)
 
 
 pl.show()
