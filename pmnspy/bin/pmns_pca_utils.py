@@ -43,8 +43,6 @@ def pca_by_svd(catalogue):
     Perform principle component analysis via singular value decomposition
     """
 
-    #catalogue /= 9.0
-
     U, S, Vt = scipy.linalg.svd(catalogue, full_matrices=True)
 
     V = Vt.T
@@ -63,7 +61,8 @@ def pca_by_svd(catalogue):
     # Score matrix:
     PC_scores = U * S
 
-    return PC_scores, V, S**2 
+    return PC_scores, U, V, S**2 
+    #return U, V, S**2 
 
 def pca_magphase(catalogue, freqs, flow=1000):
     """
@@ -78,12 +77,12 @@ def pca_magphase(catalogue, freqs, flow=1000):
     for w in xrange(np.shape(catalogue)[1]):
         phases[:,w] = signal.detrend(phases[:,w])
 
-    mean_mag = np.zeros(np.shape(catalogue)[0])
+    mean_mag   = np.zeros(np.shape(catalogue)[0])
     mean_phase = np.zeros(np.shape(catalogue)[0])
     #std_mag = np.zeros(np.shape(catalogue)[0])
     #std_phase = np.zeros(np.shape(catalogue)[0])
     for s in xrange(np.shape(catalogue)[0]):
-        mean_mag[s] = np.mean(magnitudes[s,:])
+        mean_mag[s]   = np.mean(magnitudes[s,:])
         mean_phase[s] = np.mean(phases[s,:])
         #std_mag[s] = np.std(magnitudes[s,:])
         #std_phase[s] = np.std(phases[s,:])
@@ -98,10 +97,13 @@ def pca_magphase(catalogue, freqs, flow=1000):
 
     pcs_magphase = {}
 
-    pcs_magphase['magnitude_scores'], pcs_magphase['magnitude_betas'], \
-            pcs_magphase['magnitude_eigs'] = pca_by_svd(magnitudes)
-    pcs_magphase['phase_scores'], pcs_magphase['phase_betas'], \
-            pcs_magphase['phase_eigs'] = pca_by_svd(phases)
+    pcs_magphase['magnitude_scores'], pcs_magphase['magnitude_pcs'], \
+            pcs_magphase['magnitude_betas'], pcs_magphase['magnitude_eigs'] = \
+            pca_by_svd(magnitudes)
+
+    pcs_magphase['phase_scores'], pcs_magphase['phase_pcs'], \
+            pcs_magphase['phase_betas'], pcs_magphase['phase_eigs'] = \
+            pca_by_svd(phases)
 
     pcs_magphase['magnitude_eigenergy'] = \
             eigenergy(pcs_magphase['magnitude_eigs'])
@@ -121,7 +123,6 @@ def reconstruct_signal_ampphase(pcs_magphase, nMagPCs, nPhasePCs, waveform_num):
     """
     Build the reconstructed signal from magnitude and phase components
     """
-
 
     magScores = pcs_magphase['magnitude_scores']
     magBetas = pcs_magphase['magnitude_betas']
@@ -152,6 +153,9 @@ def complex_to_polar(catalogue):
 
     magnitudes = np.zeros(shape=np.shape(catalogue))
     phases = np.zeros(shape=np.shape(catalogue))
+    if len(np.shape(catalogue))==1:
+        return abs(catalogue), np.unwrap(np.angle(catalogue))
+
     for c in xrange(np.shape(catalogue)[1]):
         magnitudes[:,c] = abs(catalogue[:,c])
         phases[:,c] = np.unwrap(np.angle(catalogue[:,c]))
@@ -394,7 +398,7 @@ def build_catalogues(waveform_names, fshift_center):
         del original_signal_spectrum
 
     return (freqaxis, low_cat, high_cat, shifted_cat, original_cat, fpeaks,
-            low_sigmas, high_sigmas, false_freqs_shift)
+            low_sigmas, high_sigmas)
 
 def idealised_matches(catalogue, principle_components, delta_f=1.0, flow=1000,
         fhigh=8192):
@@ -594,6 +598,32 @@ def unshifted_template(magBetas, phaseBetas, pcs, fpeak, target_freqs,
     shifted_reconstruction = shiftedspec_real + 1j*shiftedspec_imag
 
     return shifted_reconstruction
+
+def unshift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
+
+    # Frequency shift
+    fshift = fpeak / fcenter
+    false_freqs = target_freqs * fshift
+
+    unshiftedspec_real = np.interp(target_freqs, false_freqs, np.real(vector))
+    unshiftedspec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
+
+    unshifted_vector = unshiftedspec_real + 1j*unshiftedspec_imag
+
+    return unshifted_vector
+
+def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
+
+    # Frequency shift
+    fshift = fcenter / fpeak
+    false_freqs = target_freqs * fshift
+
+    shiftedspec_real = np.interp(target_freqs, false_freqs, np.real(vector))
+    shiftedspec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
+
+    shifted_vector = shiftedspec_real + 1j*shiftedspec_imag
+
+    return shifted_vector
 
 
 def match(vary_args, *fixed_args):
