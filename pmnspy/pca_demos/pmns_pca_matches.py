@@ -73,8 +73,8 @@ noncat_waveform_FD = ppca.unit_hrss(noncat_waveform_FD.data,
 #
 for npcs in xrange(1,11):
     reconstruction = pmpca.reconstruct(noncat_waveform_FD.data, npcs=npcs)
-    print reconstruction['match_aligo']
-    print reconstruction['match_noweight_align']
+    print 'no realignement: ', reconstruction['match_aligo_align']
+    print 'realigned: ', reconstruction['match_aligo']
     del reconstruction
 
 sys.exit()
