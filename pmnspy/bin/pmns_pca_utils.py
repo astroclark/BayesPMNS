@@ -38,12 +38,14 @@ import pycbc.types
 import pycbc.filter
 from pycbc.psd import aLIGOZeroDetHighPower
 
-def pca_by_svd(catalogue):
+# _________________ FUNCTIONS  _________________ #
+
+def pca_by_svd(matrix):
     """
     Perform principle component analysis via singular value decomposition
     """
 
-    U, S, Vt = scipy.linalg.svd(catalogue, full_matrices=True)
+    U, S, Vt = scipy.linalg.svd(matrix, full_matrices=True)
 
     V = Vt.T
 
@@ -63,36 +65,27 @@ def pca_by_svd(catalogue):
 
     return PC_scores, U, V, S**2 
 
-def pca_magphase(catalogue, freqs, flow=1000):
+def pca_magphase(complex_catalogue):
     """
-    Do PCA with magnitude and phase parts of the complex waveforms in catalogue
+    Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
 
-    # 'highpass'
-    catalogue[freqs<flow] = 0.0
+    magnitudes, phases = complex_to_polar(complex_catalogue)
 
-    magnitudes, phases = complex_to_polar(catalogue)
-
-    for w in xrange(np.shape(catalogue)[1]):
+    for w in xrange(np.shape(complex_catalogue)[1]):
         phases[:,w] = signal.detrend(phases[:,w])
 
-    mean_mag   = np.zeros(np.shape(catalogue)[0])
-    mean_phase = np.zeros(np.shape(catalogue)[0])
-    #std_mag = np.zeros(np.shape(catalogue)[0])
-    #std_phase = np.zeros(np.shape(catalogue)[0])
-    for s in xrange(np.shape(catalogue)[0]):
+    mean_mag   = np.zeros(np.shape(complex_catalogue)[0])
+    mean_phase = np.zeros(np.shape(complex_catalogue)[0])
+    for s in xrange(np.shape(complex_catalogue)[0]):
         mean_mag[s]   = np.mean(magnitudes[s,:])
         mean_phase[s] = np.mean(phases[s,:])
-        #std_mag[s] = np.std(magnitudes[s,:])
-        #std_phase[s] = np.std(phases[s,:])
 
 
-    for w in xrange(np.shape(catalogue)[1]):
+    for w in xrange(np.shape(complex_catalogue)[1]):
         #phases[:,w] = signal.detrend(phases[:,w])
         magnitudes[:,w] -= mean_mag
-        #magnitudes[:,w] /= std_mag
         phases[:,w] -= mean_phase
-        #phases[:,w] /= std_phase
 
     pcs_magphase = {}
 
@@ -111,39 +104,10 @@ def pca_magphase(catalogue, freqs, flow=1000):
 
     pcs_magphase['mean_mag'] = mean_mag
     pcs_magphase['mean_phase'] = mean_phase
-    #pcs_magphase['std_mag'] = std_mag
-    #pcs_magphase['std_phase'] = std_phase
 
     return pcs_magphase
 
 
-def reconstruct_signal_ampphase(pcs_magphase, nMagPCs, nPhasePCs, waveform_num):
-
-    """
-    Build the reconstructed signal from magnitude and phase components
-    """
-
-    magScores = pcs_magphase['magnitude_scores']
-    magBetas = pcs_magphase['magnitude_betas']
-    phasePCs = pcs_magphase['phase_scores']
-    phaseBetas = pcs_magphase['phase_betas']
-
-    mag = np.zeros(np.shape(magScores)[0], dtype=complex)
-    phase = np.zeros(np.shape(phasePCs)[0], dtype=complex)
-
-    for n in xrange(nMagPCs):
-        mag += magBetas[waveform_num,n] * magScores[:,n]
-    for n in xrange(nPhasePCs):
-        phase += phaseBetas[waveform_num,n] * phasePCs[:,n]
-
-    mag += pcs_magphase['mean_mag']
-    phase += pcs_magphase['mean_phase']
-    #mag *= pcs_magphase['std_mag']
-    #phase *= pcs_magphase['std_phase']
-
-    reconstruction = mag*np.exp(1j*phase)
-
-    return reconstruction
 
 def complex_to_polar(catalogue):
     """
@@ -184,15 +148,13 @@ def build_catalogues(waveform_names, fshift_center):
     """
 
     sample_freq=16384
-    delta_t=1./16384
-    nTsamples=16384
+    delta_t=1./sample_freq
+    nTsamples=1*sample_freq
     nFsamples=nTsamples/2 + 1
     times=np.arange(0, delta_t*nTsamples, delta_t)
 
-    fcenter = 4096.0  # center high-frequency peaks here
-
     # Preallocation
-    shifted_cat = np.zeros(shape=(nFsamples, len(waveform_names)), dtype=complex)
+    aligned_cat = np.zeros(shape=(nFsamples, len(waveform_names)), dtype=complex)
     original_cat = np.zeros(shape=(nFsamples, len(waveform_names)), dtype=complex)
     fpeaks = np.zeros(len(waveform_names))
 
@@ -203,54 +165,54 @@ def build_catalogues(waveform_names, fshift_center):
         #
         waveform = pmns_utils.Waveform(name)
         waveform.reproject_waveform()
-        waveform.compute_characteristics()
-        fpeaks[w] = np.copy(waveform.fpeak)
 
-        #
         # Waveform conditioning
-        #
-
-        # Time-domain Window
-        peakidx = np.argmax(abs(waveform.hplus.data))
-        win=lal.CreateTukeyREAL8Window(len(waveform.hplus),0.25)
-        waveform.hplus.data *= win.data.data
-
-        # Zero-pad
-        paddata = np.zeros(nTsamples)
-        paddata[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+        original_spectrum, fpeaks[w] = condition_spectrum(waveform.hplus.data)
 
         del waveform
 
         # Normalise to unit hrss
-        original_signal = unit_hrss(paddata, delta=delta_t, domain='time')
+        original_spectrum = unit_hrss(original_spectrum,
+                delta=original_spectrum.delta_f, domain='frequency')
 
         # Add to catalogue
-        original_spectrum = original_signal.to_frequencyseries()
-        original_frequencies=np.copy(original_spectrum.sample_frequencies)
+        original_frequencies = np.copy(original_spectrum.sample_frequencies)
         original_cat[:,w] = np.copy(original_spectrum.data)
 
-        #
         # Feature alignment
-        #
+        aligned_spectrum = shift_vec(original_spectrum.data, original_frequencies,
+                fpeaks[w], fshift_center)
 
-        tmpdata = np.copy(original_spectrum.data)
+        # Populate catalogue with reconstructed, normalised aligned spectrum
+        aligned_cat[:,w] = unit_hrss(aligned_spectrum,
+                delta=original_spectrum.delta_f, domain='frequency') 
 
-        # scaling factor
-        fshift = fshift_center / fpeaks[w]
-        false_freqs_shift = original_spectrum.sample_frequencies.data * fshift
+    return (original_frequencies, aligned_cat, original_cat, fpeaks)
 
-        # interpolate magnitude and phase to new freqquencies
-        shiftedspec_mag = np.interp(original_frequencies, false_freqs_shift,
-                abs(tmpdata))
-        shiftedspec_phase = np.interp(original_frequencies, false_freqs_shift,
-                np.unwrap(np.angle(tmpdata)))
+def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
+    """
+    Zero-pad, window and FFT a time-series to return a frequency series of
+    standard length (16384 samples)
+    """
 
-        # Populate catalogue with reconstructed, normalised shifted spectrum
-        shifted_cat[:,w] = unit_hrss(shiftedspec_mag * \
-                np.exp(1j*shiftedspec_phase), delta=original_spectrum.delta_f,
-                    domain='frequency') 
+    # Time-domain Window
+    win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.25)
+    waveform_timeseries *= win.data.data
 
-    return (original_frequencies, shifted_cat, original_cat, fpeaks)
+    # Zero-pad
+    paddata = np.zeros(nsamples)
+    paddata[:len(waveform_timeseries)] = np.copy(waveform_timeseries)
+
+    # FFT
+    timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
+    freqseries = timeseries.to_frequencyseries()
+
+    # Locate fpeak
+    high_idx = freqseries.sample_frequencies.data>=2000 
+    high_freq = freqseries.sample_frequencies.data[high_idx] 
+    fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
+    
+    return freqseries, fpeak
 
 def unit_hrss(data, delta, domain):
     """
@@ -275,105 +237,6 @@ def unit_hrss(data, delta, domain):
         sigma = pycbc.filter.sigma(freqseries)
         freqseries.data/=sigma
         return freqseries
-
-
-
-def idealised_matches(catalogue, principle_components, delta_f=1.0, flow=1000,
-        fhigh=8192):
-    """
-    Compute the matches between the waveforms in the catalogue and the
-    ideal reconstructions, where we use the training data as the test and
-    consider full, high and low catalogues seperately
-    """
-    
-    nwaveforms=np.shape(catalogue)[1]
-
-    # Amplitude & Phase-maximised match
-    matches = np.zeros(shape=(np.shape(catalogue)[1], np.shape(catalogue)[1]))
-    # NOTE: columns = waveforms, rows=Npcs
-
-    # Loop over waveforms
-    for w in xrange(nwaveforms):
-
-        # Loop over the number of pcs to use
-        for n in xrange(nwaveforms):
-
-            reconstruction = reconstruct_signal_ampphase(principle_components,
-                    n+1, n+1, w)
-
-            matches[w, n] = comp_match(reconstruction, catalogue[:,w],
-                    delta_f=delta_f, flow=flow)
-
-    return matches
-
-def unshifted_rec_cat(pcs, npcs, fpeaks, freqaxis, fcenter):
-
-    """
-    Reconstruct the catalogue using npcs and the shifted waveforms
-    """
-    
-    rec_cat = np.zeros(shape=(np.shape(pcs['magnitude_scores'])), dtype=complex)
-
-    for w in xrange(len(fpeaks)):
-
-        rec_cat[:, w] = unshift_waveform(pcs, [npcs[0], npcs[1]], fpeaks[w],
-                freqaxis, waveform_num=w, fcenter=fcenter)
-
-    return rec_cat
-
-def unshift_waveform(shifted_pcs, npcs, fpeak, target_freqs, waveform_num=0,
-        fcenter=3000., delta_f=1.0):
-    """
-    Reconstruct the shifted waveform and shift it back to the original peak
-    frequency.  npcs is a tuple with the number of [mag, phase] PCs to use
-    """
-
-    reconstruction = reconstruct_signal_ampphase(shifted_pcs, npcs[0], npcs[1], waveform_num)
-
-
-    #fshift = fcenter / fpeak
-
-    fshift = fpeak / fcenter
-    false_freqs = target_freqs * fshift
-
-    shiftedspec_real = np.interp(target_freqs, false_freqs,
-            np.real(reconstruction))
-
-    shiftedspec_imag = np.interp(target_freqs, false_freqs,
-            np.imag(reconstruction))
-
-    shifted_reconstruction = shiftedspec_real + 1j*shiftedspec_imag
-
-    return shifted_reconstruction
-
-
-def unshifted_matches(catalogue, pcs, fpeaks, freqaxis, delta_f=1.0, flow=1000,
-        fhigh=8192, fcenter=3000):
-    """
-    Compute the matches between the waveforms in the catalogue and the
-    shifted spectrum reconstructions, where we use the training data as the test and
-    consider full, high and low catalogues seperately
-    """
-    
-    nwaveforms=np.shape(catalogue)[1]
-
-    # Amplitude & Phase-maximised match
-    matches = np.zeros(shape=(np.shape(catalogue)[1], np.shape(catalogue)[1]))
-    # NOTE: columns = waveforms, rows=Npcs
-
-    # Loop over the number of pcs to use
-    for n in xrange(nwaveforms):
-
-        rec_cat = unshifted_rec_cat(pcs, [n+1, n+1], fpeaks, freqaxis,
-                fcenter=fcenter)
-
-        # Loop over waveforms
-        for w in xrange(nwaveforms):
-
-            matches[w,n] = comp_match(rec_cat[:,w], catalogue[:,w],
-                    delta_f=delta_f, flow=flow)
-
-    return matches
 
 
 def eigenergy(eigenvalues):
@@ -414,7 +277,298 @@ def comp_match(freqseries1, freqseries2, delta_f=1.0, flow=10., fhigh=8192,
                 high_frequency_cutoff=fhigh)[0]
 
 
-def unshifted_template(magBetas, phaseBetas, pcs, fpeak, target_freqs,
+def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
+
+    # Frequency shift
+    fshift = fcenter / fpeak
+    false_freqs = target_freqs * fshift
+
+    aligned_spec_real = np.interp(target_freqs, false_freqs, np.real(vector))
+    aligned_spec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
+
+    aligned_vector = aligned_spec_real + 1j*aligned_spec_imag
+
+    return aligned_vector
+
+
+def unshift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
+
+    # Frequency shift
+    fshift = fpeak / fcenter
+    false_freqs = target_freqs * fshift
+
+    unaligned_spec_real = np.interp(target_freqs, false_freqs, np.real(vector))
+    unaligned_spec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
+
+    unaligned_vector = unaligned_spec_real + 1j*unaligned_spec_imag
+
+    return unaligned_vector
+
+
+# _________________ CLASSES  _________________ #
+
+class pmnsPCA:
+    """
+    An object with a catalogue and principal component decomposition of
+    post-merger waveforms
+
+    """
+
+    def __init__(self, waveform_list, fcenter=1000):
+
+        #
+        # Build Catalogues
+        #
+        self.fcenter=fcenter
+        self.waveform_list=waveform_list
+
+        print "Building catalogue"
+        (self.sample_frequencies, self.cat_align, self.cat_orig,
+                self.fpeaks)=build_catalogues(self.waveform_list, self.fcenter)
+        self.delta_f = np.diff(self.sample_frequencies)[0]
+
+        #
+        # PCA
+        #
+        print "Performing PCA"
+
+        # Convert to magnitude/phase
+        # XXX: need this?  happens in pca anyway
+        self.magnitudes_align, self.phases_align = \
+                complex_to_polar(self.cat_align)
+
+        # Do PCA
+        self.pca = pca_magphase(self.cat_align)
+
+    def project(self, freqseries, this_fpeak=None):
+        """
+        Project the frequency series freqseries onto the principal components to
+        represent that waveform in the new basis.  The projection yields the
+        coefficients {beta} such that the freqseries can be reconstructed as a
+        linear combination of the beta-weighted PCs
+
+        Procedure:
+        1) Align test spectrum (peak) to 1kHz
+        2) Normalise test spectrum to unit hrss
+        3) Convert to polar representation
+        4) Center the test spectrum
+        5) Take projection
+
+        """
+
+        if this_fpeak==None:
+            # Locate fpeak
+            # Note: we'll assume the peak we're aligning to is >2kHz.  This
+            # avoids any low frequency stuff.
+            high_idx = self.sample_frequencies>=2000 
+            high_freq = self.sample_frequencies[high_idx] 
+            this_fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
+
+        # Dictionary to hold input and results of projection
+        projection = dict()
+        projection['freqseries'] = np.copy(freqseries)
+
+        # Align test spectrum
+        freqseries_align = shift_vec(freqseries, self.sample_frequencies,
+                this_fpeak)
+        
+        # Normalise test spectrum
+        freqseries_align = unit_hrss(freqseries_align, delta=self.delta_f,
+                domain='frequency')
+
+        projection['freqseries_align'] = np.copy(freqseries_align)
+
+        # Complex to polar
+        magnitude_align, phase_align = complex_to_polar(freqseries_align)
+
+        # Center test spectrum
+        magnitude_cent = magnitude_align - self.pca['mean_mag']
+        phase_cent = phase_align - self.pca['mean_phase']
+
+        #self.projection['freqseries_align'] = np.copy(freqseries_align)
+
+
+        # Finally, project test spectrum onto PCs (dot product between data and PCs)
+        projection['betas_magnitude'] = np.dot(magnitude_cent,
+                self.pca['magnitude_pcs'])
+        projection['betas_phase'] = np.dot(phase_cent,
+                self.pca['phase_pcs'])
+
+        return projection
+
+    def reconstruct(self, freqseries, npcs=1, this_fpeak=None):
+        """
+        Reconstruct the waveform in freqseries using <npcs> principal components
+        from the catalogue
+
+        Procedure:
+        1) Reconstruct the centered spectra (phase and mag) from the
+        beta-weighted PCs
+        2) Un-center the spectra (add the mean back on)
+        """
+
+        # Get projection:
+        projection = self.project(freqseries)
+
+        # Initialise reconstructions
+        recon_magnitude_align = np.copy(self.pca['mean_mag'])
+        recon_phase_align = np.copy(self.pca['mean_phase'])
+
+        # Reconstruct
+        for i in xrange(npcs):
+            print i
+            recon_magnitude_align += projection['betas_magnitude'][i]*\
+                    self.pca['magnitude_pcs'][:,i]
+            recon_phase_align += projection['betas_phase'][i]*\
+                    self.pca['phase_pcs'][:,i]
+
+
+        f, ax = pl.subplots()
+        ax.plot(self.sample_frequencies, abs(projection['freqseries_align']),
+                color='r', linewidth=2)
+        ax.plot(self.sample_frequencies, recon_magnitude_align, color='k')
+
+        ax.set_xlim(0,1500)
+
+        #print projection['betas_magnitude']
+
+        pl.show()
+
+
+
+
+# XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# XXX: LIKELY JUNK
+
+def reconstruct_signal_ampphase(pcs_magphase, nMagPCs, nPhasePCs, waveform_num):
+
+    """
+    Build the reconstructed signal from magnitude and phase components
+    """
+
+    magScores = pcs_magphase['magnitude_scores']
+    magBetas = pcs_magphase['magnitude_betas']
+    phasePCs = pcs_magphase['phase_scores']
+    phaseBetas = pcs_magphase['phase_betas']
+
+    mag = np.zeros(np.shape(magScores)[0], dtype=complex)
+    phase = np.zeros(np.shape(phasePCs)[0], dtype=complex)
+
+    for n in xrange(nMagPCs):
+        mag += magBetas[waveform_num,n] * magScores[:,n]
+    for n in xrange(nPhasePCs):
+        phase += phaseBetas[waveform_num,n] * phasePCs[:,n]
+
+    mag += pcs_magphase['mean_mag']
+    phase += pcs_magphase['mean_phase']
+    #mag *= pcs_magphase['std_mag']
+    #phase *= pcs_magphase['std_phase']
+
+    reconstruction = mag*np.exp(1j*phase)
+
+    return reconstruction
+
+def idealised_matches(catalogue, principle_components, delta_f=1.0, flow=1000,
+        fhigh=8192):
+    """
+    Compute the matches between the waveforms in the catalogue and the
+    ideal reconstructions, where we use the training data as the test and
+    consider full, high and low catalogues seperately
+    """
+    
+    nwaveforms=np.shape(catalogue)[1]
+
+    # Amplitude & Phase-maximised match
+    matches = np.zeros(shape=(np.shape(catalogue)[1], np.shape(catalogue)[1]))
+    # NOTE: columns = waveforms, rows=Npcs
+
+    # Loop over waveforms
+    for w in xrange(nwaveforms):
+
+        # Loop over the number of pcs to use
+        for n in xrange(nwaveforms):
+
+            reconstruction = reconstruct_signal_ampphase(principle_components,
+                    n+1, n+1, w)
+
+            matches[w, n] = comp_match(reconstruction, catalogue[:,w],
+                    delta_f=delta_f, flow=flow)
+
+    return matches
+
+def unaligned_rec_cat(pcs, npcs, fpeaks, freqaxis, fcenter):
+
+    """
+    Reconstruct the catalogue using npcs and the aligned waveforms
+    """
+    
+    rec_cat = np.zeros(shape=(np.shape(pcs['magnitude_scores'])), dtype=complex)
+
+    for w in xrange(len(fpeaks)):
+
+        rec_cat[:, w] = unshift_waveform(pcs, [npcs[0], npcs[1]], fpeaks[w],
+                freqaxis, waveform_num=w, fcenter=fcenter)
+
+    return rec_cat
+
+def unshift_waveform(aligned_pcs, npcs, fpeak, target_freqs, waveform_num=0,
+        fcenter=3000., delta_f=1.0):
+    """
+    Reconstruct the aligned waveform and shift it back to the original peak
+    frequency.  npcs is a tuple with the number of [mag, phase] PCs to use
+    """
+
+    reconstruction = reconstruct_signal_ampphase(aligned_pcs, npcs[0], npcs[1], waveform_num)
+
+
+    #fshift = fcenter / fpeak
+
+    fshift = fpeak / fcenter
+    false_freqs = target_freqs * fshift
+
+    aligned_spec_real = np.interp(target_freqs, false_freqs,
+            np.real(reconstruction))
+
+    aligned_spec_imag = np.interp(target_freqs, false_freqs,
+            np.imag(reconstruction))
+
+    aligned_reconstruction = aligned_spec_real + 1j*aligned_spec_imag
+
+    return aligned_reconstruction
+
+
+def unaligned_matches(catalogue, pcs, fpeaks, freqaxis, delta_f=1.0, flow=1000,
+        fhigh=8192, fcenter=3000):
+    """
+    Compute the matches between the waveforms in the catalogue and the
+    aligned spectrum reconstructions, where we use the training data as the test and
+    consider full, high and low catalogues seperately
+    """
+    
+    nwaveforms=np.shape(catalogue)[1]
+
+    # Amplitude & Phase-maximised match
+    matches = np.zeros(shape=(np.shape(catalogue)[1], np.shape(catalogue)[1]))
+    # NOTE: columns = waveforms, rows=Npcs
+
+    # Loop over the number of pcs to use
+    for n in xrange(nwaveforms):
+
+        rec_cat = unaligned_rec_cat(pcs, [n+1, n+1], fpeaks, freqaxis,
+                fcenter=fcenter)
+
+        # Loop over waveforms
+        for w in xrange(nwaveforms):
+
+            matches[w,n] = comp_match(rec_cat[:,w], catalogue[:,w],
+                    delta_f=delta_f, flow=flow)
+
+    return matches
+
+
+
+
+def unaligned_template(magBetas, phaseBetas, pcs, fpeak, target_freqs,
         fcenter=3000., delta_f=1.0):
     """
     Build an template with arbitrary PC amplitudes
@@ -438,41 +592,15 @@ def unshifted_template(magBetas, phaseBetas, pcs, fpeak, target_freqs,
     fshift = fpeak / fcenter
     false_freqs = target_freqs * fshift
 
-    shiftedspec_real = np.interp(target_freqs, false_freqs,
+    aligned_spec_real = np.interp(target_freqs, false_freqs,
             np.real(reconstruction))
 
-    shiftedspec_imag = np.interp(target_freqs, false_freqs,
+    aligned_spec_imag = np.interp(target_freqs, false_freqs,
             np.imag(reconstruction))
 
-    shifted_reconstruction = shiftedspec_real + 1j*shiftedspec_imag
+    aligned_reconstruction = aligned_spec_real + 1j*aligned_spec_imag
 
-    return shifted_reconstruction
-
-def unshift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
-
-    # Frequency shift
-    fshift = fpeak / fcenter
-    false_freqs = target_freqs * fshift
-
-    unshiftedspec_real = np.interp(target_freqs, false_freqs, np.real(vector))
-    unshiftedspec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
-
-    unshifted_vector = unshiftedspec_real + 1j*unshiftedspec_imag
-
-    return unshifted_vector
-
-def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
-
-    # Frequency shift
-    fshift = fcenter / fpeak
-    false_freqs = target_freqs * fshift
-
-    shiftedspec_real = np.interp(target_freqs, false_freqs, np.real(vector))
-    shiftedspec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
-
-    shifted_vector = shiftedspec_real + 1j*shiftedspec_imag
-
-    return shifted_vector
+    return aligned_reconstruction
 
 
 def match(vary_args, *fixed_args):
@@ -485,10 +613,10 @@ def match(vary_args, *fixed_args):
     #else:
 
     # fixed params
-    test_waveform, shifted_pcs, fpeak, target_freqs, fcenter, delta_f = fixed_args
+    test_waveform, aligned_pcs, fpeak, target_freqs, fcenter, delta_f = fixed_args
 
     # Generate template
-    tmplt = unshifted_template(magbetas, phasebetas, shifted_pcs, fpeak,
+    tmplt = unaligned_template(magbetas, phasebetas, aligned_pcs, fpeak,
             target_freqs, fcenter, delta_f=1.0)
 
     try:
@@ -540,8 +668,9 @@ def image_matches(match_matrix, waveform_names, title=None):
 
     return fig, ax
 
+# XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-# *******************************************************************************88
+# *******************************************************************************
 def main():
 
     #
@@ -577,6 +706,44 @@ def main():
 #                   'ls220_135135',
 #                   'ls375_135135']
 #
+
+
+    #
+    # Create PMNS PCA instance for this catalogue
+    #
+    pmpca = pmnsPCA(waveform_names)
+
+
+    #
+    # Create test waveform
+    #
+    noncat_name = 'shen_135135_lessvisc'
+    noncat_waveform = pmns_utils.Waveform(noncat_name)
+    noncat_waveform.reproject_waveform()
+
+    # Standardise
+    noncat_waveform_FD, fpeak = condition_spectrum(noncat_waveform.hplus.data)
+
+    # Normalise
+    noncat_waveform_FD = unit_hrss(noncat_waveform_FD.data,
+            delta=noncat_waveform_FD.delta_f, domain='frequency')
+
+    # Reconstructions 
+    pmpca.reconstruct(noncat_waveform_FD.data, npcs=5)
+
+
+    sys.exit()
+
+
+
+
+
+
+
+
+
+
+
     npcs = len(waveform_names)
 
     #
@@ -609,7 +776,7 @@ def main():
     shift_matches_ideal = idealised_matches(shift_cat, shift_pca,
             delta_f=delta_f, flow=10) # careful with this one's flow!
 
-    unshift_matches_ideal = unshifted_matches(original_cat, shift_pca, fpeaks,
+    unshift_matches_ideal = unaligned_matches(original_cat, shift_pca, fpeaks,
             freqaxis, fcenter=fshift_center)
 
 
@@ -632,12 +799,12 @@ def main():
     ax[0].minorticks_on()
     ax[0].set_title('Full Spectrum (magnitude)')
 
-    ax[1].plot(freqaxis, shift_mag, label='shifted spectrum')
+    ax[1].plot(freqaxis, shift_mag, label='aligned spectrum')
     ax[1].set_xlim(0, fshift_center+1000)
     ax[1].set_xlabel('Frequency [Hz]')
     ax[1].set_ylabel('|H(f)|')
     ax[1].minorticks_on()
-    ax[1].set_title('Shifted Spectrum (magnitude)')
+    ax[1].set_title('aligned Spectrum (magnitude)')
 
     
     f.tight_layout()
@@ -655,12 +822,12 @@ def main():
     ax[a].set_title('Full Spectrum (phase)')
 
     a+=1
-    ax[a].plot(freqaxis, shift_phase, label='shifted spectrum')
+    ax[a].plot(freqaxis, shift_phase, label='aligned spectrum')
     ax[a].set_xlim(0, fshift_center+1000)
     ax[a].set_xlabel('Frequency [Hz]')
     ax[a].set_ylabel('arg[H(f)]')
     ax[a].minorticks_on()
-    ax[a].set_title('Shifted Spectrum (phase)')
+    ax[a].set_title('aligned Spectrum (phase)')
 
     f.tight_layout()
     for fileformat in imageformats:
@@ -681,12 +848,12 @@ def main():
     ax[a].set_title('Full Spectrum Principle Components (magnitude)')
 
     a+=1
-    ax[a].plot(freqaxis, abs(shift_pca['magnitude_scores']), label='shifted spectrum')
+    ax[a].plot(freqaxis, abs(shift_pca['magnitude_scores']), label='aligned spectrum')
     ax[a].set_xlim(0, fshift_center+1000)
     ax[a].set_xlabel('Frequency [Hz]')
     ax[a].set_ylabel('|H(f)|')
     ax[a].minorticks_on()
-    ax[a].set_title('Shifted Spectrum Principle Components (magnitude)')
+    ax[a].set_title('aligned Spectrum Principle Components (magnitude)')
 
     f.tight_layout()
     for fileformat in imageformats:
@@ -707,13 +874,13 @@ def main():
     ax[a].set_title('Full Spectrum Principle Components (phase)')
 
     a+=1
-    ax[a].plot(freqaxis, shift_pca['phase_scores'], label='shifted spectrum')
+    ax[a].plot(freqaxis, shift_pca['phase_scores'], label='aligned spectrum')
     ax[a].set_xlim(0, fshift_center+1000)
     ax[a].set_xlabel('Frequency [Hz]')
     ax[a].set_ylabel('Phase PCs')
     ax[a].set_ylabel('arg[H(f)]')
     ax[a].minorticks_on()
-    ax[a].set_title('Shifted Spectrum Principle Components (phase)')
+    ax[a].set_title('aligned Spectrum Principle Components (phase)')
 
     f.tight_layout()
     for fileformat in imageformats:
@@ -731,7 +898,7 @@ def main():
     ax.plot(npcs_axis, full_pca['magnitude_eigenergy'], label='full spectrum',
             color='b')
     ax.plot(npcs_axis, shift_pca['magnitude_eigenergy'], 
-            label='shifted spectrum', color='g')
+            label='aligned spectrum', color='g')
 
     ax.plot(npcs_axis, full_pca['phase_eigenergy'], linestyle='--', color='b')
     ax.plot(npcs_axis, shift_pca['phase_eigenergy'], linestyle='--', color='g')
@@ -752,7 +919,7 @@ def main():
     # Match Plots
 
     #
-    # Shifted waveforms
+    # aligned waveforms
     fig, ax = image_matches(shift_matches_ideal, waveform_names,
             title="Matches For Full Aligned Spectrum PCA")
 
@@ -760,9 +927,9 @@ def main():
         fig.savefig('shiftspec_ideal_matches.%s'%fileformat)
 
 
-    # UN-shifted waveforms
+    # UN-aligned waveforms
     fig, ax = image_matches(unshift_matches_ideal, waveform_names,
-            title="Matches For Shifted Full Spectrum PCA")
+            title="Matches For aligned Full Spectrum PCA")
 
     for fileformat in imageformats:
         fig.savefig('unshiftspec_ideal_matches.%s'%fileformat)
