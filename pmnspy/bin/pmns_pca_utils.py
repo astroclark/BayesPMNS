@@ -89,17 +89,17 @@ def pca_magphase(complex_catalogue):
     pcs_magphase = {}
 
     pcs_magphase['magnitude_scores'], pcs_magphase['magnitude_pcs'], \
-            pcs_magphase['magnitude_betas'], pcs_magphase['magnitude_eigs'] = \
+            pcs_magphase['magnitude_betas'], pcs_magphase['magnitude_eigenvalues'] = \
             pca_by_svd(magnitudes)
 
     pcs_magphase['phase_scores'], pcs_magphase['phase_pcs'], \
-            pcs_magphase['phase_betas'], pcs_magphase['phase_eigs'] = \
+            pcs_magphase['phase_betas'], pcs_magphase['phase_eigenvalues'] = \
             pca_by_svd(phases)
 
     pcs_magphase['magnitude_eigenergy'] = \
-            eigenergy(pcs_magphase['magnitude_eigs'])
+            eigenergy(pcs_magphase['magnitude_eigenvalues'])
     pcs_magphase['phase_eigenergy'] = \
-            eigenergy(pcs_magphase['phase_eigs'])
+            eigenergy(pcs_magphase['phase_eigenvalues'])
 
     pcs_magphase['mean_mag'] = mean_mag
     pcs_magphase['mean_phase'] = mean_phase
@@ -426,12 +426,22 @@ class pmnsPCA:
         recon_phase_align = np.copy(self.pca['mean_phase'])
 
         # Reconstruct
+        tmp = np.zeros(len(freqseries), dtype=complex)
         for i in xrange(npcs):
-            recon_magnitude_align += projection['betas_magnitude'][i]*\
-                    self.pca['magnitude_pcs'][:,i]
-            recon_phase_align += projection['betas_phase'][i]*\
-                    self.pca['phase_pcs'][:,i]
 
+            # Sanity Check: if the eigenvalue for the current PC is close to
+            # zero, ignore that PC
+            if np.isclose(0, self.pca['magnitude_eigenvalues'][i]):
+                recon_magnitude_align += 0.0
+            else:
+                recon_magnitude_align += projection['betas_magnitude'][i]*\
+                        self.pca['magnitude_pcs'][:,i]
+
+            if np.isclose(0, self.pca['phase_eigenvalues'][i]):
+                recon_phase_align += 0.0
+            else:
+                recon_phase_align += projection['betas_phase'][i]*\
+                        self.pca['phase_pcs'][:,i]
 
         # Return the reconstruction as a dictionary with complex frequency
         # series for both the aligned and un-aligned waveforms (un-aligned is
@@ -442,6 +452,9 @@ class pmnsPCA:
         reconstruction['recon_spectrum_align'] = unit_hrss(recon_magnitude_align * \
                 np.exp(1j*recon_phase_align), delta=self.delta_f,
                 domain='frequency')
+
+        #reconstruction['recon_spectrum_align'] = unit_hrss(tmp,
+        #        delta=self.delta_f, domain='frequency')
 
         recon_spectrum = unshift_vec(reconstruction['recon_spectrum_align'].data,
                 self.sample_frequencies, fpeak=this_fpeak)
@@ -492,25 +505,37 @@ class pmnsPCA:
 
 
 
-def image_matches(match_matrix, waveform_names, title=None):
+def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
 
-    fig, ax = pl.subplots(figsize=(15,8))
-    #fig, ax = pl.subplots(figsize=(7,5))
-    npcs = len(waveform_names)
+    if mismatch:
+        match_matrix = 1-match_matrix
+        text_thresh = 0.1
+        clims = (0,0.2)
+        bar_label = 'mismatch'
+    else:
+        text_thresh = 0.85
+        clims = (0.75,1.0)
+        bar_label = 'match'
 
-    im = ax.imshow(match_matrix, interpolation='nearest', origin='lower')
+    #fig, ax = pl.subplots(figsize=(15,8))
+    fig, ax = pl.subplots(figsize=(7,7))
+    nwaves = np.shape(match_matrix)[0]
+    npcs = np.shape(match_matrix)[1]
 
-    for x in xrange(npcs):
+    im = ax.imshow(match_matrix, interpolation='nearest', origin='lower',
+            aspect='auto')
+
+    for x in xrange(nwaves):
         for y in xrange(npcs):
-            if match_matrix[x,y]<0.85:
-                ax.text(y, x, '%.2f'%(match_matrix[x,y]), \
-                    va='center', ha='center')
-            else:
+            if match_matrix[x,y]<text_thresh:
                 ax.text(y, x, '%.2f'%(match_matrix[x,y]), \
                     va='center', ha='center', color='w')
+            else:
+                ax.text(y, x, '%.2f'%(match_matrix[x,y]), \
+                    va='center', ha='center', color='k')
 
     ax.set_xticks(range(0,npcs))
-    ax.set_yticks(range(0,npcs))
+    ax.set_yticks(range(0,nwaves))
 
     xlabels=range(1,npcs+1)
     ax.set_xticklabels(xlabels)
@@ -518,16 +543,20 @@ def image_matches(match_matrix, waveform_names, title=None):
     ylabels=[name.replace('_lessvisc','') for name in waveform_names]
     ax.set_yticklabels(ylabels)
 
-    im.set_clim(0.75,1)
-    im.set_cmap('gnuplot2_r')
+    im.set_clim(clims)
+    im.set_cmap('gnuplot2')
 
     ax.set_xlabel('Number of PCs')
+    ax.set_ylabel('Waveform type')
 
     if title is not None:
         ax.set_title(title)
 
+    c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
+            orientation='horizontal')
+    c.set_label(bar_label)
+
     fig.tight_layout()
-    c=pl.colorbar(im, ticks=np.arange(0.75,1.05,0.05))#, orientation='horizontal')
 
     return fig, ax
 
