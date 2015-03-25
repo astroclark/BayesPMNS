@@ -83,7 +83,6 @@ def pca_magphase(complex_catalogue):
 
 
     for w in xrange(np.shape(complex_catalogue)[1]):
-        #phases[:,w] = signal.detrend(phases[:,w])
         magnitudes[:,w] -= mean_mag
         phases[:,w] -= mean_phase
 
@@ -409,7 +408,7 @@ class pmnsPCA:
         beta-weighted PCs
         2) Un-center the spectra (add the mean back on)
         """
-        print "Analysing reconstruction with %d PCs"%npcs
+        #print "Analysing reconstruction with %d PCs"%npcs
 
         if this_fpeak==None:
             # Locate fpeak
@@ -443,7 +442,6 @@ class pmnsPCA:
         reconstruction['recon_spectrum_align'] = unit_hrss(recon_magnitude_align * \
                 np.exp(1j*recon_phase_align), delta=self.delta_f,
                 domain='frequency')
-
 
         recon_spectrum = unshift_vec(reconstruction['recon_spectrum_align'].data,
                 self.sample_frequencies, fpeak=this_fpeak)
@@ -582,19 +580,19 @@ def main():
     #
     # Create test waveform
     #
-    noncat_name = 'shen_135135_lessvisc'
-    noncat_waveform = pmns_utils.Waveform(noncat_name)
-    noncat_waveform.reproject_waveform()
+    testwav_name = 'shen_135135_lessvisc'
+    testwav_waveform = pmns_utils.Waveform(testwav_name)
+    testwav_waveform.reproject_waveform()
 
     # Standardise
-    noncat_waveform_FD, fpeak = condition_spectrum(noncat_waveform.hplus.data)
+    testwav_waveform_FD, fpeak = condition_spectrum(testwav_waveform.hplus.data)
 
     # Normalise
-    noncat_waveform_FD = unit_hrss(noncat_waveform_FD.data,
-            delta=noncat_waveform_FD.delta_f, domain='frequency')
+    testwav_waveform_FD = unit_hrss(testwav_waveform_FD.data,
+            delta=testwav_waveform_FD.delta_f, domain='frequency')
 
     # Reconstructions 
-    reconstruction = pmpca.reconstruct(noncat_waveform_FD.data, npcs=1)
+    reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=1)
 
     print reconstruction['match_aligo']
 

@@ -48,51 +48,82 @@ waveform_names=['apr_135135_lessvisc',
                 'tma_135135_lessvisc' ,
                 'sfhx_135135_lessvisc',
                 'sfho_135135_lessvisc']#,
+catlen = len(waveform_names)
 
 #
 # Create PMNS PCA instance for this catalogue
 #
 pmpca = ppca.pmnsPCA(waveform_names)
 
+
 #
 # Create test waveform
 #
-noncat_name = 'shen_135135_lessvisc'
-noncat_waveform = pu.Waveform(noncat_name)
-noncat_waveform.reproject_waveform()
+testwav_name = 'shen_135135_lessvisc'
+testwav_waveform = pu.Waveform(testwav_name)
+testwav_waveform.reproject_waveform()
 
 # Standardise
-noncat_waveform_FD, fpeak = ppca.condition_spectrum(noncat_waveform.hplus.data)
+testwav_waveform_FD, fpeak = ppca.condition_spectrum(testwav_waveform.hplus.data)
 
 # Normalise
-noncat_waveform_FD = ppca.unit_hrss(noncat_waveform_FD.data,
-        delta=noncat_waveform_FD.delta_f, domain='frequency')
+testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,
+        delta=testwav_waveform_FD.delta_f, domain='frequency')
+
 
 #
 # Reconstruct 
 #
-for npcs in xrange(1,11):
-    reconstruction = pmpca.reconstruct(noncat_waveform_FD.data, npcs=npcs)
-    print 'no realignement: ', reconstruction['match_aligo_align']
-    print 'realigned: ', reconstruction['match_aligo']
-    del reconstruction
+matches=np.zeros(catlen)
+matches_align=np.zeros(catlen)
 
+for n, npcs in enumerate(xrange(1,catlen+1)):
+    reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
+    matches_align[n]=reconstruction['match_aligo_align'][0]
+    matches[n]=reconstruction['match_aligo'][0]
+
+print matches
 sys.exit()
+
+#sys.exit()
 #
 # Plotting
 #
 
-#sys.exit()
-
-f, ax = pl.subplots()
-
-ax.plot(reconstruction['sample_frequencies'],
-        abs(reconstruction['original_spectrum_align']), color='r',
-        linewidth=2)
-
-ax.plot(reconstruction['sample_frequencies'],
-        abs(reconstruction['recon_spectrum_align']), color='k')
-
-ax.set_xlim(0,1500)
-
+#
+# Matches
+#
+f, ax = pl.subplots(figsize=(7,5))
+ax.plot(range(1,catlen+1), matches_align, label='Aligned spectra')
+ax.plot(range(1,catlen+1), matches, label='Unaligned spectra')
+ax.set_xlabel('Number of Principal Components')
+ax.set_ylabel('Match')
+ax.minorticks_on()
+ax.grid()
+ax.legend(loc='lower right')
+f.tight_layout()
 pl.show()
+
+sys.exit()
+#
+# Eigenenergy
+#
+catlen=len(waveform_names)
+
+f, ax = pl.subplots(ncols=1,figsize=(7,5))
+
+ax.plot(range(1,catlen+1), 100*pmpca.pca['magnitude_eigenergy'], 
+     label='magnitudes')
+
+ax.plot(range(1,catlen+1), 100*pmpca.pca['phase_eigenergy'],
+     label='phases', color='b', linestyle='--')
+
+ax.set_xlabel('Number of Principal Components')
+ax.set_ylabel('% Variance Explained')
+ax.minorticks_on()
+ax.grid()
+ax.legend(loc='lower right')
+f.tight_layout()
+pl.show()
+
+sys.exit()
