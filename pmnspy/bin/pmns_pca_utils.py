@@ -72,8 +72,8 @@ def pca_magphase(complex_catalogue):
 
     magnitudes, phases = complex_to_polar(complex_catalogue)
 
-    for w in xrange(np.shape(complex_catalogue)[1]):
-        phases[:,w] = signal.detrend(phases[:,w])
+    #for w in xrange(np.shape(complex_catalogue)[1]):
+    #    phases[:,w] = signal.detrend(phases[:,w])
 
     mean_mag   = np.zeros(np.shape(complex_catalogue)[0])
     mean_phase = np.zeros(np.shape(complex_catalogue)[0])
@@ -303,6 +303,22 @@ def unshift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
 
     return unaligned_vector
 
+def dotmatch(vector1, vector2):
+    """
+    Compute the normalised dot product between vector1 and vector 2:
+
+    result = dot(vector1/norm(vector1), vector2/norm(vector2))
+
+    so that result=1 <=> vector1==vector2
+    """
+
+    #vector1_normed = vector1 / np.linalg.norm(vector1)
+    #vector2_normed = vector2 / np.linalg.norm(vector2)
+    vector1_normed = vector1 / np.sqrt(np.inner(vector1,vector1))
+    vector2_normed = vector2 / np.sqrt(np.inner(vector2,vector2))
+
+    #return np.dot(vector1_normed,vector2_normed)
+    return np.inner(vector1_normed,vector2_normed).real
 
 # _________________ CLASSES  _________________ #
 
@@ -410,6 +426,7 @@ class pmnsPCA:
         """
         #print "Analysing reconstruction with %d PCs"%npcs
 
+
         if this_fpeak==None:
             # Locate fpeak
             # Note: we'll assume the peak we're aligning to is >2kHz.  This
@@ -421,40 +438,112 @@ class pmnsPCA:
         # Get projection:
         projection = self.project(freqseries)
 
-        # Initialise reconstructions
-        recon_magnitude_align = np.copy(self.pca['mean_mag'])
-        recon_phase_align = np.copy(self.pca['mean_phase'])
+        reconstruction=dict()
+        #
+        # Original Waveforms
+        #
+        reconstruction['original_spectrum'] = unit_hrss(freqseries,
+                delta=self.delta_f, domain='frequency')
+        reconstruction['original_spectrum_align'] = \
+                unit_hrss(projection['freqseries_align'], delta=self.delta_f,
+                        domain='frequency')
+        reconstruction['sample_frequencies'] = np.copy(self.sample_frequencies)
 
-        # Reconstruct
-        tmp = np.zeros(len(freqseries), dtype=complex)
+        #
+        # Magnitude and phase reconstructions
+        #
+
+        # Initialise reconstructions
+        reconstruction['recon_magnitude_align'] = np.copy(self.pca['mean_mag'])
+        reconstruction['recon_phase_align'] = np.copy(self.pca['mean_phase'])
+
+        # Sum contributions from PCs
         for i in xrange(npcs):
 
             # Sanity Check: if the eigenvalue for the current PC is close to
             # zero, ignore that PC
-            if np.isclose(0, self.pca['magnitude_eigenvalues'][i]):
-                recon_magnitude_align += 0.0
+            #if np.isclose(0, self.pca['magnitude_eigenvalues'][i]):
+            if abs(self.pca['magnitude_eigenvalues'][i])<1e-5:
+                reconstruction['recon_magnitude_align'] += 0.0
             else:
-                recon_magnitude_align += projection['betas_magnitude'][i]*\
-                        self.pca['magnitude_pcs'][:,i]
+                reconstruction['recon_magnitude_align'] += \
+                        projection['betas_magnitude'][i]*self.pca['magnitude_pcs'][:,i]
 
-            if np.isclose(0, self.pca['phase_eigenvalues'][i]):
-                recon_phase_align += 0.0
+            #if np.isclose(0, self.pca['phase_eigenvalues'][i]):
+            if abs(self.pca['phase_eigenvalues'][i])<1e-5:
+                reconstruction['recon_phase_align'] += 0.0
             else:
-                recon_phase_align += projection['betas_phase'][i]*\
-                        self.pca['phase_pcs'][:,i]
+                reconstruction['recon_phase_align'] += \
+                        projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
 
-        # Return the reconstruction as a dictionary with complex frequency
-        # series for both the aligned and un-aligned waveforms (un-aligned is
-        # where we shift it back so that it has the desired peak frequency)
+        # --- Match calculations for mag/phase reconstructions
+        reconstruction['dotmatch_magnitude'] = dotmatch(
+                reconstruction['recon_magnitude_align'],
+                abs(reconstruction['original_spectrum_align']))
+        
+        reconstruction['dotmatch_phase'] = dotmatch(
+                reconstruction['recon_phase_align'],
+                np.unwrap(np.angle(reconstruction['original_spectrum_align'])))
 
-        reconstruction=dict()
+        #
+        # Fourier spectrum reconstructions
+        #
 
-        reconstruction['recon_spectrum_align'] = unit_hrss(recon_magnitude_align * \
-                np.exp(1j*recon_phase_align), delta=self.delta_f,
-                domain='frequency')
+        recmag = reconstruction['recon_magnitude_align']
+        orimag = abs(reconstruction['original_spectrum_align'])
 
-        #reconstruction['recon_spectrum_align'] = unit_hrss(tmp,
-        #        delta=self.delta_f, domain='frequency')
+        recphi = reconstruction['recon_phase_align']
+        oriphi = np.unwrap(np.angle(reconstruction['original_spectrum_align']))
+
+        # XXX
+
+        pl.figure()
+        pl.plot(recmag)
+        pl.plot(orimag)
+        print dotmatch(recmag,orimag)
+
+
+        pl.figure()
+        pl.plot(recphi)
+        pl.plot(oriphi)
+        print dotmatch(recphi,oriphi)
+
+    
+        reccplx = recmag*np.exp(1j*recphi)
+        oricplx = orimag*np.exp(1j*oriphi)
+
+        f, ax = pl.subplots(nrows=2)
+        ax[0].plot(reccplx.real)
+        ax[0].plot(oricplx.real)
+        ax[1].plot(reccplx.imag)
+        ax[1].plot(oricplx.imag)
+
+        reconstruction['recon_spectrum_align'] = \
+                unit_hrss(recmag*np.exp(1j*recphi),
+                delta=self.delta_f, domain='frequency')
+
+        reconstruction['match_noweight_align'] = \
+                pycbc.filter.overlap(reconstruction['recon_spectrum_align'],
+                        reconstruction['original_spectrum_align'],
+                        low_frequency_cutoff = self.low_frequency_cutoff)
+
+        print reconstruction['match_noweight_align']
+
+        reconstruction['match_noweight_align'] = \
+                pycbc.filter.match(reconstruction['recon_spectrum_align'],
+                        reconstruction['original_spectrum_align'],
+                        low_frequency_cutoff = self.low_frequency_cutoff)[0]
+
+        print reconstruction['match_noweight_align']
+
+        pl.show()
+        sys.exit()
+
+        # XXX
+
+        reconstruction['recon_spectrum_align'] = \
+                unit_hrss(recmag*np.exp(1j*recphi),
+                delta=self.delta_f, domain='frequency')
 
         recon_spectrum = unshift_vec(reconstruction['recon_spectrum_align'].data,
                 self.sample_frequencies, fpeak=this_fpeak)
@@ -462,45 +551,40 @@ class pmnsPCA:
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
 
-        # Throw in the originals for convenience
-        reconstruction['original_spectrum'] = unit_hrss(freqseries,
-                delta=self.delta_f, domain='frequency')
-        reconstruction['original_spectrum_align'] = \
-                unit_hrss(projection['freqseries_align'], delta=self.delta_f,
-                        domain='frequency')
-
-        reconstruction['sample_frequencies'] = np.copy(self.sample_frequencies)
-
-        #
-        # Finally, throw in some match calculations
-        #
+        # --- Match calculations for full reconstructions
 
         # make psd
         flen = len(self.sample_frequencies)
         psd = aLIGOZeroDetHighPower(flen, self.delta_f,
                 low_freq_cutoff=self.low_frequency_cutoff)
 
+        reconstruction['match_aligo_align'] = \
+               pycbc.filter.match(reconstruction['recon_spectrum_align'],
+                       reconstruction['original_spectrum_align'], psd = psd,
+                       low_frequency_cutoff = self.low_frequency_cutoff)[0]
+
         reconstruction['match_aligo'] = \
                 pycbc.filter.match(reconstruction['recon_spectrum'],
                         reconstruction['original_spectrum'], psd = psd,
+                        low_frequency_cutoff = self.low_frequency_cutoff)[0]
+
+        reconstruction['match_noweight_align'] = \
+                pycbc.filter.overlap(reconstruction['recon_spectrum_align'],
+                        reconstruction['original_spectrum_align'],
                         low_frequency_cutoff = self.low_frequency_cutoff)
 
-        reconstruction['match_aligo_align'] = \
-                pycbc.filter.match(reconstruction['recon_spectrum_align'],
-                        reconstruction['original_spectrum_align'], psd = psd,
-                        low_frequency_cutoff = self.low_frequency_cutoff)
+#               [dotmatch(reconstruction['recon_spectrum_align'],
+#                       reconstruction['original_spectrum_align'])]
+
 
         reconstruction['match_noweight'] = \
                 pycbc.filter.match(reconstruction['recon_spectrum'],
                         reconstruction['original_spectrum'],
-                        low_frequency_cutoff = self.low_frequency_cutoff)
+                        low_frequency_cutoff = self.low_frequency_cutoff)[0]
 
-        reconstruction['match_noweight_align'] = \
-                pycbc.filter.match(reconstruction['recon_spectrum_align'],
-                        reconstruction['original_spectrum_align'],
-                        low_frequency_cutoff = self.low_frequency_cutoff)
 
         return reconstruction
+
 
 
 
@@ -518,7 +602,8 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
         bar_label = 'match'
 
     #fig, ax = pl.subplots(figsize=(15,8))
-    fig, ax = pl.subplots(figsize=(7,7))
+    #fig, ax = pl.subplots(figsize=(7,7))
+    fig, ax = pl.subplots()
     nwaves = np.shape(match_matrix)[0]
     npcs = np.shape(match_matrix)[1]
 
@@ -623,234 +708,51 @@ def main():
     # Reconstructions 
     reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=1)
 
-    print reconstruction['match_aligo']
-
-
-    f, ax = pl.subplots()
-
-    ax.plot(reconstruction['sample_frequencies'],
-            abs(reconstruction['original_spectrum_align']), color='r',
-            linewidth=2)
-
-    ax.plot(reconstruction['sample_frequencies'],
-            abs(reconstruction['recon_spectrum_align']), color='k')
-
-    ax.set_xlim(0,1500)
-
-    #print projection['betas_magnitude']
-
-    pl.show()
-
-
-    sys.exit()
-
-
-
-
-
-
-
-
-
-
-
-    npcs = len(waveform_names)
-
-    #
-    # Build Catalogues
-    #
-    print "building catalogues"
-    fshift_center = 1000
-    (freqaxis, shift_cat, original_cat, fpeaks) = build_catalogues(waveform_names, fshift_center)
-    delta_f = np.diff(freqaxis)[0]
-
-    # Convert to magnitude/phase
-    full_mag, full_phase = complex_to_polar(original_cat)
-    shift_mag, shift_phase = complex_to_polar(shift_cat)
-
-
-    #
-    # PCA
-    #
-    print "Performing PCA"
-    shift_pca = pca_magphase(shift_cat, freqaxis, flow=10)
-    full_pca = pca_magphase(original_cat, freqaxis, flow=10)
-
-
-
-    #
-    # Compute idealised minimal matches
-    #
-    print "Computing all matches"
-    full_matches_ideal = idealised_matches(original_cat, full_pca, delta_f=delta_f, flow=1000)
-    shift_matches_ideal = idealised_matches(shift_cat, shift_pca,
-            delta_f=delta_f, flow=10) # careful with this one's flow!
-
-    unshift_matches_ideal = unaligned_matches(original_cat, shift_pca, fpeaks,
-            freqaxis, fcenter=fshift_center)
-
-
-    # ******** #
-    # Plotting #
-    # ******** #
-    imageformats=['png','eps','pdf']
-
-
-    #
-    # Plot Catalogues
-    #
-
-    # Magnitude
-    f, ax = pl.subplots(nrows=2,figsize=(7,15))
-    ax[0].plot(freqaxis, full_mag, label='full spectrum')
-    ax[0].set_xlim(1000, 5000)
-    ax[0].set_xlabel('Frequency [Hz]')
-    ax[0].set_ylabel('|H(f)|')
-    ax[0].minorticks_on()
-    ax[0].set_title('Full Spectrum (magnitude)')
-
-    ax[1].plot(freqaxis, shift_mag, label='aligned spectrum')
-    ax[1].set_xlim(0, fshift_center+1000)
-    ax[1].set_xlabel('Frequency [Hz]')
-    ax[1].set_ylabel('|H(f)|')
-    ax[1].minorticks_on()
-    ax[1].set_title('aligned Spectrum (magnitude)')
-
-    
-    f.tight_layout()
-    for fileformat in imageformats:
-        f.savefig('catalogue_magnitude_overlay.%s'%fileformat)
-
-    # Phase
-    f, ax = pl.subplots(nrows=2,figsize=(7,15))
-    a=0
-    ax[a].plot(freqaxis, full_phase, label='full spectrum')
-    ax[a].set_xlim(1000, 5000)
-    ax[a].set_xlabel('Frequency [Hz]')
-    ax[a].set_ylabel('arg[H(f)]')
-    ax[a].minorticks_on()
-    ax[a].set_title('Full Spectrum (phase)')
-
-    a+=1
-    ax[a].plot(freqaxis, shift_phase, label='aligned spectrum')
-    ax[a].set_xlim(0, fshift_center+1000)
-    ax[a].set_xlabel('Frequency [Hz]')
-    ax[a].set_ylabel('arg[H(f)]')
-    ax[a].minorticks_on()
-    ax[a].set_title('aligned Spectrum (phase)')
-
-    f.tight_layout()
-    for fileformat in imageformats:
-        f.savefig('catalogue_phase_overlay.%s'%fileformat)
-
-    #pl.show()
-
-    #
-    # Plot Magnitude PCs
-    #
-    f, ax = pl.subplots(nrows=2,figsize=(7,15))
-    a=0
-    ax[a].plot(freqaxis, abs(full_pca['magnitude_scores']), label='full spectrum')
-    ax[a].set_xlim(1000, 5000)
-    ax[a].set_xlabel('Frequency [Hz]')
-    ax[a].set_ylabel('|H(f)|')
-    ax[a].minorticks_on()
-    ax[a].set_title('Full Spectrum Principle Components (magnitude)')
-
-    a+=1
-    ax[a].plot(freqaxis, abs(shift_pca['magnitude_scores']), label='aligned spectrum')
-    ax[a].set_xlim(0, fshift_center+1000)
-    ax[a].set_xlabel('Frequency [Hz]')
-    ax[a].set_ylabel('|H(f)|')
-    ax[a].minorticks_on()
-    ax[a].set_title('aligned Spectrum Principle Components (magnitude)')
-
-    f.tight_layout()
-    for fileformat in imageformats:
-        f.savefig('pcs_magnitude_overlay.%s'%fileformat)
-    #pl.show()
-
-    #
-    # Plot Phase PCs
-    #
-    f, ax = pl.subplots(nrows=2,figsize=(7,15))
-    a=0
-    ax[a].plot(freqaxis, full_pca['phase_scores'], label='full spectrum')
-    ax[a].set_xlim(1000, 5000)
-    ax[a].set_xlabel('Frequency [Hz]')
-    ax[a].set_ylabel('Phase PCs')
-    ax[a].set_ylabel('arg[H(f)]')
-    ax[a].minorticks_on()
-    ax[a].set_title('Full Spectrum Principle Components (phase)')
-
-    a+=1
-    ax[a].plot(freqaxis, shift_pca['phase_scores'], label='aligned spectrum')
-    ax[a].set_xlim(0, fshift_center+1000)
-    ax[a].set_xlabel('Frequency [Hz]')
-    ax[a].set_ylabel('Phase PCs')
-    ax[a].set_ylabel('arg[H(f)]')
-    ax[a].minorticks_on()
-    ax[a].set_title('aligned Spectrum Principle Components (phase)')
-
-    f.tight_layout()
-    for fileformat in imageformats:
-        f.savefig('pcs_phase_overlay.%s'%fileformat)
-    #pl.show()
-
-    #
-    # PCA Diagnostics
-    #
-
-    # Eignenergies
-    f, ax = pl.subplots(nrows=1)#, figsize=(8,6), sharex=True)
-    npcs_axis = range(1,npcs+1)
-
-    ax.plot(npcs_axis, full_pca['magnitude_eigenergy'], label='full spectrum',
-            color='b')
-    ax.plot(npcs_axis, shift_pca['magnitude_eigenergy'], 
-            label='aligned spectrum', color='g')
-
-    ax.plot(npcs_axis, full_pca['phase_eigenergy'], linestyle='--', color='b')
-    ax.plot(npcs_axis, shift_pca['phase_eigenergy'], linestyle='--', color='g')
-
-    ax.legend(loc='lower right')
-    #ax.set_ylim(0,1)
-    ax.set_xlabel('Number of PCs')
-    ax.set_ylabel('Explained Variance (\%)')
-    ax.minorticks_on()
-
-    f.tight_layout()
-    for fileformat in imageformats:
-        f.savefig('eigenenergy.%s'%fileformat)
-    #pl.show()
-
-
-    # -----------
-    # Match Plots
-
-    #
-    # aligned waveforms
-    fig, ax = image_matches(shift_matches_ideal, waveform_names,
-            title="Matches For Full Aligned Spectrum PCA")
-
-    for fileformat in imageformats:
-        fig.savefig('shiftspec_ideal_matches.%s'%fileformat)
-
-
-    # UN-aligned waveforms
-    fig, ax = image_matches(unshift_matches_ideal, waveform_names,
-            title="Matches For aligned Full Spectrum PCA")
-
-    for fileformat in imageformats:
-        fig.savefig('unshiftspec_ideal_matches.%s'%fileformat)
-
-
-    # Original waveforms
-    fig, ax = image_matches(full_matches_ideal, waveform_names,
-            title="Matches For Full Spectrum PCA")
-
-    for fileformat in imageformats:
-        fig.savefig('fullspec_ideal_matches.%s'%fileformat)
+#   print reconstruction['match_aligo']
+#
+#
+#   f, ax = pl.subplots()
+#
+#   ax.plot(reconstruction['sample_frequencies'],
+#           abs(reconstruction['original_spectrum_align']), color='r',
+#           linewidth=2)
+#
+#   ax.plot(reconstruction['sample_frequencies'],
+#           abs(reconstruction['recon_spectrum_align']), color='k')
+#
+#   ax.set_xlim(0,1500)
+#
+#   #print projection['betas_magnitude']
+#
+#   pl.show()
+#
+#
+#   # -----------
+#   # Match Plots
+#
+#   #
+#   # aligned waveforms
+#   fig, ax = image_matches(shift_matches_ideal, waveform_names,
+#           title="Matches For Full Aligned Spectrum PCA")
+#
+#   for fileformat in imageformats:
+#       fig.savefig('shiftspec_ideal_matches.%s'%fileformat)
+#
+#
+#   # UN-aligned waveforms
+#   fig, ax = image_matches(unshift_matches_ideal, waveform_names,
+#           title="Matches For aligned Full Spectrum PCA")
+#
+#   for fileformat in imageformats:
+#       fig.savefig('unshiftspec_ideal_matches.%s'%fileformat)
+#
+#
+#   # Original waveforms
+#   fig, ax = image_matches(full_matches_ideal, waveform_names,
+#           title="Matches For Full Spectrum PCA")
+#
+#   for fileformat in imageformats:
+#       fig.savefig('fullspec_ideal_matches.%s'%fileformat)
 
 
 

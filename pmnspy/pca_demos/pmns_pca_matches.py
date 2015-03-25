@@ -75,13 +75,16 @@ catlen = len(waveform_names)
 # Create PMNS PCA instance for this catalogue
 #
 
-pmpca = ppca.pmnsPCA(waveform_names)
+pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=0)
 
 #
 # Exact matches (include test waveform in training data)
 #
 exact_matches=np.zeros(shape=(catlen, catlen))
 exact_matches_align=np.zeros(shape=(catlen, catlen))
+
+exact_dotmatch_magnitude=np.zeros(shape=(catlen, catlen))
+exact_dotmatch_phase=np.zeros(shape=(catlen, catlen))
 
 for w,testwav_name in enumerate(waveform_names):
 
@@ -106,18 +109,33 @@ for w,testwav_name in enumerate(waveform_names):
     for n, npcs in enumerate(xrange(1,catlen+1)):
         reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
-        exact_matches_align[w,n]=reconstruction['match_aligo_align'][0]
-        exact_matches[w,n]=reconstruction['match_aligo'][0]
+        exact_matches_align[w,n]=reconstruction['match_noweight_align']
+        exact_matches[w,n]=reconstruction['match_noweight']
+
+        exact_dotmatch_magnitude[w,n]=reconstruction['dotmatch_magnitude']
+        exact_dotmatch_phase[w,n]=reconstruction['dotmatch_phase']
+
 
 # ***** Plot Results ***** #
 
 #
 # Exact Matches
 #
-f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=True,
+#f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=True,
+#        title="Reconstructing including the test waveform")
+
+f, ax = ppca.image_matches(exact_dotmatch_magnitude, waveform_names,
+        mismatch=False, title="Magnitudes")
+
+f, ax = ppca.image_matches(exact_dotmatch_phase, waveform_names,
+        mismatch=False, title="Phases")
+
+f, ax = ppca.image_matches(exact_matches_align, waveform_names, mismatch=False,
         title="Reconstructing including the test waveform")
-f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
-        title="Reconstructing including the test waveform")
+pl.show()
+sys.exit()
+
+
 
 #
 # Eigenenergy
@@ -138,8 +156,6 @@ ax.minorticks_on()
 ax.grid()
 ax.legend(loc='lower right')
 f.tight_layout()
-
-pl.show()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Realistic catalogues
@@ -201,5 +217,7 @@ f, ax = ppca.image_matches(real_matches, waveform_names, mismatch=False,
         title="Reconstructing excluding the test waveform")
 
 
+
+pl.show()
 
 sys.exit()
