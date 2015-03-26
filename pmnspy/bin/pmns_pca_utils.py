@@ -73,17 +73,37 @@ def pca_magphase(magnitudes, phases):
     #for w in xrange(np.shape(phases)[1]):
     #    phases[:,w] = signal.detrend(phases[:,w])
 
+    #
+    # Centering
+    #
     mean_mag   = np.zeros(np.shape(magnitudes)[0])
     mean_phase = np.zeros(np.shape(phases)[0])
     for s in xrange(np.shape(magnitudes)[0]):
         mean_mag[s]   = np.mean(magnitudes[s,:])
         mean_phase[s] = np.mean(phases[s,:])
 
+
     magnitudes_centered = np.copy(magnitudes)
     phases_centered = np.copy(phases)
     for w in xrange(np.shape(magnitudes)[1]):
         magnitudes_centered[:,w] -= mean_mag
         phases_centered[:,w] -= mean_phase
+
+    #
+    # Scaling
+    #
+    std_mag   = np.zeros(np.shape(magnitudes)[0])
+    std_phase = np.zeros(np.shape(phases)[0])
+    for s in xrange(np.shape(magnitudes)[0]):
+
+        std_mag[s] = np.std(magnitudes_centered[s,:])
+        std_phase[s] = 1.0#np.std(phases_centered[s,:])
+        #std_mag[s] = np.inner(magnitudes_centered[s,:],magnitudes_centered[s,:])
+        #std_phase[s] = np.inner(phases_centered[s,:],phases_centered[s,:])
+
+    for w in xrange(np.shape(magnitudes)[1]):
+        magnitudes_centered[:,w] /= std_mag
+        phases_centered[:,w] /= std_phase
 
     pcs_magphase = {}
 
@@ -102,6 +122,9 @@ def pca_magphase(magnitudes, phases):
 
     pcs_magphase['mean_mag'] = mean_mag
     pcs_magphase['mean_phase'] = mean_phase
+
+    pcs_magphase['std_mag'] = std_mag
+    pcs_magphase['std_phase'] = std_phase
 
     return pcs_magphase
 
@@ -363,16 +386,29 @@ class pmnsPCA:
 
         self.magnitude, self.phase = complex_to_polar(self.cat_orig)
 
-        self.magnitude_align, self.phase_align = \
-                complex_to_polar(self.cat_align)
+        self.magnitude_align = np.zeros(np.shape(self.magnitude))
+        for i in xrange(np.shape(self.magnitude)[1]):
+            self.magnitude_align[:,i] = shift_vec(self.magnitude[:,i],
+                    self.sample_frequencies, self.fpeaks[i], self.fcenter).real
 
         # Do PCA
-        #self.pca = pca_magphase(self.magnitude_align, self.phase_align)
         self.pca = pca_magphase(self.magnitude_align, self.phase)
 
         # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
         # WHY ARE MAGNITUDES SUDDENLY SHITTY?
         # WE'RE BEING CAREFUL ABOUT OVERALL SCALE FOR MAGNITUDES, BUT NOT PHASE
+
+        # Problem may lie with the alignment:  looks like there are off-by-one
+        # errors in the samples when we compare the alignment of the magnitude
+        # spectrum with the magnitude of the aligned complex spectrum, for
+        # example. ... dialling up the number of time samples didn't help tho
+
+#       N =max(abs(self.cat_align[:,0]))/max(self.magnitude_align[:,0])
+#       pl.figure()
+#       pl.plot(self.sample_frequencies,
+#               abs(abs(self.cat_align[:,0])-self.magnitude_align[:,0]*N))
+#       pl.show()
+#       sys.exit()
 
 
     def project(self, freqseries, this_fpeak=None):
@@ -413,14 +449,15 @@ class pmnsPCA:
 
         # Complex to polar
         testwav_magnitude, testwav_phase = complex_to_polar(freqseries)
-        testwav_magnitude_align, testwav_phase_align = complex_to_polar(freqseries_align.data)
 
-        # Center test spectrum
-        magnitude_cent = testwav_magnitude_align - self.pca['mean_mag']
-        #phase_cent = testwav_phase_align - self.pca['mean_phase']
+        testwav_magnitude_align = shift_vec(testwav_magnitude,
+                self.sample_frequencies, this_fpeak, self.fcenter).real
 
-        #magnitude_cent = testwav_magnitude - self.pca['mean_mag']
-        phase_cent = testwav_phase - self.pca['mean_phase']
+        #
+        # Center & scale test spectrum
+        #
+        magnitude_cent = (testwav_magnitude_align - self.pca['mean_mag']) / self.pca['std_mag']
+        phase_cent = (testwav_phase - self.pca['mean_phase']) / self.pca['std_phase']
 
         # Finally, project test spectrum onto PCs (dot product between data and PCs)
         projection['betas_magnitude'] = np.dot(magnitude_cent,
@@ -453,12 +490,17 @@ class pmnsPCA:
 
         # Get projection:
         projection = self.project(freqseries)
-
         reconstruction=dict()
+
         #
         # Original Waveforms
         #
         reconstruction['original_spectrum'] = unit_hrss(freqseries,
+                delta=self.delta_f, domain='frequency')
+
+        freqseries_align = shift_vec(freqseries, self.sample_frequencies,
+                this_fpeak)
+        reconstruction['original_spectrum_align'] = unit_hrss(freqseries_align,
                 delta=self.delta_f, domain='frequency')
 
         reconstruction['sample_frequencies'] = np.copy(self.sample_frequencies)
@@ -468,8 +510,8 @@ class pmnsPCA:
         #
 
         # Initialise reconstructions
-        recmag = np.copy(self.pca['mean_mag'])
-        recphi = np.copy(self.pca['mean_phase'])
+        recmag = np.zeros(shape=np.shape(self.pca['mean_mag']))
+        recphi = np.zeros(shape=np.shape(self.pca['mean_phase']))
 
         # Sum contributions from PCs
         for i in xrange(npcs):
@@ -477,31 +519,32 @@ class pmnsPCA:
             # Sanity Check: if the eigenvalue for the current PC is close to
             # zero, ignore that PC
 
-            if abs(self.pca['magnitude_eigenvalues'][i])<1e-5:
+            if abs(self.pca['magnitude_eigenvalues'][i])<1e-8:
                 recmag += 0.0
             else:
                 recmag += \
                         projection['betas_magnitude'][i]*self.pca['magnitude_pcs'][:,i]
                                 
-            if abs(self.pca['phase_eigenvalues'][i])<1e-5:
+            if abs(self.pca['phase_eigenvalues'][i])<1e-8:
                 recphi += 0.0
             else:
                 recphi += \
                         projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
+                        #projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
+
+        #
+        # De-center the reconstruction
+        #
+        recmag = (recmag * self.pca['std_mag']) + self.pca['mean_mag']
+        recphi = (recphi * self.pca['std_phase']) + self.pca['mean_phase']
 
 
+        #
         # Move the spectrum back to where it should be
-
-        #recspec = unshift_vec(recmag*np.exp(1j*recphi), self.sample_frequencies,
-        #        fpeak=this_fpeak)
-        #recmag = abs(recspec)
-        #recphi = np.unwrap(np.angle(recspec))
+        #
 
         recmag = unshift_vec(recmag, self.sample_frequencies,
                 fpeak=this_fpeak).real
-
-        #recphi = unshift_vec(recphi, self.sample_frequencies,
-        #        fpeak=this_fpeak).real
 
 
         #
@@ -511,87 +554,12 @@ class pmnsPCA:
         orimag = abs(reconstruction['original_spectrum'].data)
         oriphi = np.unwrap(np.angle(reconstruction['original_spectrum'].data))
 
-        recon_spectrum = recmag * np.exp(1j*recphi)
+        #recon_spectrum = recmag * np.exp(1j*recphi)
+        recon_spectrum = recmag * (np.cos(recphi) + 1j*np.sin(recphi))
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
 
-        # XXX
- 
-#       recmag = abs(reconstruction['recon_spectrum'].data)
-#       recphi = np.unwrap(np.angle(reconstruction['recon_spectrum'].data))
-#
-#
-#       pl.figure()
-#       pl.plot(recmag, label='reconstructed')
-#       pl.plot(orimag, label='original')
-#       pl.xlabel('frequency index')
-#       pl.ylabel('magnitude')
-#       #pl.title('magnitude spectra: (rec|original)=%.2f'%innerprod(recmag,orimag))
-#       pl.title('magnitude spectra: residual=%.2e'%residual_power(recmag,orimag))
-#       #pl.xlim(0,3000)
-#
-#       pl.figure()
-#       pl.plot(recphi, label='reconstructed')
-#       pl.plot(oriphi, label='original')
-#       pl.xlabel('frequency index')
-#       pl.ylabel('phase')
-#       #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
-#       pl.title('phase spectra: residual=%.2e'%residual_power(recphi,oriphi))
-#       #pl.xlim(0,3000)
-#
-#       pl.figure()
-#       pl.plot(abs(recphi-oriphi), label='|residual|')
-#       pl.xlabel('frequency index')
-#       pl.ylabel('phase')
-#       #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
-#       pl.title('phase residual spectra: residual=%.2e'%residual_power(recphi,oriphi))
-#       #pl.xlim(0,3000)
-#
-#   
-#       reccplx = recmag*np.exp(1j*recphi)
-#       oricplx = orimag*np.exp(1j*oriphi)
-#
-#       f, ax = pl.subplots(nrows=2)
-#       ax[0].plot(reccplx.real, label='reconstructed')
-#       ax[0].plot(oricplx.real, label='original')
-#       ax[0].set_xlabel('frequency index')
-#       ax[0].set_ylabel('Re[H(f)]')
-#       ax[1].plot(reccplx.imag, label='reconstructed')
-#       ax[1].plot(oricplx.imag, label='original')
-#       ax[1].set_xlabel('frequency index')
-#       ax[1].set_ylabel('Im[H(f)]')
-#
-#       reconstruction['recon_spectrum_align'] = \
-#               unit_hrss(recmag*np.exp(1j*recphi),
-#               delta=self.delta_f, domain='frequency')
-#
-#       ov = \
-#               pycbc.filter.overlap(reconstruction['recon_spectrum'],
-#                       reconstruction['original_spectrum'],
-#                       low_frequency_cutoff = self.low_frequency_cutoff)
-#
-#       ma = \
-#               pycbc.filter.match(reconstruction['recon_spectrum'],
-#                       reconstruction['original_spectrum'],
-#                       low_frequency_cutoff = self.low_frequency_cutoff)[0]
-#
-#       ax[0].set_title('H(f): match=%.3f, overlap=%.3f'%(ma,ov))
-#       #ax[0].set_xlim(0,3000)
-#       #ax[1].set_xlim(0,3000)
-#
-#       pl.show()
-#       sys.exit()
-#
-#       # XXX
-
         # --- Match calculations for mag/phase reconstructions
-        #reconstruction['innerprod_magnitude'] = innerprod(
-        #        recmag, abs(reconstruction['original_spectrum']))
-        
-        #reconstruction['innerprod_phase'] = innerprod(
-        #        recphi,
-        #        np.unwrap(np.angle(reconstruction['original_spectrum'])))
-
         recmag = abs(reconstruction['recon_spectrum'].data)
         recphi = np.unwrap(np.angle(reconstruction['recon_spectrum'].data))
 
@@ -603,7 +571,6 @@ class pmnsPCA:
 
 
         # --- Match calculations for full reconstructions
-
         # make psd
         flen = len(self.sample_frequencies)
         psd = aLIGOZeroDetHighPower(flen, self.delta_f,
@@ -620,6 +587,74 @@ class pmnsPCA:
                 pycbc.filter.match(reconstruction['recon_spectrum'],
                         reconstruction['original_spectrum'],
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
+
+        # XXX
+ 
+ 
+        if False:
+            pl.figure()
+            pl.plot(recmag, label='reconstructed')
+            pl.plot(orimag, label='original')
+            pl.xlabel('frequency index')
+            pl.ylabel('magnitude')
+            #pl.title('magnitude spectra: (rec|original)=%.2f'%innerprod(recmag,orimag))
+            pl.title('magnitude spectra: residual=%.2e'%residual_power(recmag,orimag))
+            #pl.xlim(0,3000)
+     
+            pl.figure()
+            pl.plot(recphi, label='reconstructed')
+            pl.plot(oriphi, label='original')
+            pl.xlabel('frequency index')
+            pl.ylabel('phase')
+            #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
+            pl.title('phase spectra: residual=%.2e'%residual_power(recphi,oriphi))
+            #pl.xlim(0,3000)
+     
+            pl.figure()
+            pl.plot(abs(recphi-oriphi), label='|residual|')
+            pl.xlabel('frequency index')
+            pl.ylabel('phase')
+            #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
+            pl.title('phase residual spectra: residual=%.2e'%residual_power(recphi,oriphi))
+            #pl.xlim(0,3000)
+     
+        
+            reccplx = recmag*np.exp(1j*recphi)
+            oricplx = orimag*np.exp(1j*oriphi)
+     
+            f, ax = pl.subplots(nrows=2)
+            ax[0].plot(reccplx.real, label='reconstructed')
+            ax[0].plot(oricplx.real, label='original')
+            ax[0].set_xlabel('frequency index')
+            ax[0].set_ylabel('Re[H(f)]')
+            ax[1].plot(reccplx.imag, label='reconstructed')
+            ax[1].plot(oricplx.imag, label='original')
+            ax[1].set_xlabel('frequency index')
+            ax[1].set_ylabel('Im[H(f)]')
+     
+            reconstruction['recon_spectrum_align'] = \
+                    unit_hrss(recmag*np.exp(1j*recphi),
+                    delta=self.delta_f, domain='frequency')
+     
+            ov = \
+                    pycbc.filter.overlap(reconstruction['recon_spectrum'],
+                            reconstruction['original_spectrum'],
+                            low_frequency_cutoff = self.low_frequency_cutoff)
+     
+            ma = \
+                    pycbc.filter.match(reconstruction['recon_spectrum'],
+                            reconstruction['original_spectrum'],
+                            low_frequency_cutoff = self.low_frequency_cutoff)[0]
+     
+            ax[0].set_title('H(f): match=%.3f, overlap=%.3f'%(ma,ov))
+            #ax[0].set_xlim(0,3000)
+            #ax[1].set_xlim(0,3000)
+     
+            pl.show()
+            sys.exit()
+    #
+    #       # XXX
+
 
 
         return reconstruction
@@ -674,9 +709,9 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
     if title is not None:
         ax.set_title(title)
 
-    c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
-            orientation='horizontal')
-    c.set_label(bar_label)
+    #c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
+    #        orientation='horizontal')
+    #c.set_label(bar_label)
 
     fig.tight_layout()
 
@@ -724,9 +759,9 @@ def image_residuals(residuals_matrix, waveform_names, title=None):
     if title is not None:
         ax.set_title(title)
 
-    c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
-            orientation='horizontal')
-    c.set_label(bar_label)
+    #c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
+    #        orientation='horizontal')
+    #c.set_label(bar_label)
 
     fig.tight_layout()
 
