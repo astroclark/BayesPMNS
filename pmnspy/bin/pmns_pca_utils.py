@@ -65,24 +65,22 @@ def pca_by_svd(matrix):
 
     return PC_scores, U, V, S**2 
 
-def pca_magphase(complex_catalogue):
+def pca_magphase(magnitudes, phases):
     """
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
 
-    magnitudes, phases = complex_to_polar(complex_catalogue)
-
     #for w in xrange(np.shape(complex_catalogue)[1]):
     #    phases[:,w] = signal.detrend(phases[:,w])
 
-    mean_mag   = np.zeros(np.shape(complex_catalogue)[0])
-    mean_phase = np.zeros(np.shape(complex_catalogue)[0])
-    for s in xrange(np.shape(complex_catalogue)[0]):
+    mean_mag   = np.zeros(np.shape(magnitudes)[0])
+    mean_phase = np.zeros(np.shape(phases)[0])
+    for s in xrange(np.shape(magnitudes)[0]):
         mean_mag[s]   = np.mean(magnitudes[s,:])
         mean_phase[s] = np.mean(phases[s,:])
 
 
-    for w in xrange(np.shape(complex_catalogue)[1]):
+    for w in xrange(np.shape(magnitudes)[1]):
         magnitudes[:,w] -= mean_mag
         phases[:,w] -= mean_phase
 
@@ -142,8 +140,7 @@ def taper(input_data, delta_t=1./16384):
 
 def build_catalogues(waveform_names, fshift_center):
     """
-    Build the low, high and full catalogues, including data conditioning for the
-    waveforms in the list of names waveform_names
+    Build the data matrix
     """
 
     sample_freq=16384
@@ -355,8 +352,11 @@ class pmnsPCA:
         self.magnitudes_align, self.phases_align = \
                 complex_to_polar(self.cat_align)
 
+        self.magnitudes, self.phases = \
+                complex_to_polar(self.cat_orig)
+
         # Do PCA
-        self.pca = pca_magphase(self.cat_align)
+        self.pca = pca_magphase(self.magnitudes_align, self.phases)
 
     def project(self, freqseries, this_fpeak=None):
         """
@@ -495,63 +495,63 @@ class pmnsPCA:
         recphi = reconstruction['recon_phase_align']
         oriphi = np.unwrap(np.angle(reconstruction['original_spectrum_align']))
 
-        # XXX
-
-        pl.figure()
-        pl.plot(recmag, label='reconstructed')
-        pl.plot(orimag, label='original')
-        pl.xlabel('frequency index')
-        pl.ylabel('magnitude')
-        pl.title('magnitude spectra: (rec|original)=%.2f'%dotmatch(recmag,orimag))
-        pl.xlim(0,1500)
-        pl.xlim(0,1500)
-
-
-        pl.figure()
-        pl.plot(recphi, label='reconstructed')
-        pl.plot(oriphi, label='original')
-        pl.xlabel('frequency index')
-        pl.ylabel('phase')
-        pl.title('phase spectra: (rec|original)=%.2f'%dotmatch(recphi,oriphi))
-        pl.xlim(0,1500)
-        pl.xlim(0,1500)
-
-    
-        reccplx = recmag*np.exp(1j*recphi)
-        oricplx = orimag*np.exp(1j*oriphi)
-
-        f, ax = pl.subplots(nrows=2)
-        ax[0].plot(reccplx.real, label='reconstructed')
-        ax[0].plot(oricplx.real, label='original')
-        ax[0].set_xlabel('frequency index')
-        ax[0].set_ylabel('Re[H(f)]')
-        ax[1].plot(reccplx.imag, label='reconstructed')
-        ax[1].plot(oricplx.imag, label='original')
-        ax[1].set_xlabel('frequency index')
-        ax[1].set_ylabel('Im[H(f)]')
-
-        reconstruction['recon_spectrum_align'] = \
-                unit_hrss(recmag*np.exp(1j*recphi),
-                delta=self.delta_f, domain='frequency')
-
-        ov = \
-                pycbc.filter.overlap(reconstruction['recon_spectrum_align'],
-                        reconstruction['original_spectrum_align'],
-                        low_frequency_cutoff = self.low_frequency_cutoff)
-
-        ma = \
-                pycbc.filter.match(reconstruction['recon_spectrum_align'],
-                        reconstruction['original_spectrum_align'],
-                        low_frequency_cutoff = self.low_frequency_cutoff)[0]
-
-        ax[0].set_title('H(f): match=%.3f, overlap=%.3f'%(ma,ov))
-        ax[0].set_xlim(0,1500)
-        ax[1].set_xlim(0,1500)
-
-        pl.show()
-        sys.exit()
-
-        # XXX
+#       # XXX
+#
+#       pl.figure()
+#       pl.plot(recmag, label='reconstructed')
+#       pl.plot(orimag, label='original')
+#       pl.xlabel('frequency index')
+#       pl.ylabel('magnitude')
+#       pl.title('magnitude spectra: (rec|original)=%.2f'%dotmatch(recmag,orimag))
+#       pl.xlim(0,1500)
+#       pl.xlim(0,1500)
+#
+#
+#       pl.figure()
+#       pl.plot(recphi, label='reconstructed')
+#       pl.plot(oriphi, label='original')
+#       pl.xlabel('frequency index')
+#       pl.ylabel('phase')
+#       pl.title('phase spectra: (rec|original)=%.2f'%dotmatch(recphi,oriphi))
+#       pl.xlim(0,1500)
+#       pl.xlim(0,1500)
+#
+#   
+#       reccplx = recmag*np.exp(1j*recphi)
+#       oricplx = orimag*np.exp(1j*oriphi)
+#
+#       f, ax = pl.subplots(nrows=2)
+#       ax[0].plot(reccplx.real, label='reconstructed')
+#       ax[0].plot(oricplx.real, label='original')
+#       ax[0].set_xlabel('frequency index')
+#       ax[0].set_ylabel('Re[H(f)]')
+#       ax[1].plot(reccplx.imag, label='reconstructed')
+#       ax[1].plot(oricplx.imag, label='original')
+#       ax[1].set_xlabel('frequency index')
+#       ax[1].set_ylabel('Im[H(f)]')
+#
+#       reconstruction['recon_spectrum_align'] = \
+#               unit_hrss(recmag*np.exp(1j*recphi),
+#               delta=self.delta_f, domain='frequency')
+#
+#       ov = \
+#               pycbc.filter.overlap(reconstruction['recon_spectrum_align'],
+#                       reconstruction['original_spectrum_align'],
+#                       low_frequency_cutoff = self.low_frequency_cutoff)
+#
+#       ma = \
+#               pycbc.filter.match(reconstruction['recon_spectrum_align'],
+#                       reconstruction['original_spectrum_align'],
+#                       low_frequency_cutoff = self.low_frequency_cutoff)[0]
+#
+#       ax[0].set_title('H(f): match=%.3f, overlap=%.3f'%(ma,ov))
+#       ax[0].set_xlim(0,1500)
+#       ax[1].set_xlim(0,1500)
+#
+#       pl.show()
+#       sys.exit()
+#
+#       # XXX
 
         reconstruction['recon_spectrum_align'] = \
                 unit_hrss(recmag*np.exp(1j*recphi),
