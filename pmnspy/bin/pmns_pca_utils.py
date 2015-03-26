@@ -97,9 +97,7 @@ def pca_magphase(magnitudes, phases):
     for s in xrange(np.shape(magnitudes)[0]):
 
         std_mag[s] = np.std(magnitudes_centered[s,:])
-        std_phase[s] = 1.0#np.std(phases_centered[s,:])
-        #std_mag[s] = np.inner(magnitudes_centered[s,:],magnitudes_centered[s,:])
-        #std_phase[s] = np.inner(phases_centered[s,:],phases_centered[s,:])
+        std_phase[s] = np.std(phases_centered[s,:])
 
     for w in xrange(np.shape(magnitudes)[1]):
         magnitudes_centered[:,w] /= std_mag
@@ -145,22 +143,6 @@ def complex_to_polar(catalogue):
         phases[:,c] = np.unwrap(np.angle(catalogue[:,c]))
 
     return magnitudes, phases
-
-
-
-def taper(input_data, delta_t=1./16384):
-    """  
-    Apply a taper to the start/end of the data in input_data
-    """
-
-    timeseries = lal.CreateREAL8TimeSeries('blah', 0.0, 0,
-            delta_t, lal.StrainUnit, int(len(input_data)))
-
-    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
-        lalsim.SIM_INSPIRAL_TAPER_START)
-        #lalsim.SIM_INSPIRAL_TAPER_STARTEND)
-
-    return timeseries.data.data
 
 def build_catalogues(waveform_names, fshift_center):
     """
@@ -275,27 +257,6 @@ def eigenergy(eigenvalues):
 
     return gj
 
-def comp_match(freqseries1, freqseries2, delta_f=1.0, flow=10., fhigh=8192,
-        weighted=True):
-    """ 
-    """
-
-    tmp1 = pycbc.types.FrequencySeries(initial_array=freqseries1, delta_f=delta_f)
-    tmp2 = pycbc.types.FrequencySeries(initial_array=freqseries2, delta_f=delta_f)
-
-    if weighted:
-
-        # make psd
-        flen = len(tmp1)
-        psd = aLIGOZeroDetHighPower(flen, delta_f, low_freq_cutoff=flow)
-
-        return pycbc.filter.match(tmp1, tmp2, psd=psd,
-                low_frequency_cutoff=flow, high_frequency_cutoff=fhigh)[0]
-
-    else:
-
-        return pycbc.filter.match(tmp1, tmp2, low_frequency_cutoff=flow,
-                high_frequency_cutoff=fhigh)[0]
 
 
 def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
@@ -312,32 +273,6 @@ def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
     return aligned_vector
 
 
-def unshift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
-
-    # Frequency shift
-    fshift = fpeak / fcenter
-    false_freqs = target_freqs * fshift
-
-    unaligned_spec_real = np.interp(target_freqs, false_freqs, np.real(vector))
-    unaligned_spec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
-
-    unaligned_vector = unaligned_spec_real + 1j*unaligned_spec_imag
-
-    return unaligned_vector
-
-def innerprod(vector1, vector2):
-    """
-    Compute the normalised dot product between vector1 and vector 2:
-
-    result = dot(vector1/norm(vector1), vector2/norm(vector2))
-
-    so that result=1 <=> vector1==vector2
-    """
-
-    vec1vec1 = np.inner(vector1,vector1)
-    vec2vec2 = np.inner(vector2,vector2)
-
-    return (np.inner(vector1,vector2) / np.sqrt(vec1vec1 * vec2vec2)).real
 
 def residual_power(vector1, vector2):
     """
@@ -543,8 +478,8 @@ class pmnsPCA:
         # Move the spectrum back to where it should be
         #
 
-        recmag = unshift_vec(recmag, self.sample_frequencies,
-                fpeak=this_fpeak).real
+        recmag = shift_vec(recmag, self.sample_frequencies,
+                fcenter=this_fpeak, fpeak=self.fcenter).real
 
 
         #
