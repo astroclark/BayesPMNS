@@ -498,43 +498,55 @@ class pmnsPCA:
         # XXX
 
         pl.figure()
-        pl.plot(recmag)
-        pl.plot(orimag)
-        print dotmatch(recmag,orimag)
+        pl.plot(recmag, label='reconstructed')
+        pl.plot(orimag, label='original')
+        pl.xlabel('frequency index')
+        pl.ylabel('magnitude')
+        pl.title('magnitude spectra: (rec|original)=%.2f'%dotmatch(recmag,orimag))
+        pl.xlim(0,1500)
+        pl.xlim(0,1500)
 
 
         pl.figure()
-        pl.plot(recphi)
-        pl.plot(oriphi)
-        print dotmatch(recphi,oriphi)
+        pl.plot(recphi, label='reconstructed')
+        pl.plot(oriphi, label='original')
+        pl.xlabel('frequency index')
+        pl.ylabel('phase')
+        pl.title('phase spectra: (rec|original)=%.2f'%dotmatch(recphi,oriphi))
+        pl.xlim(0,1500)
+        pl.xlim(0,1500)
 
     
         reccplx = recmag*np.exp(1j*recphi)
         oricplx = orimag*np.exp(1j*oriphi)
 
         f, ax = pl.subplots(nrows=2)
-        ax[0].plot(reccplx.real)
-        ax[0].plot(oricplx.real)
-        ax[1].plot(reccplx.imag)
-        ax[1].plot(oricplx.imag)
+        ax[0].plot(reccplx.real, label='reconstructed')
+        ax[0].plot(oricplx.real, label='original')
+        ax[0].set_xlabel('frequency index')
+        ax[0].set_ylabel('Re[H(f)]')
+        ax[1].plot(reccplx.imag, label='reconstructed')
+        ax[1].plot(oricplx.imag, label='original')
+        ax[1].set_xlabel('frequency index')
+        ax[1].set_ylabel('Im[H(f)]')
 
         reconstruction['recon_spectrum_align'] = \
                 unit_hrss(recmag*np.exp(1j*recphi),
                 delta=self.delta_f, domain='frequency')
 
-        reconstruction['match_noweight_align'] = \
+        ov = \
                 pycbc.filter.overlap(reconstruction['recon_spectrum_align'],
                         reconstruction['original_spectrum_align'],
                         low_frequency_cutoff = self.low_frequency_cutoff)
 
-        print reconstruction['match_noweight_align']
-
-        reconstruction['match_noweight_align'] = \
+        ma = \
                 pycbc.filter.match(reconstruction['recon_spectrum_align'],
                         reconstruction['original_spectrum_align'],
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
 
-        print reconstruction['match_noweight_align']
+        ax[0].set_title('H(f): match=%.3f, overlap=%.3f'%(ma,ov))
+        ax[0].set_xlim(0,1500)
+        ax[1].set_xlim(0,1500)
 
         pl.show()
         sys.exit()
