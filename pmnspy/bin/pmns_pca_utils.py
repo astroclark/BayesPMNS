@@ -79,20 +79,21 @@ def pca_magphase(magnitudes, phases):
         mean_mag[s]   = np.mean(magnitudes[s,:])
         mean_phase[s] = np.mean(phases[s,:])
 
-
+    magnitudes_centered = np.copy(magnitudes)
+    phases_centered = np.copy(phases)
     for w in xrange(np.shape(magnitudes)[1]):
-        magnitudes[:,w] -= mean_mag
-        phases[:,w] -= mean_phase
+        magnitudes_centered[:,w] -= mean_mag
+        phases_centered[:,w] -= mean_phase
 
     pcs_magphase = {}
 
     pcs_magphase['magnitude_scores'], pcs_magphase['magnitude_pcs'], \
             pcs_magphase['magnitude_betas'], pcs_magphase['magnitude_eigenvalues'] = \
-            pca_by_svd(magnitudes)
+            pca_by_svd(magnitudes_centered)
 
     pcs_magphase['phase_scores'], pcs_magphase['phase_pcs'], \
             pcs_magphase['phase_betas'], pcs_magphase['phase_eigenvalues'] = \
-            pca_by_svd(phases)
+            pca_by_svd(phases_centered)
 
     pcs_magphase['magnitude_eigenergy'] = \
             eigenergy(pcs_magphase['magnitude_eigenvalues'])
@@ -182,6 +183,7 @@ def build_catalogues(waveform_names, fshift_center):
         # Populate catalogue with reconstructed, normalised aligned spectrum
         aligned_cat[:,w] = unit_hrss(aligned_spectrum,
                 delta=original_spectrum.delta_f, domain='frequency') 
+        #aligned_cat[original_frequencies>2000] = 0.0
 
     return (original_frequencies, aligned_cat, original_cat, fpeaks)
 
@@ -336,7 +338,7 @@ class pmnsPCA:
 
     """
 
-    def __init__(self, waveform_list, fcenter=1000, low_frequency_cutoff=1000):
+    def __init__(self, waveform_list, fcenter=1000, low_frequency_cutoff=0):
 
         #
         # Build Catalogues
@@ -365,9 +367,13 @@ class pmnsPCA:
                 complex_to_polar(self.cat_align)
 
         # Do PCA
-        self.pca = pca_magphase(self.magnitude_align, self.phase_align)
-        #self.pca = pca_magphase(self.magnitude, self.phase)
-        #self.pca = pca_magphase(self.magnitude_align, self.phase)
+        #self.pca = pca_magphase(self.magnitude_align, self.phase_align)
+        self.pca = pca_magphase(self.magnitude_align, self.phase)
+
+        # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+        # WHY ARE MAGNITUDES SUDDENLY SHITTY?
+        # WE'RE BEING CAREFUL ABOUT OVERALL SCALE FOR MAGNITUDES, BUT NOT PHASE
+
 
     def project(self, freqseries, this_fpeak=None):
         """
@@ -411,10 +417,10 @@ class pmnsPCA:
 
         # Center test spectrum
         magnitude_cent = testwav_magnitude_align - self.pca['mean_mag']
-        phase_cent = testwav_phase_align - self.pca['mean_phase']
+        #phase_cent = testwav_phase_align - self.pca['mean_phase']
 
         #magnitude_cent = testwav_magnitude - self.pca['mean_mag']
-        #phase_cent = testwav_phase - self.pca['mean_phase']
+        phase_cent = testwav_phase - self.pca['mean_phase']
 
         # Finally, project test spectrum onto PCs (dot product between data and PCs)
         projection['betas_magnitude'] = np.dot(magnitude_cent,
@@ -476,7 +482,7 @@ class pmnsPCA:
             else:
                 recmag += \
                         projection['betas_magnitude'][i]*self.pca['magnitude_pcs'][:,i]
-
+                                
             if abs(self.pca['phase_eigenvalues'][i])<1e-5:
                 recphi += 0.0
             else:
@@ -484,15 +490,15 @@ class pmnsPCA:
                         projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
 
 
-        # Move the magnitudes back to where they should be
+        # Move the spectrum back to where it should be
 
-        recspec = unshift_vec(recmag*np.exp(1j*recphi), self.sample_frequencies,
-                fpeak=this_fpeak)
-        recmag = abs(recspec)
-        recphi = np.unwrap(np.angle(recspec))
+        #recspec = unshift_vec(recmag*np.exp(1j*recphi), self.sample_frequencies,
+        #        fpeak=this_fpeak)
+        #recmag = abs(recspec)
+        #recphi = np.unwrap(np.angle(recspec))
 
-        #recmag = unshift_vec(recmag, self.sample_frequencies,
-        #        fpeak=this_fpeak).real
+        recmag = unshift_vec(recmag, self.sample_frequencies,
+                fpeak=this_fpeak).real
 
         #recphi = unshift_vec(recphi, self.sample_frequencies,
         #        fpeak=this_fpeak).real
@@ -509,8 +515,8 @@ class pmnsPCA:
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
 
-#       # XXX
-#
+        # XXX
+ 
 #       recmag = abs(reconstruction['recon_spectrum'].data)
 #       recphi = np.unwrap(np.angle(reconstruction['recon_spectrum'].data))
 #
@@ -533,8 +539,14 @@ class pmnsPCA:
 #       pl.title('phase spectra: residual=%.2e'%residual_power(recphi,oriphi))
 #       #pl.xlim(0,3000)
 #
-#       pl.show()
-#       sys.exit()
+#       pl.figure()
+#       pl.plot(abs(recphi-oriphi), label='|residual|')
+#       pl.xlabel('frequency index')
+#       pl.ylabel('phase')
+#       #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
+#       pl.title('phase residual spectra: residual=%.2e'%residual_power(recphi,oriphi))
+#       #pl.xlim(0,3000)
+#
 #   
 #       reccplx = recmag*np.exp(1j*recphi)
 #       oricplx = orimag*np.exp(1j*oriphi)
@@ -569,8 +581,8 @@ class pmnsPCA:
 #
 #       pl.show()
 #       sys.exit()
- 
-        # XXX
+#
+#       # XXX
 
         # --- Match calculations for mag/phase reconstructions
         #reconstruction['innerprod_magnitude'] = innerprod(

@@ -130,8 +130,6 @@ f, ax = ppca.image_residuals(exact_residual_phase, waveform_names,
 
 f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
         title="Reconstructing including the test waveform")
-pl.show()
-sys.exit()
 
 
 
@@ -154,6 +152,9 @@ ax.minorticks_on()
 ax.grid()
 ax.legend(loc='lower right')
 f.tight_layout()
+
+pl.show()
+sys.exit()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Realistic catalogues
