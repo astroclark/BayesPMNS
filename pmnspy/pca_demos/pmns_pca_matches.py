@@ -90,7 +90,7 @@ exact_matches=np.zeros(shape=(catlen, catlen))
 exact_residual_magnitude=np.zeros(shape=(catlen, catlen))
 exact_residual_phase=np.zeros(shape=(catlen, catlen))
 
-#waveform_names=['shen_135135']
+waveform_names=['shen_135135']
 for w,testwav_name in enumerate(waveform_names):
 
     print "Analysing %s (exact match)"%testwav_name
@@ -111,13 +111,13 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Reconstruct 
     #
-#   cols=np.linspace(0,1,catlen)
-#   f, ax = pl.subplots()
-#   f2, ax2 = pl.subplots()
+    cols=np.linspace(0,1,catlen)
+    f, ax = pl.subplots()
 
 
-    for n, npcs in enumerate(xrange(1,catlen+1)):
-    #for n, npcs in enumerate([catlen]):
+    #for n, npcs in enumerate(xrange(1,catlen+1)):
+    for n, npcs in enumerate([catlen]):
+    #for n, npcs in enumerate([1]):
         reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
         #exact_matches[w,n]=reconstruction['match_noweight']
@@ -126,28 +126,24 @@ for w,testwav_name in enumerate(waveform_names):
         exact_residual_magnitude[w,n]=reconstruction['residual_magnitude']
         exact_residual_phase[w,n]=reconstruction['residual_phase']
 
-#           ax.plot(reconstruction['sample_frequencies'],
-#                   np.unwrap(np.angle(reconstruction['original_spectrum']))-np.unwrap(np.angle(reconstruction['recon_spectrum'])), label='%d pcs'%npcs, 
-#                   color=(cols[n],0,0),linewidth=2)
-#           ax2.plot(reconstruction['sample_frequencies'],
-#                   abs(reconstruction['original_spectrum'])-abs(reconstruction['recon_spectrum']), label='%d pcs'%npcs, 
-#                   color=(cols[n],0,0),linewidth=2)
-#
-#   #   ax.plot(reconstruction['sample_frequencies'],
-#   #           np.unwrap(np.angle(reconstruction['original_spectrum'])),
-#   #           label='original', color='m',linewidth=1)
-#       ax.set_title(testwav_name)
-#   #
-#   #   ax2.plot(reconstruction['sample_frequencies'],
-#   #           abs(reconstruction['original_spectrum']),
-#   #           label='original', color='m',linewidth=1)
-#       ax2.set_title(testwav_name)
+        #ax.plot(reconstruction['sample_frequencies'],
+        #       np.unwrap(np.angle(reconstruction['recon_spectrum'])), label='%d pcs'%npcs, 
+        #       color=(cols[n],0,0),linewidth=2)
+
+        ax.plot(reconstruction['sample_frequencies'],
+               reconstruction['recon_phi'], label='%d pcs'%npcs, 
+               color=(cols[n],0,0),linewidth=2)
+ 
+    ax.plot(reconstruction['sample_frequencies'],
+            np.unwrap(np.angle(reconstruction['original_spectrum'])),
+            label='original', color='m',linewidth=1)
+    ax.set_title(testwav_name)
 
 
 
-#    pl.legend()
-#   pl.show()
-#   sys.exit()
+    pl.legend(loc='lower left')
+    pl.show()
+    sys.exit()
 
 
 # ***** Plot Results ***** #

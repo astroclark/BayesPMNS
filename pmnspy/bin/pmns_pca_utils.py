@@ -131,7 +131,7 @@ def complex_to_polar(catalogue):
 
     for c in xrange(np.shape(catalogue)[1]):
         magnitudes[:,c] = abs(catalogue[:,c])
-        phases[:,c] = np.unwrap(np.angle(catalogue[:,c]))
+        phases[:,c] = np.unwrap(np.angle(catalogue[:,c])) - 2*np.pi
 
     return magnitudes, phases
 
@@ -255,13 +255,51 @@ def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
     fshift = fcenter / fpeak
     false_freqs = target_freqs * fshift
 
-    aligned_spec_real = np.interp(target_freqs, false_freqs, np.real(vector))
-    aligned_spec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
+#   aligned_spec_real = np.interp(target_freqs, false_freqs, np.real(vector))
+#   aligned_spec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
+#
+#   aligned_vector = aligned_spec_real + 1j*aligned_spec_imag
 
-    aligned_vector = aligned_spec_real + 1j*aligned_spec_imag
+    aligned_vector = complex_interp(vector, target_freqs, false_freqs)
 
     return aligned_vector
 
+def complex_interp(ordinate, abscissa_interp, abscissa):
+    """
+    Interpolate complex series
+    """
+
+    ordinate_interp_real = np.interp(abscissa_interp, abscissa,
+            np.real(ordinate))
+    ordinate_interp_imag = np.interp(abscissa_interp, abscissa,
+            np.imag(ordinate))
+
+    return ordinate_interp_real + 1j*ordinate_interp_imag
+
+def fine_phase_spectrum(complex_spectrum, sample_frequencies, gamma=0.01):
+    """
+    Return the unwrapped phase spectrum of the complex Fourier spectrum in
+    complex_spectrum.
+
+    This function interpolates the complex spectrum to a frequency axis, which is
+    gamma times denser than the original frequencies, prior to unwrapping.  This
+    permits a much smoother unwrapping.
+
+    Finally, the interpolated spectrum is re-interpolated back to the original
+    frequencies
+    """
+
+    delta_f = np.diff(sample_frequencies)[0]
+    fine_frequencies = np.arange(sample_frequencies.min(),
+            sample_frequencies.max() + delta_f, delta_f * gamma)
+
+    complex_spectrum_interp = complex_interp(complex_spectrum, fine_frequencies,
+            sample_frequencies)
+
+    phase_spectrum = np.unwrap(np.angle(complex_spectrum))
+    phase_spectrum_fine = np.unwrap(np.angle(complex_spectrum_interp))
+
+    return np.interp(sample_frequencies, fine_frequencies, phase_spectrum_fine)
 
 
 def residual_power(vector1, vector2):
@@ -276,6 +314,11 @@ def residual_power(vector1, vector2):
     return np.linalg.norm(vector1-vector2) / np.linalg.norm(vector2)
 
 
+def wrap_phase(phase):
+    """
+    Opposite of np.wrap()
+    """
+    return ( phase + np.pi) % (2 * np.pi ) - np.pi
 
 # _________________ CLASSES  _________________ #
 
@@ -328,24 +371,10 @@ class pmnsPCA:
         # spectrum with the magnitude of the aligned complex spectrum, for
         # example. ... dialling up the number of time samples didn't help tho
 
-#       magnitude_unalign = np.zeros(np.shape(self.magnitude))
-#       for i in xrange(np.shape(self.magnitude)[1]):
-#           magnitude_unalign[:,i] = shift_vec(self.magnitude_align[:,i],
-#                   self.sample_frequencies, self.fcenter, self.fpeaks[i]).real
-#
-#       pl.figure()
-#       #pl.plot(self.sample_frequencies,abs(self.magnitude -
-#       #    magnitude_unalign)/self.magnitude)
-#       pl.plot(self.sample_frequencies, magnitude_unalign / self.magnitude)
-#       pl.show()
-#       sys.exit()
-#
-#       N =max(abs(self.cat_align[:,0]))/max(self.magnitude_align[:,0])
-#       pl.figure()
-#       pl.plot(self.sample_frequencies,
-#               abs(abs(self.cat_align[:,0])-self.magnitude_align[:,0]*N))
-#       pl.show()
-#       sys.exit()
+        # Maybe it is with the phases, actually.  I see weird errors in the
+        # phase spectra if i do unwrap(angle()) on a fourier spectrum with a
+        # non-unity magnitude
+
 
 
     def project(self, freqseries, this_fpeak=None):
@@ -469,7 +498,7 @@ class pmnsPCA:
             else:
                 recphi += \
                         projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
-                        #projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
+
 
         #
         # De-center the reconstruction
@@ -477,30 +506,58 @@ class pmnsPCA:
         recmag = (recmag * self.pca['std_mag']) + self.pca['mean_mag']
         recphi = (recphi * self.pca['std_phase']) + self.pca['mean_phase']
 
+        reconstruction['recon_mag'] = recmag
+        reconstruction['recon_phi'] = recphi
 
         #
         # Move the spectrum back to where it should be
         #
-
         recmag = shift_vec(recmag, self.sample_frequencies,
                 fcenter=this_fpeak, fpeak=self.fcenter).real
-
-
+                    
         #
         # Fourier spectrum reconstructions
         #
-
         orimag = abs(reconstruction['original_spectrum'].data)
         oriphi = np.unwrap(np.angle(reconstruction['original_spectrum'].data))
 
+        pl.figure()
+        pl.plot(self.sample_frequencies, oriphi, label='target',
+                linewidth=2, linestyle='--', color='k')
+        pl.plot(self.sample_frequencies, recphi, label='1')
+
+        recon_spectrum = recmag * np.exp(1j*recphi)
         #recon_spectrum = recmag * np.exp(1j*recphi)
-        recon_spectrum = recmag * (np.cos(recphi) + 1j*np.sin(recphi))
+        #recon_spectrum = recmag * (np.cos(recphi) + 1j*np.sin(recphi))
+
+        recmag = abs(recon_spectrum)
+        recphi  = np.unwrap(np.angle(recon_spectrum))
+
+        # XXX
+
+        print residual_power(recphi, oriphi)
+
+        pl.plot(self.sample_frequencies,recphi, label='2')
+
+        pl.legend()
+        pl.show()
+        sys.exit()
+
+        # --- Unit norm reconstruction
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
 
         # --- Match calculations for mag/phase reconstructions
-        recmag = abs(reconstruction['recon_spectrum'].data)
-        recphi = np.unwrap(np.angle(reconstruction['recon_spectrum'].data))
+        recon_spectrum = np.copy(reconstruction['recon_spectrum'].data)
+
+        recmag = abs(recon_spectrum)
+        recphi = np.unwrap(np.angle(recon_spectrum))
+
+        pl.plot(self.sample_frequencies,recphi, label='3')
+
+        pl.legend(loc='lower left')
+        pl.show()
+        sys.exit()
 
         orimag = abs(reconstruction['original_spectrum'].data)
         oriphi = np.unwrap(np.angle(reconstruction['original_spectrum'].data))
