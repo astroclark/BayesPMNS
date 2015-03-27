@@ -45,25 +45,18 @@ def pca_by_svd(matrix):
     Perform principle component analysis via singular value decomposition
     """
 
-    U, S, Vt = scipy.linalg.svd(matrix, full_matrices=True)
-
+    N = np.shape(matrix)[1]
+    U, S, Vt = scipy.linalg.svd(matrix, full_matrices=False)
     V = Vt.T
 
-    # sort the PCs by descending order of the singular values (i.e. by the
-    # proportion of total variance they explain)
-    #ind = np.argsort(S)[::-1]
-    ind = np.argsort(S)[::-1]
-    U = U[:,ind]
-    S = S[ind]
-    V = V[:,ind]
+#   print 'dim(U)', np.shape(U)
+#   print 'dim(S)', np.shape(S)
+#   print 'dim(V)', np.shape(V)
+#   print 'dim(matrix)', np.shape(matrix)
+ 
+    #sys.exit()
 
-    # See e.g.,:
-    # http://en.wikipedia.org/wiki/Principal_component_analysis#Singular_value_decomposition
-
-    # Score matrix:
-    PC_scores = U * S
-
-    return PC_scores, U, V, S**2 
+    return U, V, S**2 
 
 def pca_magphase(magnitudes, phases):
     """
@@ -96,8 +89,8 @@ def pca_magphase(magnitudes, phases):
     std_phase = np.zeros(np.shape(phases)[0])
     for s in xrange(np.shape(magnitudes)[0]):
 
-        std_mag[s] = np.std(magnitudes_centered[s,:])
-        std_phase[s] = np.std(phases_centered[s,:])
+        std_mag[s] = 1.0#np.std(magnitudes_centered[s,:])
+        std_phase[s] = 1.0#np.std(phases_centered[s,:])
 
     for w in xrange(np.shape(magnitudes)[1]):
         magnitudes_centered[:,w] /= std_mag
@@ -105,13 +98,11 @@ def pca_magphase(magnitudes, phases):
 
     pcs_magphase = {}
 
-    pcs_magphase['magnitude_scores'], pcs_magphase['magnitude_pcs'], \
-            pcs_magphase['magnitude_betas'], pcs_magphase['magnitude_eigenvalues'] = \
-            pca_by_svd(magnitudes_centered)
+    pcs_magphase['magnitude_pcs'], pcs_magphase['magnitude_betas'],\
+        pcs_magphase['magnitude_eigenvalues'] = pca_by_svd(magnitudes_centered)
 
-    pcs_magphase['phase_scores'], pcs_magphase['phase_pcs'], \
-            pcs_magphase['phase_betas'], pcs_magphase['phase_eigenvalues'] = \
-            pca_by_svd(phases_centered)
+    pcs_magphase['phase_pcs'], pcs_magphase['phase_betas'],\
+        pcs_magphase['phase_eigenvalues'] = pca_by_svd(phases_centered)
 
     pcs_magphase['magnitude_eigenergy'] = \
             eigenergy(pcs_magphase['magnitude_eigenvalues'])
@@ -187,8 +178,7 @@ def build_catalogues(waveform_names, fshift_center):
 
         # Populate catalogue with reconstructed, normalised aligned spectrum
         aligned_cat[:,w] = unit_hrss(aligned_spectrum,
-                delta=original_spectrum.delta_f, domain='frequency') 
-        #aligned_cat[original_frequencies>2000] = 0.0
+                delta=original_spectrum.delta_f, domain='frequency').data
 
     return (original_frequencies, aligned_cat, original_cat, fpeaks)
 
@@ -338,6 +328,18 @@ class pmnsPCA:
         # spectrum with the magnitude of the aligned complex spectrum, for
         # example. ... dialling up the number of time samples didn't help tho
 
+#       magnitude_unalign = np.zeros(np.shape(self.magnitude))
+#       for i in xrange(np.shape(self.magnitude)[1]):
+#           magnitude_unalign[:,i] = shift_vec(self.magnitude_align[:,i],
+#                   self.sample_frequencies, self.fcenter, self.fpeaks[i]).real
+#
+#       pl.figure()
+#       #pl.plot(self.sample_frequencies,abs(self.magnitude -
+#       #    magnitude_unalign)/self.magnitude)
+#       pl.plot(self.sample_frequencies, magnitude_unalign / self.magnitude)
+#       pl.show()
+#       sys.exit()
+#
 #       N =max(abs(self.cat_align[:,0]))/max(self.magnitude_align[:,0])
 #       pl.figure()
 #       pl.plot(self.sample_frequencies,
@@ -395,10 +397,12 @@ class pmnsPCA:
         phase_cent = (testwav_phase - self.pca['mean_phase']) / self.pca['std_phase']
 
         # Finally, project test spectrum onto PCs (dot product between data and PCs)
+
         projection['betas_magnitude'] = np.dot(magnitude_cent,
                 self.pca['magnitude_pcs'])
 
         projection['betas_phase'] = np.dot(phase_cent, self.pca['phase_pcs'])
+
 
         return projection
 
