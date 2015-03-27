@@ -526,39 +526,17 @@ class pmnsPCA:
                 linewidth=2, linestyle='--', color='k')
         pl.plot(self.sample_frequencies, recphi, label='1')
 
-        #recon_spectrum = recmag * np.exp(1j*recphi)
-        recon_spectrum = np.exp(1j*recphi)
-        print np.arctan2(np.imag(recon_spectrum[-1]), np.real(recon_spectrum[-1]))
-
-        import mpmath
-        print mpmath.atan2(float(np.imag(recon_spectrum[-1])),
-                float(np.real(recon_spectrum[-1])))
-        sys.exit()
-
-        # XXX: make complex spectrum with unit amplitude *then* multiply???
-
-#       import mpmath
-#       exppart = np.zeros(len(recmag),dtype=complex)
-#       for e in xrange(len(recmag)):
-#           exppart[e] = float(mpmath.expj(recphi[e]).real) + \
-#                   1j*float(mpmath.expj(recphi[e]).imag)
-#       recon_spectrum = recmag * exppart
-#
-        #recon_spectrum = recmag * np.exp(1j*recphi)
-        #recon_spectrum = recmag * (np.cos(recphi) + 1j*np.sin(recphi))
+        recon_spectrum = recmag * np.exp(1j*recphi)
 
         recmag = abs(recon_spectrum)
-        recphi  = np.unwrap(np.angle(recon_spectrum))
+        recphi = np.unwrap(np.angle(recon_spectrum))
 
-        # XXX
-
-        print residual_power(recphi, oriphi)
-
-        pl.plot(self.sample_frequencies,recphi, label='2')
-
-        pl.legend()
-        pl.show()
-        sys.exit()
+        # XXX 
+#       pl.plot(self.sample_frequencies,recphi, label='2')
+#
+#       pl.legend()
+#       pl.show()
+#       sys.exit()
 
         # --- Unit norm reconstruction
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
@@ -570,11 +548,11 @@ class pmnsPCA:
         recmag = abs(recon_spectrum)
         recphi = np.unwrap(np.angle(recon_spectrum))
 
-        pl.plot(self.sample_frequencies,recphi, label='3')
-
-        pl.legend(loc='lower left')
-        pl.show()
-        sys.exit()
+#       pl.plot(self.sample_frequencies,recphi, label='3')
+#
+#       pl.legend(loc='lower left')
+#       pl.show()
+#       sys.exit()
 
         orimag = abs(reconstruction['original_spectrum'].data)
         oriphi = np.unwrap(np.angle(reconstruction['original_spectrum'].data))
@@ -588,7 +566,6 @@ class pmnsPCA:
         flen = len(self.sample_frequencies)
         psd = aLIGOZeroDetHighPower(flen, self.delta_f,
                 low_freq_cutoff=self.low_frequency_cutoff)
-
 
         reconstruction['match_aligo'] = \
                 pycbc.filter.match(reconstruction['recon_spectrum'],
