@@ -526,7 +526,24 @@ class pmnsPCA:
                 linewidth=2, linestyle='--', color='k')
         pl.plot(self.sample_frequencies, recphi, label='1')
 
-        recon_spectrum = recmag * np.exp(1j*recphi)
+        #recon_spectrum = recmag * np.exp(1j*recphi)
+        recon_spectrum = np.exp(1j*recphi)
+        print np.arctan2(np.imag(recon_spectrum[-1]), np.real(recon_spectrum[-1]))
+
+        import mpmath
+        print mpmath.atan2(float(np.imag(recon_spectrum[-1])),
+                float(np.real(recon_spectrum[-1])))
+        sys.exit()
+
+        # XXX: make complex spectrum with unit amplitude *then* multiply???
+
+#       import mpmath
+#       exppart = np.zeros(len(recmag),dtype=complex)
+#       for e in xrange(len(recmag)):
+#           exppart[e] = float(mpmath.expj(recphi[e]).real) + \
+#                   1j*float(mpmath.expj(recphi[e]).imag)
+#       recon_spectrum = recmag * exppart
+#
         #recon_spectrum = recmag * np.exp(1j*recphi)
         #recon_spectrum = recmag * (np.cos(recphi) + 1j*np.sin(recphi))
 
