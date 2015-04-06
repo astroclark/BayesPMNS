@@ -59,8 +59,6 @@ waveform_names=['apr_135135_lessvisc',
 #                'nl3_135135_lessvisc' ,
 #                'tm1_135135_lessvisc' ,
 #                'tma_135135_lessvisc' ,
-#                'sfhx_135135_lessvisc',
-#                'sfho_135135_lessvisc',
 #                'tm1_1215',
 #                'gs1_135135',
 #                'gs2_135135',
@@ -75,12 +73,7 @@ catlen = len(waveform_names)
 # Create PMNS PCA instance for this catalogue
 #
 
-pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000)
-
-#   pl.figure()
-#   pl.plot(pmpca.cat_align)
-#   pl.show()
-#   sys.exit()
+pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710)
 
 #
 # Exact matches (include test waveform in training data)
@@ -90,7 +83,7 @@ exact_matches=np.zeros(shape=(catlen, catlen))
 exact_residual_magnitude=np.zeros(shape=(catlen, catlen))
 exact_residual_phase=np.zeros(shape=(catlen, catlen))
 
-waveform_names=['shen_135135']
+#waveform_names=['sfho_135135_lessvisc']
 for w,testwav_name in enumerate(waveform_names):
 
     print "Analysing %s (exact match)"%testwav_name
@@ -111,13 +104,13 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Reconstruct 
     #
-    cols=np.linspace(0,1,catlen)
-    f, ax = pl.subplots()
+#    cols=np.linspace(0,1,catlen)
+#    f, ax = pl.subplots()
 
 
-    #for n, npcs in enumerate(xrange(1,catlen+1)):
-    for n, npcs in enumerate([catlen]):
-    #for n, npcs in enumerate([1]):
+    for n, npcs in enumerate(xrange(1,catlen+1)):
+    #for n, npcs in enumerate([catlen]):
+    #for n, npcs in enumerate([3]):
         reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
         #exact_matches[w,n]=reconstruction['match_noweight']
@@ -126,24 +119,22 @@ for w,testwav_name in enumerate(waveform_names):
         exact_residual_magnitude[w,n]=reconstruction['residual_magnitude']
         exact_residual_phase[w,n]=reconstruction['residual_phase']
 
-        #ax.plot(reconstruction['sample_frequencies'],
-        #       np.unwrap(np.angle(reconstruction['recon_spectrum'])), label='%d pcs'%npcs, 
-        #       color=(cols[n],0,0),linewidth=2)
-
-        ax.plot(reconstruction['sample_frequencies'],
-               reconstruction['recon_phi'], label='%d pcs'%npcs, 
-               color=(cols[n],0,0),linewidth=2)
- 
-    ax.plot(reconstruction['sample_frequencies'],
-            np.unwrap(np.angle(reconstruction['original_spectrum'])),
-            label='original', color='m',linewidth=1)
-    ax.set_title(testwav_name)
-
-
-
-    pl.legend(loc='lower left')
-    pl.show()
-    sys.exit()
+#       ax.plot(reconstruction['sample_frequencies'],
+#              reconstruction['recon_mag'], label='%d pcs, r=%f'%(npcs,
+#                  exact_residual_magnitude[w,n]), 
+#              color=(cols[n],0,0),linewidth=2)
+#
+#   ax.plot(reconstruction['sample_frequencies'],
+#           abs(reconstruction['original_spectrum']),
+#           label='original', color='m',linewidth=1)
+#
+#   ax.set_title(testwav_name)
+#
+#
+#
+#   pl.legend(loc='upper right')
+#   pl.show()
+#   sys.exit()
 
 
 # ***** Plot Results ***** #

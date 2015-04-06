@@ -58,43 +58,106 @@ def pca_by_svd(matrix):
 
     return U, V, S**2 
 
+def pca_by_cov(matrix):
+
+    covariance_matrix = np.cov( matrix.transpose() )
+
+    eigenvalues, eigenvectors = np.linalg.eigh( covariance_matrix )
+    # Sort eigenvalues by order of decreasing absolute value
+    idx = np.abs(eigenvalues).argsort()
+    eigenvalues = eigenvalues[idx[::-1]]
+    eigenvectors = eigenvectors[:,idx[::-1]]
+    index = 0
+    # Sets phase, so the sign is fixed.
+    for eigenvector in eigenvectors.transpose():
+            if ( eigenvector[0] < 0 ):
+                    eigenvector *= -1
+            elif ( eigenvector[0] == 0 ):
+                    # If the first component is zero, check the next one
+                    # until a non-zero component is found
+                    try:
+                            while ( eigenvector[index] == 0 ):
+                                    index += 1
+                            if ( eigenvector[index] < 0 ):
+                                    eigenvector *= -1
+                    except IndexError:
+                            pass
+
+    V = np.zeros(10)
+
+    scores = np.dot(matrix, eigenvectors)
+
+    return scores, V, eigenvalues
+
 def pca_magphase(magnitudes, phases):
     """
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
 
-    #for w in xrange(np.shape(phases)[1]):
-    #    phases[:,w] = signal.detrend(phases[:,w])
+    magnitudes_centered = np.copy(magnitudes)
+    phases_centered = np.copy(phases)
+
+    #
+    # Phase conditioning
+    #
+    x = np.arange(len(phases[:,0]))
+    pfits = np.zeros(shape=np.shape(phases))
+    for w in xrange(np.shape(pfits)[1]):
+        y = phases[:,w]
+        pfits[:,w] = poly4(x, y)
+        #phases_centered[:,w] = phases[:,w] - pfits[:,w]
+
+    mean_pfits = np.mean(pfits,axis=1)
+
+#    for p in xrange(np.shape(pfits)[1]):
+#        phases_centered[:,p] = (phases[:,p]-100) / (mean_pfits - 100)
 
     #
     # Centering
     #
-    mean_mag   = np.zeros(np.shape(magnitudes)[0])
-    mean_phase = np.zeros(np.shape(phases)[0])
-    for s in xrange(np.shape(magnitudes)[0]):
-        mean_mag[s]   = np.mean(magnitudes[s,:])
-        mean_phase[s] = np.mean(phases[s,:])
+    mean_mag = np.mean(magnitudes, axis=1)
+    #mean_phase = np.mean(phases, axis=1)
+    mean_phase = np.mean(phases_centered, axis=1)
 
-
-    magnitudes_centered = np.copy(magnitudes)
-    phases_centered = np.copy(phases)
     for w in xrange(np.shape(magnitudes)[1]):
         magnitudes_centered[:,w] -= mean_mag
         phases_centered[:,w] -= mean_phase
+        
 
     #
     # Scaling
     #
-    std_mag   = np.zeros(np.shape(magnitudes)[0])
-    std_phase = np.zeros(np.shape(phases)[0])
-    for s in xrange(np.shape(magnitudes)[0]):
+    std_mag = np.std(magnitudes, axis=1)
+    std_phase = np.ones(shape=np.shape(mean_phase))
+    #std_phase = np.std(phases, axis=1)
+    #std_phase = np.std(phases_centered, axis=1)
 
-        std_mag[s] = 1.0#np.std(magnitudes_centered[s,:])
-        std_phase[s] = 1.0#np.std(phases_centered[s,:])
+#   pl.figure()
+#   pl.plot(std_phase)
+#   pl.show()
+#   sys.exit()
 
     for w in xrange(np.shape(magnitudes)[1]):
         magnitudes_centered[:,w] /= std_mag
-        phases_centered[:,w] /= std_phase
+        phases_centered[1:,w] /= std_phase[1:]
+
+#   pl.figure()
+#   for w in xrange(np.shape(phases)[1]):
+#      pl.plot(x, phases_centered[:,w], label='data')
+#   pl.show()
+
+#   pcs_magphase = {}
+#   pcs_magphase['phase_pcs'], pcs_magphase['phase_betas'],\
+#       pcs_magphase['phase_eigenvalues'] = pca_by_svd(phases_centered)
+
+#   print eigenergy(pcs_magphase['phase_eigenvalues'])
+#   pl.figure()
+#   pl.bar(range(1,len(eigenergy(pcs_magphase['phase_eigenvalues']))+1),
+#       eigenergy(pcs_magphase['phase_eigenvalues']))
+#   pl.show()
+#
+#    sys.exit()
+
 
     pcs_magphase = {}
 
@@ -127,13 +190,21 @@ def complex_to_polar(catalogue):
     magnitudes = np.zeros(shape=np.shape(catalogue))
     phases = np.zeros(shape=np.shape(catalogue))
     if len(np.shape(catalogue))==1:
-        return abs(catalogue), np.unwrap(np.angle(catalogue))
+        return abs(catalogue), phase_of(catalogue)
 
     for c in xrange(np.shape(catalogue)[1]):
         magnitudes[:,c] = abs(catalogue[:,c])
-        phases[:,c] = np.unwrap(np.angle(catalogue[:,c])) - 2*np.pi
+        phases[:,c] = phase_of(catalogue[:,c])
 
     return magnitudes, phases
+
+def phase_of(z):
+    return np.unwrap(np.angle(z))# - 2*np.pi
+#   import mpmath
+#   phases = np.zeros(len(z))
+#   for p, phase in enumerate(phases):
+#       phases[p] = np.float(mpmath.arg(z[p]))
+#   return np.unwrap(phases)# - 2*np.pi
 
 def build_catalogues(waveform_names, fshift_center):
     """
@@ -189,7 +260,7 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     """
 
     # Time-domain Window
-    win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.25)
+    win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.1)
     waveform_timeseries *= win.data.data
 
     # Zero-pad
@@ -200,12 +271,29 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
     freqseries = timeseries.to_frequencyseries()
 
+    # Phase-shift
+#    mag = abs(freqseries.data)
+#    phi = phase_of(freqseries.data)
+#    phi -= phi[0]
+
+#    freqseries.data = mag*np.exp(1j*phi)
+
     # Locate fpeak
     high_idx = freqseries.sample_frequencies.data>=2000 
     high_freq = freqseries.sample_frequencies.data[high_idx] 
     fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
     
     return freqseries, fpeak
+
+def poly4(x, y):
+    """
+    helper func for 4th order polyfit for phase conditioning
+    """
+
+    # 4th order polyfit to phase for trend removal
+    p = np.polyfit(x, y, 4)
+
+    return  p[0]*x**4 + p[1]*x**3 + p[2]*x**2 + p[3]*x**1 + p[4]
 
 def unit_hrss(data, delta, domain):
     """
@@ -255,11 +343,6 @@ def shift_vec(vector, target_freqs, fpeak, fcenter=1000.0):
     fshift = fcenter / fpeak
     false_freqs = target_freqs * fshift
 
-#   aligned_spec_real = np.interp(target_freqs, false_freqs, np.real(vector))
-#   aligned_spec_imag = np.interp(target_freqs, false_freqs, np.imag(vector))
-#
-#   aligned_vector = aligned_spec_real + 1j*aligned_spec_imag
-
     aligned_vector = complex_interp(vector, target_freqs, false_freqs)
 
     return aligned_vector
@@ -296,8 +379,8 @@ def fine_phase_spectrum(complex_spectrum, sample_frequencies, gamma=0.01):
     complex_spectrum_interp = complex_interp(complex_spectrum, fine_frequencies,
             sample_frequencies)
 
-    phase_spectrum = np.unwrap(np.angle(complex_spectrum))
-    phase_spectrum_fine = np.unwrap(np.angle(complex_spectrum_interp))
+    phase_spectrum = phase_of(complex_spectrum)
+    phase_spectrum_fine = phase_of(complex_spectrum_interp)
 
     return np.interp(sample_frequencies, fine_frequencies, phase_spectrum_fine)
 
@@ -311,7 +394,8 @@ def residual_power(vector1, vector2):
     """
 
     #return np.sqrt(sum((vector1-vector2)**2) / sum(vector2**2))
-    return np.linalg.norm(vector1-vector2) / np.linalg.norm(vector2)
+    #return np.linalg.norm(vector1-vector2) / np.linalg.norm(vector2)
+    return np.sqrt(sum((vector1-vector2)**2) / sum(vector2**2))
 
 
 def wrap_phase(phase):
@@ -348,10 +432,10 @@ class pmnsPCA:
         #
         # PCA
         #
-        print "Performing PCA"
+
+        print "Aligning"
 
         # Convert to magnitude/phase
-
         self.magnitude, self.phase = complex_to_polar(self.cat_orig)
 
         self.magnitude_align = np.zeros(np.shape(self.magnitude))
@@ -360,6 +444,7 @@ class pmnsPCA:
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
 
         # Do PCA
+        print "Performing PCA"
         self.pca = pca_magphase(self.magnitude_align, self.phase)
 
         # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -463,7 +548,12 @@ class pmnsPCA:
         #
         # Original Waveforms
         #
-        reconstruction['original_spectrum'] = unit_hrss(freqseries,
+        orimag = abs(freqseries)
+        oriphi = phase_of(freqseries)
+
+        orispec = orimag*np.exp(1j*oriphi)
+
+        reconstruction['original_spectrum'] = unit_hrss(orispec,
                 delta=self.delta_f, domain='frequency')
 
         freqseries_align = shift_vec(freqseries, self.sample_frequencies,
@@ -499,6 +589,10 @@ class pmnsPCA:
                 recphi += \
                         projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
 
+        #recphi = projection['betas_phase'][0]*self.pca['phase_pcs'][:,0]
+
+        # expected error
+        #print sum(self.pca['magnitude_eigenvalues'][npcs:])
 
         #
         # De-center the reconstruction
@@ -506,38 +600,25 @@ class pmnsPCA:
         recmag = (recmag * self.pca['std_mag']) + self.pca['mean_mag']
         recphi = (recphi * self.pca['std_phase']) + self.pca['mean_phase']
 
-        reconstruction['recon_mag'] = recmag
-        reconstruction['recon_phi'] = recphi
-
         #
         # Move the spectrum back to where it should be
         #
         recmag = shift_vec(recmag, self.sample_frequencies,
                 fcenter=this_fpeak, fpeak=self.fcenter).real
-                    
+
+        reconstruction['recon_mag'] = np.copy(recmag)
+        reconstruction['recon_phi'] = np.copy(recphi)
+ 
+        reconstruction['residual_magnitude'] = residual_power(recmag, orimag)
+        reconstruction['residual_phase'] = residual_power(recphi, oriphi)
+
         #
         # Fourier spectrum reconstructions
         #
-        orimag = abs(reconstruction['original_spectrum'].data)
-        oriphi = np.unwrap(np.angle(reconstruction['original_spectrum'].data))
-
-        pl.figure()
-        pl.plot(self.sample_frequencies, oriphi, label='target',
-                linewidth=2, linestyle='--', color='k')
-        pl.plot(self.sample_frequencies, recphi, label='1')
 
         recon_spectrum = recmag * np.exp(1j*recphi)
 
-        recmag = abs(recon_spectrum)
-        recphi = np.unwrap(np.angle(recon_spectrum))
-
-        # XXX 
-#       pl.plot(self.sample_frequencies,recphi, label='2')
-#
-#       pl.legend()
-#       pl.show()
-#       sys.exit()
-
+ 
         # --- Unit norm reconstruction
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
@@ -546,19 +627,13 @@ class pmnsPCA:
         recon_spectrum = np.copy(reconstruction['recon_spectrum'].data)
 
         recmag = abs(recon_spectrum)
-        recphi = np.unwrap(np.angle(recon_spectrum))
+        recphi = phase_of(recon_spectrum)
 
-#       pl.plot(self.sample_frequencies,recphi, label='3')
-#
-#       pl.legend(loc='lower left')
-#       pl.show()
-#       sys.exit()
-
-        orimag = abs(reconstruction['original_spectrum'].data)
-        oriphi = np.unwrap(np.angle(reconstruction['original_spectrum'].data))
-
-        reconstruction['residual_magnitude'] = residual_power(recmag, orimag)
-        reconstruction['residual_phase'] = residual_power(recphi, oriphi)
+#        reconstruction['recon_mag'] = np.copy(recmag)
+#        reconstruction['recon_phi'] = np.copy(recphi)
+ 
+#        reconstruction['residual_magnitude'] = residual_power(recmag, orimag)
+#        reconstruction['residual_phase'] = residual_power(recphi, oriphi)
 
 
         # --- Match calculations for full reconstructions
@@ -566,86 +641,38 @@ class pmnsPCA:
         flen = len(self.sample_frequencies)
         psd = aLIGOZeroDetHighPower(flen, self.delta_f,
                 low_freq_cutoff=self.low_frequency_cutoff)
-
+ 
         reconstruction['match_aligo'] = \
                 pycbc.filter.match(reconstruction['recon_spectrum'],
                         reconstruction['original_spectrum'], psd = psd,
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
-
+ 
 
         reconstruction['match_noweight'] = \
                 pycbc.filter.match(reconstruction['recon_spectrum'],
                         reconstruction['original_spectrum'],
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
 
-        # XXX
- 
- 
-        if False:
-            pl.figure()
-            pl.plot(recmag, label='reconstructed')
-            pl.plot(orimag, label='original')
-            pl.xlabel('frequency index')
-            pl.ylabel('magnitude')
-            #pl.title('magnitude spectra: (rec|original)=%.2f'%innerprod(recmag,orimag))
-            pl.title('magnitude spectra: residual=%.2e'%residual_power(recmag,orimag))
-            #pl.xlim(0,3000)
-     
-            pl.figure()
-            pl.plot(recphi, label='reconstructed')
-            pl.plot(oriphi, label='original')
-            pl.xlabel('frequency index')
-            pl.ylabel('phase')
-            #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
-            pl.title('phase spectra: residual=%.2e'%residual_power(recphi,oriphi))
-            #pl.xlim(0,3000)
-     
-            pl.figure()
-            pl.plot(abs(recphi-oriphi), label='|residual|')
-            pl.xlabel('frequency index')
-            pl.ylabel('phase')
-            #pl.title('phase spectra: (rec|original)=%.2f'%innerprod(recphi,oriphi))
-            pl.title('phase residual spectra: residual=%.2e'%residual_power(recphi,oriphi))
-            #pl.xlim(0,3000)
-     
-        
-            reccplx = recmag*np.exp(1j*recphi)
-            oricplx = orimag*np.exp(1j*oriphi)
-     
-            f, ax = pl.subplots(nrows=2)
-            ax[0].plot(reccplx.real, label='reconstructed')
-            ax[0].plot(oricplx.real, label='original')
-            ax[0].set_xlabel('frequency index')
-            ax[0].set_ylabel('Re[H(f)]')
-            ax[1].plot(reccplx.imag, label='reconstructed')
-            ax[1].plot(oricplx.imag, label='original')
-            ax[1].set_xlabel('frequency index')
-            ax[1].set_ylabel('Im[H(f)]')
-     
-            reconstruction['recon_spectrum_align'] = \
-                    unit_hrss(recmag*np.exp(1j*recphi),
-                    delta=self.delta_f, domain='frequency')
-     
-            ov = \
-                    pycbc.filter.overlap(reconstruction['recon_spectrum'],
-                            reconstruction['original_spectrum'],
-                            low_frequency_cutoff = self.low_frequency_cutoff)
-     
-            ma = \
-                    pycbc.filter.match(reconstruction['recon_spectrum'],
-                            reconstruction['original_spectrum'],
-                            low_frequency_cutoff = self.low_frequency_cutoff)[0]
-     
-            ax[0].set_title('H(f): match=%.3f, overlap=%.3f'%(ma,ov))
-            #ax[0].set_xlim(0,3000)
-            #ax[1].set_xlim(0,3000)
-     
-            pl.show()
-            sys.exit()
-    #
-    #       # XXX
 
-
+        # compute overlap 'by hand':
+#       idx = self.sample_frequencies>=self.low_frequency_cutoff
+#
+#       phase_diff = oriphi[idx] - recphi[idx] 
+#       ampprod = recmag[idx] * orimag[idx]
+#
+#       numerator = ampprod*np.exp(1j*phase_diff)
+#       
+#       overlap = 4*np.real(np.trapz(numerator / psd.data[idx],
+#           self.sample_frequencies[idx]))
+#
+#       N1 = np.sqrt(4*np.real(np.trapz(recmag[idx]*recmag[idx] / psd.data[idx],
+#           self.sample_frequencies[idx])))
+#       N2 = np.sqrt(4*np.real(np.trapz(orimag[idx]*orimag[idx] / psd.data[idx],
+#           self.sample_frequencies[idx])))
+#
+#       N = N1*N2
+#
+#       reconstruction['match_aligo'] = overlap/N
 
         return reconstruction
 
