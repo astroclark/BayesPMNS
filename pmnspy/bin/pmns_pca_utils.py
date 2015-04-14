@@ -38,6 +38,8 @@ import pycbc.types
 import pycbc.filter
 from pycbc.psd import aLIGOZeroDetHighPower
 
+from IPython.core.debugger import Tracer; debug_here = Tracer()
+
 # _________________ FUNCTIONS  _________________ #
 
 def pca_by_svd(matrix):
@@ -60,104 +62,42 @@ def pca_by_svd(matrix):
 
 def pca_by_cov(matrix):
 
-    covariance_matrix = np.cov( matrix.transpose() )
+    H = np.matrix(matrix)
 
-    eigenvalues, eigenvectors = np.linalg.eigh( covariance_matrix )
-    # Sort eigenvalues by order of decreasing absolute value
-    idx = np.abs(eigenvalues).argsort()
-    eigenvalues = eigenvalues[idx[::-1]]
-    eigenvectors = eigenvectors[:,idx[::-1]]
-    index = 0
-    # Sets phase, so the sign is fixed.
-    for eigenvector in eigenvectors.transpose():
-            if ( eigenvector[0] < 0 ):
-                    eigenvector *= -1
-            elif ( eigenvector[0] == 0 ):
-                    # If the first component is zero, check the next one
-                    # until a non-zero component is found
-                    try:
-                            while ( eigenvector[index] == 0 ):
-                                    index += 1
-                            if ( eigenvector[index] < 0 ):
-                                    eigenvector *= -1
-                    except IndexError:
-                            pass
+    HTH = H.T*H
 
-    V = np.zeros(10)
+    S, V = np.linalg.eig(HTH)
 
-    scores = np.dot(matrix, eigenvectors)
+    idx = np.argsort(S)[::-1]
+    V = V[:,idx]
+    S = S[idx]
 
-    return scores, V, eigenvalues
+    U = H*V
+    U = np.array(U)
+    S = np.array(S)
+
+    # normalise PCs
+    for i in xrange(np.shape(U)[1]):
+        U[:,i] /= np.linalg.norm(U[:,i])
+
+    return U, V, S
+
 
 def pca_magphase(magnitudes, phases):
     """
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
 
-    magnitudes_centered = np.copy(magnitudes)
-    phases_centered = np.copy(phases)
+    #
+    # Condition Spectra
+    #
+    magnitudes_centered, mean_mag, std_mag = condition_magnitude(magnitudes)
+    phases_centered, mean_phase, std_phase, phase_trend, pfits = condition_phase(phases)
+
 
     #
-    # Phase conditioning
+    # Principal component analysis
     #
-    x = np.arange(len(phases[:,0]))
-    pfits = np.zeros(shape=np.shape(phases))
-    for w in xrange(np.shape(pfits)[1]):
-        y = phases[:,w]
-        pfits[:,w] = poly4(x, y)
-        #phases_centered[:,w] = phases[:,w] - pfits[:,w]
-
-    mean_pfits = np.mean(pfits,axis=1)
-
-#    for p in xrange(np.shape(pfits)[1]):
-#        phases_centered[:,p] = (phases[:,p]-100) / (mean_pfits - 100)
-
-    #
-    # Centering
-    #
-    mean_mag = np.mean(magnitudes, axis=1)
-    #mean_phase = np.mean(phases, axis=1)
-    mean_phase = np.mean(phases_centered, axis=1)
-
-    for w in xrange(np.shape(magnitudes)[1]):
-        magnitudes_centered[:,w] -= mean_mag
-        phases_centered[:,w] -= mean_phase
-        
-
-    #
-    # Scaling
-    #
-    std_mag = np.std(magnitudes, axis=1)
-    std_phase = np.ones(shape=np.shape(mean_phase))
-    #std_phase = np.std(phases, axis=1)
-    #std_phase = np.std(phases_centered, axis=1)
-
-#   pl.figure()
-#   pl.plot(std_phase)
-#   pl.show()
-#   sys.exit()
-
-    for w in xrange(np.shape(magnitudes)[1]):
-        magnitudes_centered[:,w] /= std_mag
-        phases_centered[1:,w] /= std_phase[1:]
-
-#   pl.figure()
-#   for w in xrange(np.shape(phases)[1]):
-#      pl.plot(x, phases_centered[:,w], label='data')
-#   pl.show()
-
-#   pcs_magphase = {}
-#   pcs_magphase['phase_pcs'], pcs_magphase['phase_betas'],\
-#       pcs_magphase['phase_eigenvalues'] = pca_by_svd(phases_centered)
-
-#   print eigenergy(pcs_magphase['phase_eigenvalues'])
-#   pl.figure()
-#   pl.bar(range(1,len(eigenergy(pcs_magphase['phase_eigenvalues']))+1),
-#       eigenergy(pcs_magphase['phase_eigenvalues']))
-#   pl.show()
-#
-#    sys.exit()
-
 
     pcs_magphase = {}
 
@@ -172,14 +112,70 @@ def pca_magphase(magnitudes, phases):
     pcs_magphase['phase_eigenergy'] = \
             eigenergy(pcs_magphase['phase_eigenvalues'])
 
+    #debug_here()
+
     pcs_magphase['mean_mag'] = mean_mag
     pcs_magphase['mean_phase'] = mean_phase
 
     pcs_magphase['std_mag'] = std_mag
     pcs_magphase['std_phase'] = std_phase
 
+    pcs_magphase['phase_trend'] = phase_trend
+    pcs_magphase['phase_fits'] = pfits
+
+    #debug_here()
+
     return pcs_magphase
 
+def condition_magnitude(magnitude_spectra):
+
+    magnitude_spectra_centered = np.copy(magnitude_spectra)
+
+    # --- Centering
+    mean_mag = np.mean(magnitude_spectra, axis=1)
+    for w in xrange(np.shape(magnitude_spectra)[1]):
+        magnitude_spectra_centered[:,w] -= mean_mag
+
+    # --- Scaling
+    std_mag = np.std(magnitude_spectra, axis=1)
+
+    for w in xrange(np.shape(magnitude_spectra)[1]):
+        magnitude_spectra_centered[:,w] /= std_mag
+
+    return magnitude_spectra_centered, mean_mag, std_mag
+
+
+def condition_phase(phase_spectra):
+    """
+    Center and scale the phase spectrum with optional trend removal
+    """
+
+    phase_spectra_centered = np.copy(phase_spectra)
+
+    # --- Trend removal
+    x = np.arange(len(phase_spectra[:,0]))
+    pfits = np.zeros(shape=np.shape(phase_spectra))
+    for w in xrange(np.shape(pfits)[1]):
+        y = phase_spectra[:,w]
+        pfits[:,w] = poly4(x, y)
+
+    phase_trend = np.mean(pfits,axis=1)
+##    for p in xrange(np.shape(pfits)[1]):
+#        phase_spectra_centered[:,p] = (phase_spectra[:,p]-100) / (phase_trend - 100)
+
+    # --- Centering
+    mean_phase = np.mean(phase_spectra_centered, axis=1)
+ #   for w in xrange(np.shape(phase_spectra)[1]):
+ #       phase_spectra_centered[:,w] -= mean_phase
+
+    # --- Scaling
+    #std_phase = np.ones(shape=np.shape(mean_phase))
+    #std_phase = np.std(phase_spectra, axis=1)
+    std_phase = np.std(phase_spectra_centered, axis=1)
+ #   for w in xrange(np.shape(phase_spectra)[1]):
+ #       phase_spectra_centered[1:,w] /= std_phase[1:]
+
+    return phase_spectra_centered, mean_phase, std_phase, phase_trend, pfits
 
 
 def complex_to_polar(catalogue):
@@ -199,7 +195,7 @@ def complex_to_polar(catalogue):
     return magnitudes, phases
 
 def phase_of(z):
-    return np.unwrap(np.angle(z))# - 2*np.pi
+    return np.unwrap(np.angle(z)) #- np.pi / 2
 #   import mpmath
 #   phases = np.zeros(len(z))
 #   for p, phase in enumerate(phases):
@@ -395,7 +391,7 @@ def residual_power(vector1, vector2):
 
     #return np.sqrt(sum((vector1-vector2)**2) / sum(vector2**2))
     #return np.linalg.norm(vector1-vector2) / np.linalg.norm(vector2)
-    return np.sqrt(sum((vector1-vector2)**2) / sum(vector2**2))
+    return np.sqrt(sum((vector1-vector2)**2))# / sum(vector2**2))
 
 
 def wrap_phase(phase):
@@ -507,16 +503,27 @@ class pmnsPCA:
         #
         # Center & scale test spectrum
         #
-        magnitude_cent = (testwav_magnitude_align - self.pca['mean_mag']) / self.pca['std_mag']
-        phase_cent = (testwav_phase - self.pca['mean_phase']) / self.pca['std_phase']
+        magnitude_cent = np.copy(testwav_magnitude_align)
+        magnitude_cent -= self.pca['mean_mag']
+        magnitude_cent /= self.pca['std_mag']
 
+        #phase_cent = (testwav_phase - 100)
+        #phase_cent /= self.pca['phase_trend'] - 100
+        phase_cent = np.copy(testwav_phase)
+        #phase_cent -= self.pca['mean_phase']
+        #phase_cent /= self.pca['std_phase']
+
+        projection['magnitude_cent'] = magnitude_cent
+        projection['phase_cent'] = phase_cent
+
+        #
         # Finally, project test spectrum onto PCs (dot product between data and PCs)
+        #
 
         projection['betas_magnitude'] = np.dot(magnitude_cent,
                 self.pca['magnitude_pcs'])
 
         projection['betas_phase'] = np.dot(phase_cent, self.pca['phase_pcs'])
-
 
         return projection
 
@@ -571,7 +578,10 @@ class pmnsPCA:
         recmag = np.zeros(shape=np.shape(self.pca['mean_mag']))
         recphi = np.zeros(shape=np.shape(self.pca['mean_phase']))
 
+        cmplx = np.zeros(shape=np.shape(self.pca['mean_phase']), dtype=complex)
+
         # Sum contributions from PCs
+        #npcs=10
         for i in xrange(npcs):
 
             # Sanity Check: if the eigenvalue for the current PC is close to
@@ -589,7 +599,11 @@ class pmnsPCA:
                 recphi += \
                         projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
 
-        #recphi = projection['betas_phase'][0]*self.pca['phase_pcs'][:,0]
+            cmplx += \
+                    projection['betas_magnitude'][i]*self.pca['magnitude_pcs'][:,i]*np.exp(1j*projection['betas_phase'][i]*self.pca['phase_pcs'][:,i])
+
+        cmplx = shift_vec(cmplx, self.sample_frequencies,
+                fcenter=this_fpeak, fpeak=self.fcenter)
 
         # expected error
         #print sum(self.pca['magnitude_eigenvalues'][npcs:])
@@ -597,10 +611,23 @@ class pmnsPCA:
         #
         # De-center the reconstruction
         #
-        recmag = (recmag * self.pca['std_mag']) + self.pca['mean_mag']
-        #recphi = (recphi * self.pca['std_phase']) + self.pca['mean_phase']
+        recmag = recmag * self.pca['std_mag'] 
+        recmag += self.pca['mean_mag']
 
-        recphi = np.copy(oriphi)
+        #recphi = recphi * self.pca['std_phase']
+        #recphi += self.pca['mean_phase']
+        #recphi *= self.pca['phase_trend'] - 100
+        #recphi += 100
+
+
+        x = np.arange(len(oriphi))
+        fitphi = poly4(x, oriphi)
+
+        #debug_here()
+
+        #noisyphi = np.copy(oriphi) + 0.1*np.random.randn(len(oriphi))
+
+        #debug_here()
 
         #
         # Move the spectrum back to where it should be
@@ -619,6 +646,7 @@ class pmnsPCA:
         #
 
         recon_spectrum = recmag * np.exp(1j*recphi)
+        #recon_spectrum = np.copy(cmplx)
 
  
         # --- Unit norm reconstruction
