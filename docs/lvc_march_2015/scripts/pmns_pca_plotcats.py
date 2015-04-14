@@ -23,6 +23,7 @@ import os,sys
 import numpy as np
 from matplotlib import pyplot as pl
 import pmns_pca_utils
+import pmns_utils
 
 
 waveform_names=['apr_135135_lessvisc',
@@ -44,7 +45,7 @@ npcs = len(waveform_names)
 fshift_center=1000
 print "building catalogues"
 (freqaxis, low_cat, high_cat, shift_cat, original_cat, fpeaks, low_sigmas,
-        high_sigmas) = pmns_pca_utils.build_catalogues(waveform_names,
+        high_sigmas, false_freqs_shift) = pmns_pca_utils.build_catalogues(waveform_names,
                 fshift_center)
 delta_f = np.diff(freqaxis)[0]
 
@@ -68,7 +69,7 @@ imageformats=['png','eps','pdf']
 #
 
 # Magnitude
-f, ax = pl.subplots(ncols=2,figsize=(7,10))
+f, ax = pl.subplots(nrows=2,figsize=(7,10))
 
 ax[0].semilogy(freqaxis, full_mag)
 ax[0].set_xlim(900, 5000)
@@ -80,7 +81,7 @@ ax[0].set_title('Original Spectra (magnitude)')
 ax[0].grid()
 
 ax[1].semilogy(freqaxis, shift_mag)
-ax[1].set_xlim(900, 5000)
+ax[1].set_xlim(500, 2000)
 ax[1].set_ylim(1e-4, 1e-1)
 ax[1].set_xlabel('Frequency [Hz]')
 ax[1].set_ylabel('|H(f)|')
@@ -94,7 +95,7 @@ for fileformat in imageformats:
     f.savefig('catalogue_magnitude_overlay.%s'%fileformat)
 
 # Phase
-f, ax = pl.subplots(ncols=2,figsize=(7,10))
+f, ax = pl.subplots(nrows=2,figsize=(7,10))
 
 ax[0].plot(freqaxis, full_phase)
 ax[0].set_xlim(900, 5000)
@@ -105,7 +106,7 @@ ax[0].set_title('Original Spectra (phase)')
 ax[0].grid()
 
 ax[1].plot(freqaxis, shift_phase)
-ax[1].set_xlim(900, 5000)
+ax[1].set_xlim(500, 2000)
 ax[1].set_xlabel('Frequency [Hz]')
 ax[1].set_ylabel('arg[H(f)]')
 ax[1].minorticks_on()

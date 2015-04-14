@@ -598,7 +598,9 @@ class pmnsPCA:
         # De-center the reconstruction
         #
         recmag = (recmag * self.pca['std_mag']) + self.pca['mean_mag']
-        recphi = (recphi * self.pca['std_phase']) + self.pca['mean_phase']
+        #recphi = (recphi * self.pca['std_phase']) + self.pca['mean_phase']
+
+        recphi = np.copy(oriphi)
 
         #
         # Move the spectrum back to where it should be
