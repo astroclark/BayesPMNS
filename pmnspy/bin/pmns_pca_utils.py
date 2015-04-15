@@ -506,7 +506,7 @@ class pmnsPCA:
         #
         magnitude_cent = np.copy(testwav_magnitude_align)
         magnitude_cent -= self.pca['mean_mag']
-        magnitude_cent /= self.pca['std_mag']
+        #magnitude_cent /= self.pca['std_mag']
 
         phase_cent = np.copy(testwav_phase)
         phase_cent -= self.pca['mean_phase']
@@ -527,7 +527,7 @@ class pmnsPCA:
 
         return projection
 
-    def reconstruct(self, freqseries, npcs=1, this_fpeak=None):
+    def reconstruct(self, freqseries, npcs=1, this_fpeak=None, wfnum=None):
         """
         Reconstruct the waveform in freqseries using <npcs> principal components
         from the catalogue
@@ -599,7 +599,7 @@ class pmnsPCA:
         #
         # De-center the reconstruction
         #
-        recmag = recmag * self.pca['std_mag'] 
+        #recmag = recmag * self.pca['std_mag'] 
         recmag += self.pca['mean_mag']
 
         recphi = recphi * self.pca['std_phase']
