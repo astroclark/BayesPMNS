@@ -186,11 +186,11 @@ def complex_to_polar(catalogue):
     magnitudes = np.zeros(shape=np.shape(catalogue))
     phases = np.zeros(shape=np.shape(catalogue))
     if len(np.shape(catalogue))==1:
-        return abs(catalogue), phase_of(catalogue)
+        return abs(catalogue), phase_of(catalogue) - phase_of(catalogue)[0]
 
     for c in xrange(np.shape(catalogue)[1]):
         magnitudes[:,c] = abs(catalogue[:,c])
-        phases[:,c] = phase_of(catalogue[:,c])
+        phases[:,c] = phase_of(catalogue[:,c]) - phase_of(catalogue[:,c])[0]
 
     return magnitudes, phases
 
