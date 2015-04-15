@@ -139,8 +139,8 @@ def condition_magnitude(magnitude_spectra):
     # --- Scaling
     std_mag = np.std(magnitude_spectra, axis=1)
 
-    for w in xrange(np.shape(magnitude_spectra)[1]):
-        magnitude_spectra_centered[:,w] /= std_mag
+    #for w in xrange(np.shape(magnitude_spectra)[1]):
+    #    magnitude_spectra_centered[:,w] /= std_mag
 
     return magnitude_spectra_centered, mean_mag, std_mag
 
