@@ -160,20 +160,21 @@ def condition_phase(phase_spectra):
         pfits[:,w] = poly4(x, y)
 
     phase_trend = np.mean(pfits,axis=1)
-##    for p in xrange(np.shape(pfits)[1]):
-#        phase_spectra_centered[:,p] = (phase_spectra[:,p]-100) / (phase_trend - 100)
+    #for p in xrange(np.shape(pfits)[1]):
+    #    phase_spectra_centered[:,w] -= phase_trend
 
     # --- Centering
     mean_phase = np.mean(phase_spectra_centered, axis=1)
- #   for w in xrange(np.shape(phase_spectra)[1]):
- #       phase_spectra_centered[:,w] -= mean_phase
+    for w in xrange(np.shape(phase_spectra)[1]):
+        phase_spectra_centered[:,w] -= mean_phase
 
     # --- Scaling
     #std_phase = np.ones(shape=np.shape(mean_phase))
     #std_phase = np.std(phase_spectra, axis=1)
     std_phase = np.std(phase_spectra_centered, axis=1)
- #   for w in xrange(np.shape(phase_spectra)[1]):
- #       phase_spectra_centered[1:,w] /= std_phase[1:]
+    std_phase[0] = 1.0
+    for w in xrange(np.shape(phase_spectra)[1]):
+        phase_spectra_centered[1:,w] /= std_phase[1:]
 
     return phase_spectra_centered, mean_phase, std_phase, phase_trend, pfits
 
@@ -507,11 +508,10 @@ class pmnsPCA:
         magnitude_cent -= self.pca['mean_mag']
         magnitude_cent /= self.pca['std_mag']
 
-        #phase_cent = (testwav_phase - 100)
-        #phase_cent /= self.pca['phase_trend'] - 100
         phase_cent = np.copy(testwav_phase)
-        #phase_cent -= self.pca['mean_phase']
-        #phase_cent /= self.pca['std_phase']
+        phase_cent -= self.pca['mean_phase']
+        phase_cent /= self.pca['std_phase']
+        #phase_cent -= self.pca['phase_trend']
 
         projection['magnitude_cent'] = magnitude_cent
         projection['phase_cent'] = phase_cent
@@ -578,10 +578,7 @@ class pmnsPCA:
         recmag = np.zeros(shape=np.shape(self.pca['mean_mag']))
         recphi = np.zeros(shape=np.shape(self.pca['mean_phase']))
 
-        cmplx = np.zeros(shape=np.shape(self.pca['mean_phase']), dtype=complex)
-
         # Sum contributions from PCs
-        #npcs=10
         for i in xrange(npcs):
 
             # Sanity Check: if the eigenvalue for the current PC is close to
@@ -599,35 +596,16 @@ class pmnsPCA:
                 recphi += \
                         projection['betas_phase'][i]*self.pca['phase_pcs'][:,i]
 
-            cmplx += \
-                    projection['betas_magnitude'][i]*self.pca['magnitude_pcs'][:,i]*np.exp(1j*projection['betas_phase'][i]*self.pca['phase_pcs'][:,i])
-
-        cmplx = shift_vec(cmplx, self.sample_frequencies,
-                fcenter=this_fpeak, fpeak=self.fcenter)
-
-        # expected error
-        #print sum(self.pca['magnitude_eigenvalues'][npcs:])
-
         #
         # De-center the reconstruction
         #
         recmag = recmag * self.pca['std_mag'] 
         recmag += self.pca['mean_mag']
 
-        #recphi = recphi * self.pca['std_phase']
-        #recphi += self.pca['mean_phase']
-        #recphi *= self.pca['phase_trend'] - 100
-        #recphi += 100
+        recphi = recphi * self.pca['std_phase']
+        recphi += self.pca['mean_phase']
+        #recphi += self.pca['phase_trend']
 
-
-        x = np.arange(len(oriphi))
-        fitphi = poly4(x, oriphi)
-
-        #debug_here()
-
-        #noisyphi = np.copy(oriphi) + 0.1*np.random.randn(len(oriphi))
-
-        #debug_here()
 
         #
         # Move the spectrum back to where it should be
