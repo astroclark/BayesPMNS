@@ -45,8 +45,7 @@ from IPython.core.debugger import Tracer; debug_here = Tracer()
 # _________________ FUNCTIONS  _________________ #
 
 
-
-def pca_magphase(magnitudes, phases):
+def perform_pca(cpx, magnitudes, phases):
     """
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
@@ -57,11 +56,6 @@ def pca_magphase(magnitudes, phases):
     phase_spectra_centered, phase_mean, phase_std, phase_trend, pfits = \
             condition_phase(phases)
 
-    # XXX
-    cpx_spectra = magnitudes * np.exp(1j*phases)
-    cpx_pca = PCA(whiten=False)
-    cpx_pca.fit(cpx_spectra)
-
 
     mag_pca = PCA(whiten=False)
     mag_pca.fit(magnitude_spectra_centered)
@@ -70,8 +64,6 @@ def pca_magphase(magnitudes, phases):
     phase_pca.fit(phase_spectra_centered)
 
     pcs_magphase={}
-
-    pcs_magphase['cpx_pca'] = cpx_pca
 
     pcs_magphase['magnitude_pca'] = mag_pca
     pcs_magphase['phase_pca'] = phase_pca
@@ -87,11 +79,49 @@ def pca_magphase(magnitudes, phases):
     pcs_magphase['phase_fits'] = pfits
 
 
+    # XXX
+
+    cpx_spectra_centered, cpx_mean, cpx_std = condition_cpx(cpx.real)
+
+    cpx_pca = PCA(whiten=False)
+    cpx_pca.fit(cpx_spectra_centered)
+
+    pcs_magphase['cpx_pca'] = cpx_pca
+
+    pcs_magphase['cpx_mean'] = cpx_mean
+    pcs_magphase['cpx_std'] = cpx_std
+
+
     return pcs_magphase
+
+def condition_cpx(cpx_spectra):
+    """
+    Center and scale the cpx spectrum with optional trend removal
+    """
+
+    cpx_spectra_centered = np.copy(cpx_spectra)
+
+    # --- Centering
+    cpx_mean = np.mean(cpx_spectra_centered, axis=0)
+    for w in xrange(np.shape(cpx_spectra)[0]):
+        cpx_spectra_centered[w,:] -= cpx_mean
+
+    # --- Scaling
+    cpx_std = np.std(cpx_spectra_centered, axis=0)
+
+    for w in xrange(np.shape(cpx_spectra)[0]):
+        #cpx_spectra_centered[w,:] /= cpx_std
+        cpx_spectra_centered[w,:] /= np.linalg.norm(cpx_spectra_centered[w,:])
+
+    return cpx_spectra_centered, cpx_mean, cpx_std
 
 def condition_magnitude(magnitude_spectra):
 
     magnitude_spectra_centered = np.copy(magnitude_spectra)
+
+#   for w in xrange(np.shape(magnitude_spectra)[0]):
+#       magnitude_spectra_centered[w,:] /= \
+#               np.linalg.norm(magnitude_spectra_centered[w,:])
 
     # --- Centering
     magnitude_mean = np.mean(magnitude_spectra, axis=0)
@@ -102,7 +132,7 @@ def condition_magnitude(magnitude_spectra):
     magnitude_std = np.std(magnitude_spectra, axis=0)
 
     #for w in xrange(np.shape(magnitude_spectra)[0]):
-    #    magnitude_spectra_centered[w,:] /= magnitude_std
+        #magnitude_spectra_centered[w,:] /= magnitude_std
 
     return magnitude_spectra_centered, magnitude_mean, magnitude_std
 
@@ -114,6 +144,10 @@ def condition_phase(phase_spectra):
 
     phase_spectra_centered = np.copy(phase_spectra)
 
+#   for w in xrange(np.shape(phase_spectra)[0]):
+#       phase_spectra_centered[w,:] /= \
+#               np.linalg.norm(phase_spectra_centered[w,:])
+#
     # --- Trend removal
     x = np.arange(len(phase_spectra[0,:]))
     pfits = np.zeros(shape=np.shape(phase_spectra))
@@ -380,7 +414,7 @@ class pmnsPCA:
 
         # Do PCA
         print "Performing PCA"
-        self.pca = pca_magphase(self.magnitude_align, self.phase)
+        self.pca = perform_pca(self.cat_align, self.magnitude_align, self.phase)
 
 
 
@@ -414,7 +448,7 @@ class pmnsPCA:
 
         # Align test spectrum
         freqseries_align = shift_vec(freqseries, self.sample_frequencies,
-                this_fpeak)
+                fcenter=self.fcenter, fpeak=this_fpeak)
         
         # Normalise test spectrum
         freqseries_align = unit_hrss(freqseries_align, delta=self.delta_f,
@@ -437,19 +471,24 @@ class pmnsPCA:
         phase_cent -= self.pca['phase_mean']
         phase_cent /= self.pca['phase_std']
 
+        cpx_cent = np.copy(freqseries_align.data.real)
+        cpx_cent -= self.pca['cpx_mean']
+        #cpx_cent /= self.pca['cpx_std']
 
         #
         # Finally, project test spectrum onto PCs
         #
-
         projection['magnitude_betas'] = np.concatenate(
-                self.pca['magnitude_pca'].transform(magnitude_cent))
+                self.pca['magnitude_pca'].transform(magnitude_cent)
+                )
 
         projection['phase_betas'] = np.concatenate(
-                self.pca['phase_pca'].transform(phase_cent))
+                self.pca['phase_pca'].transform(phase_cent)
+                )
 
         projection['cpx_betas'] = np.concatenate(
-                self.pca['cpx_pca'].transform(freqseries_align))
+                self.pca['cpx_pca'].transform(cpx_cent)
+                )
 
         return projection
 
@@ -490,7 +529,7 @@ class pmnsPCA:
                 delta=self.delta_f, domain='frequency')
 
         freqseries_align = shift_vec(freqseries, self.sample_frequencies,
-                this_fpeak)
+                fcenter=self.fcenter, fpeak=this_fpeak)
         reconstruction['original_spectrum_align'] = unit_hrss(freqseries_align,
                 delta=self.delta_f, domain='frequency')
 
@@ -507,7 +546,7 @@ class pmnsPCA:
         recspec = np.zeros(shape=np.shape(oriphi))
 
         # Sum contributions from PCs
-        npcs=10
+        #npcs=10
         for i in xrange(npcs):
 
             recmag += \
@@ -531,9 +570,8 @@ class pmnsPCA:
         recphi = recphi * self.pca['phase_std']
         recphi += self.pca['phase_mean']
 
-        recspec += self.pca['cpx_pca'].mean_
-
-        debug_here()
+        #recspec = recspec * self.pca['cpx_std']
+        recspec += self.pca['cpx_mean']
 
 
         #
@@ -555,16 +593,20 @@ class pmnsPCA:
         # Fourier spectrum reconstructions
         #
 
-        #recon_spectrum = recmag * np.exp(1j*recphi)
+        recon_spectrum = recmag * np.exp(1j*recphi)
 
-        pl.figure()
-        pl.plot(recspec)
-        pl.plot(-1*np.imag(signal.hilbert(recspec)))
-        pl.plot(orimag*np.exp(1j*oriphi), label='real sig')
-        pl.plot(np.imag(orimag*np.exp(1j*oriphi)), label='imag sig')
-        pl.show()
-        sys.exit()
-        recon_spectrum = recspec - 1j*np.imag(signal.hilbert(recspec))
+#       f, ax = pl.subplots(nrows=2)
+#
+#       ax[0].plot(recspec, label='real from pcs')
+#       ax[0].plot(np.real(freqseries), label='real sig')
+#
+#       ax[1].plot(-1*np.imag(signal.hilbert(recspec)), 
+#               label='imag from pcs (via hilbert)')
+#       ax[1].plot(np.imag(orimag*np.exp(1j*oriphi)), label='imag sig')
+#
+#       pl.show()
+#       sys.exit()
+#        recon_spectrum = recspec - 1j*np.imag(signal.hilbert(recspec))
 
  
         # --- Unit norm reconstruction
