@@ -264,8 +264,12 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     standard length (16384 samples)
     """
 
+    #ts = pycbc.types.TimeSeries(initial_array=waveform_timeseries, delta_t=delta_t)
+    #ts = pycbc.filter.highpass(ts, 1000, filter_order=8)
+
     # Time-domain Window
     win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.1)
+    #waveform_timeseries = np.copy(ts.data)
     waveform_timeseries *= win.data.data
 
     # Zero-pad
@@ -545,6 +549,8 @@ class pmnsPCA:
         oriphi = phase_of(freqseries)
         #oriphi = self.pca['phase_fits'][wfnum,:]
 
+        phase_fit = poly4(np.arange(len(oriphi)), oriphi)
+
         orispec = orimag*np.exp(1j*oriphi)
 
         reconstruction['original_spectrum'] = unit_hrss(orispec,
@@ -591,7 +597,8 @@ class pmnsPCA:
 
         recphi = recphi * self.pca['phase_std']
         recphi += self.pca['phase_mean']
-        #recphi = self.pca['phase_fits'][wfnum,:]
+
+        #recphi = phase_fit
 
         #recspec = recspec * self.pca['cpx_std']
         recspec += self.pca['cpx_mean']
