@@ -73,7 +73,10 @@ catlen = len(waveform_names)
 # Create PMNS PCA instance for this catalogue
 #
 
-pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710)
+nTsamples=int(sys.argv[1])
+
+pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710,
+        nTsamples=nTsamples)
 
 #
 # Exact matches (include test waveform in training data)
@@ -94,7 +97,9 @@ for w,testwav_name in enumerate(waveform_names):
     testwav_waveform.reproject_waveform()
 
     # Standardise
-    testwav_waveform_FD, fpeak = ppca.condition_spectrum(testwav_waveform.hplus.data)
+    testwav_waveform_FD, fpeak = \
+            ppca.condition_spectrum(testwav_waveform.hplus.data,
+                    nsamples=nTsamples)
 
     # Normalise
     testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,
@@ -106,9 +111,9 @@ for w,testwav_name in enumerate(waveform_names):
 
 
     for n, npcs in enumerate(xrange(1,catlen+1)):
-        #reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs,
-        #        wfnum=w)
-        reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
+        reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs,
+                wfnum=w)
+        #reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
         #exact_matches[w,n]=reconstruction['match_noweight']
         exact_matches[w,n]=reconstruction['match_aligo']
@@ -136,9 +141,6 @@ f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
         title="Reconstructing including the test waveform")
 
 
-pl.show()
-sys.exit()
-
 #
 # Eigenenergy
 #
@@ -146,11 +148,13 @@ catlen=len(waveform_names)
 
 f, ax = pl.subplots(ncols=1,figsize=(7,5))
 
-ax.plot(range(1,catlen+1), 100*pmpca.pca['magnitude_eigenergy'], 
-     label='magnitudes')
+ax.plot(range(1,catlen+1),
+        100*(np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_)), 
+            label='magnitudes')
 
-ax.plot(range(1,catlen+1), 100*pmpca.pca['phase_eigenergy'],
-     label='phases', color='b', linestyle='--')
+ax.plot(range(1,catlen+1),
+        100*(np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_)),
+            label='phases', color='b', linestyle='--')
 
 ax.set_xlabel('Number of Principal Components')
 ax.set_ylabel('% Variance Explained')
@@ -160,7 +164,6 @@ ax.legend(loc='lower right')
 f.tight_layout()
 
 pl.show()
-sys.exit()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Realistic catalogues
@@ -207,8 +210,7 @@ for w,testwav_name in enumerate(waveform_names):
     for n, npcs in enumerate(xrange(1,catlen-1+1)):
         reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
-        real_matches_align[w,n]=reconstruction['match_aligo_align'][0]
-        real_matches[w,n]=reconstruction['match_aligo'][0]
+        real_matches[w,n]=reconstruction['match_aligo']
 
 
 # ***** Plot Results ***** #
@@ -216,8 +218,8 @@ for w,testwav_name in enumerate(waveform_names):
 #
 # Realistic Matches
 #
-f, ax = ppca.image_matches(real_matches, waveform_names, mismatch=True,
-        title="Reconstructing excluding the test waveform")
+#f, ax = ppca.image_matches(real_matches, waveform_names, mismatch=True,
+#        title="Reconstructing excluding the test waveform")
 f, ax = ppca.image_matches(real_matches, waveform_names, mismatch=False,
         title="Reconstructing excluding the test waveform")
 

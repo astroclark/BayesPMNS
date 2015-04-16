@@ -21,12 +21,11 @@ from __future__ import division
 import os,sys
 import cPickle as pickle
 import numpy as np
-import scipy.linalg
-import scipy.sparse.linalg
 from scipy import signal
 from scipy import optimize
 
 from sklearn.decomposition import PCA 
+from sklearn.decomposition import TruncatedSVD
 
 import matplotlib
 #matplotlib.use("Agg")
@@ -50,17 +49,22 @@ def perform_pca(cpx, magnitudes, phases):
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
 
+
     magnitude_spectra_centered, magnitude_mean, magnitude_std = \
             condition_magnitude(magnitudes)
 
     phase_spectra_centered, phase_mean, phase_std, phase_trend, pfits = \
             condition_phase(phases)
 
+#   pl.figure()
+#   pl.plot(phases.T)
+#   pl.show()
+#   sys.exit()
 
-    mag_pca = PCA(whiten=False)
+    mag_pca = PCA()
     mag_pca.fit(magnitude_spectra_centered)
 
-    phase_pca = PCA(whiten=False)
+    phase_pca = PCA()
     phase_pca.fit(phase_spectra_centered)
 
     pcs_magphase={}
@@ -109,9 +113,9 @@ def condition_cpx(cpx_spectra):
     # --- Scaling
     cpx_std = np.std(cpx_spectra_centered, axis=0)
 
-    for w in xrange(np.shape(cpx_spectra)[0]):
+    #for w in xrange(np.shape(cpx_spectra)[0]):
         #cpx_spectra_centered[w,:] /= cpx_std
-        cpx_spectra_centered[w,:] /= np.linalg.norm(cpx_spectra_centered[w,:])
+        #cpx_spectra_centered[w,:] /= np.linalg.norm(cpx_spectra_centered[w,:])
 
     return cpx_spectra_centered, cpx_mean, cpx_std
 
@@ -137,7 +141,7 @@ def condition_magnitude(magnitude_spectra):
     return magnitude_spectra_centered, magnitude_mean, magnitude_std
 
 
-def condition_phase(phase_spectra):
+def condition_phase(phase_spectra, freqs=None, fmin=1000., fmax=4000.):
     """
     Center and scale the phase spectrum with optional trend removal
     """
@@ -148,12 +152,18 @@ def condition_phase(phase_spectra):
 #       phase_spectra_centered[w,:] /= \
 #               np.linalg.norm(phase_spectra_centered[w,:])
 #
-    # --- Trend removal
+    # --- Phase fits
+
+    if freqs is None:
+        freqs = np.arange(0,8192+16,16)
+
+    fitidx = (freqs>fmin) * (freqs<fmax)
+
     x = np.arange(len(phase_spectra[0,:]))
     pfits = np.zeros(shape=np.shape(phase_spectra))
     for w in xrange(np.shape(pfits)[0]):
         y = phase_spectra[w,:]
-        pfits[w,:] = poly4(x, y)
+        pfits[w,:] = poly4(x, y, fitidx)
 
     phase_trend = np.mean(pfits,axis=0)
     #for p in xrange(np.shape(pfits)[1]):
@@ -166,8 +176,8 @@ def condition_phase(phase_spectra):
 
     # --- Scaling
     #phase_std = np.ones(shape=np.shape(phase_mean))
-    #phase_std = np.std(phase_spectra, axis=1)
     phase_std = np.std(phase_spectra_centered, axis=0)
+    #phase_std = np.ones(shape=np.shape(phase_std))
     phase_std[0] = 1.0
     for w in xrange(np.shape(phase_spectra)[0]):
         phase_spectra_centered[w,1:] /= phase_std[1:]
@@ -192,21 +202,22 @@ def complex_to_polar(catalogue):
     return magnitudes, phases
 
 def phase_of(z):
-    return np.unwrap(np.angle(z)) #- np.pi / 2
+    #return np.unwrap(np.angle(z))# - 2*np.pi
+    return np.unwrap(np.angle(z))# - 2*np.pi
 #   import mpmath
 #   phases = np.zeros(len(z))
 #   for p, phase in enumerate(phases):
 #       phases[p] = np.float(mpmath.arg(z[p]))
 #   return np.unwrap(phases)# - 2*np.pi
 
-def build_catalogues(waveform_names, fshift_center):
+def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
     """
     Build the data matrix
     """
 
     sample_freq=16384
+
     delta_t=1./sample_freq
-    nTsamples=1*sample_freq
     nFsamples=nTsamples/2 + 1
     times=np.arange(0, delta_t*nTsamples, delta_t)
 
@@ -224,7 +235,8 @@ def build_catalogues(waveform_names, fshift_center):
         waveform.reproject_waveform()
 
         # Waveform conditioning
-        original_spectrum, fpeaks[w] = condition_spectrum(waveform.hplus.data)
+        original_spectrum, fpeaks[w] = condition_spectrum(waveform.hplus.data,
+                nsamples=nTsamples)
 
         del waveform
 
@@ -260,8 +272,12 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     paddata = np.zeros(nsamples)
     paddata[:len(waveform_timeseries)] = np.copy(waveform_timeseries)
 
+
     # FFT
     timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
+
+    timeseries = pycbc.filter.highpass(timeseries, 1000, filter_order=8)
+
     freqseries = timeseries.to_frequencyseries()
 
     # Locate fpeak
@@ -271,13 +287,16 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     
     return freqseries, fpeak
 
-def poly4(x, y):
+def poly4(x, y, idx=None):
     """
     helper func for 4th order polyfit for phase conditioning
     """
 
     # 4th order polyfit to phase for trend removal
-    p = np.polyfit(x, y, 4)
+    if idx is None:
+        p = np.polyfit(x, y, 4)
+    else:
+        p = np.polyfit(x[idx], y[idx], 4)
 
     return  p[0]*x**4 + p[1]*x**3 + p[2]*x**2 + p[3]*x**1 + p[4]
 
@@ -382,7 +401,8 @@ class pmnsPCA:
 
     """
 
-    def __init__(self, waveform_list, fcenter=1000, low_frequency_cutoff=0):
+    def __init__(self, waveform_list, fcenter=1000, low_frequency_cutoff=1000,
+            nTsamples=16384):
 
         #
         # Build Catalogues
@@ -392,7 +412,8 @@ class pmnsPCA:
 
         print "Building catalogue"
         (self.sample_frequencies, self.cat_align, self.cat_orig,
-                self.fpeaks)=build_catalogues(self.waveform_list, self.fcenter)
+                self.fpeaks)=build_catalogues(self.waveform_list, self.fcenter,
+                        nTsamples=nTsamples)
         self.delta_f = np.diff(self.sample_frequencies)[0]
 
         # min freq for match calculations
@@ -522,6 +543,7 @@ class pmnsPCA:
         #
         orimag = abs(freqseries)
         oriphi = phase_of(freqseries)
+        #oriphi = self.pca['phase_fits'][wfnum,:]
 
         orispec = orimag*np.exp(1j*oriphi)
 
@@ -569,6 +591,7 @@ class pmnsPCA:
 
         recphi = recphi * self.pca['phase_std']
         recphi += self.pca['phase_mean']
+        #recphi = self.pca['phase_fits'][wfnum,:]
 
         #recspec = recspec * self.pca['cpx_std']
         recspec += self.pca['cpx_mean']
@@ -681,8 +704,8 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
         bar_label = 'match'
 
     #fig, ax = pl.subplots(figsize=(15,8))
-    #fig, ax = pl.subplots(figsize=(7,7))
-    fig, ax = pl.subplots()
+    fig, ax = pl.subplots(figsize=(8,4))
+    #fig, ax = pl.subplots()
     nwaves = np.shape(match_matrix)[0]
     npcs = np.shape(match_matrix)[1]
 
