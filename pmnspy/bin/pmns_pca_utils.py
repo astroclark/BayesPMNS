@@ -84,10 +84,6 @@ def condition_magnitude(magnitude_spectra):
 
     magnitude_spectra_centered = np.copy(magnitude_spectra)
 
-#   for w in xrange(np.shape(magnitude_spectra)[0]):
-#       magnitude_spectra_centered[w,:] /= \
-#               np.linalg.norm(magnitude_spectra_centered[w,:])
-
     # --- Centering
     magnitude_mean = np.mean(magnitude_spectra, axis=0)
     for w in xrange(np.shape(magnitude_spectra)[0]):
@@ -109,10 +105,6 @@ def condition_phase(phase_spectra, freqs=None, fmin=1000., fmax=4000.):
 
     phase_spectra_centered = np.copy(phase_spectra)
 
-#   for w in xrange(np.shape(phase_spectra)[0]):
-#       phase_spectra_centered[w,:] /= \
-#               np.linalg.norm(phase_spectra_centered[w,:])
-#
     # --- Phase fits
 
     if freqs is None:
@@ -127,8 +119,6 @@ def condition_phase(phase_spectra, freqs=None, fmin=1000., fmax=4000.):
         pfits[w,:] = poly4(x, y, fitidx)
 
     phase_trend = np.mean(pfits,axis=0)
-    #for p in xrange(np.shape(pfits)[1]):
-    #    phase_spectra_centered[:,w] -= phase_trend
 
     # --- Centering
     phase_mean = np.mean(phase_spectra_centered, axis=0)
@@ -136,9 +126,7 @@ def condition_phase(phase_spectra, freqs=None, fmin=1000., fmax=4000.):
         phase_spectra_centered[w,:] -= phase_mean
 
     # --- Scaling
-    #phase_std = np.ones(shape=np.shape(phase_mean))
     phase_std = np.std(phase_spectra_centered, axis=0)
-    #phase_std = np.ones(shape=np.shape(phase_std))
     phase_std[0] = 1.0
     for w in xrange(np.shape(phase_spectra)[0]):
         phase_spectra_centered[w,1:] /= phase_std[1:]
@@ -163,13 +151,7 @@ def complex_to_polar(catalogue):
     return magnitudes, phases
 
 def phase_of(z):
-    #return np.unwrap(np.angle(z))# - 2*np.pi
     return np.unwrap(np.angle(z))# - 2*np.pi
-#   import mpmath
-#   phases = np.zeros(len(z))
-#   for p, phase in enumerate(phases):
-#       phases[p] = np.float(mpmath.arg(z[p]))
-#   return np.unwrap(phases)# - 2*np.pi
 
 def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
     """
@@ -225,9 +207,6 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     standard length (16384 samples)
     """
 
-    #ts = pycbc.types.TimeSeries(initial_array=waveform_timeseries, delta_t=delta_t)
-    #ts = pycbc.filter.highpass(ts, 1000, filter_order=8)
-
     # Time-domain Window
     win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.1)
     #waveform_timeseries = np.copy(ts.data)
@@ -240,7 +219,6 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
 
     # FFT
     timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
-
     timeseries = pycbc.filter.highpass(timeseries, 1000, filter_order=8)
 
     freqseries = timeseries.to_frequencyseries()
