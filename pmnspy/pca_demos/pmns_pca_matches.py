@@ -208,7 +208,8 @@ for w,testwav_name in enumerate(waveform_names):
     # Reconstruct 
     #
     for n, npcs in enumerate(xrange(1,catlen-1+1)):
-        reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
+
+        reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs, wfnum=w)
 
         real_matches[w,n]=reconstruction['match_aligo']
 
