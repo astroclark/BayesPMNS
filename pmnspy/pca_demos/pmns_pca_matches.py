@@ -83,8 +83,8 @@ pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710,
 #
 exact_matches=np.zeros(shape=(catlen, catlen))
 
-exact_residual_magnitude=np.zeros(shape=(catlen, catlen))
-exact_residual_phase=np.zeros(shape=(catlen, catlen))
+exact_magnitude_euclidean=np.zeros(shape=(catlen, catlen))
+exact_phase_euclidean=np.zeros(shape=(catlen, catlen))
 
 for w,testwav_name in enumerate(waveform_names):
 
@@ -93,6 +93,7 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Create test waveform
     #
+    #testwav_name='nl3_1919_lessvisc'
     testwav_waveform = pu.Waveform(testwav_name)
     testwav_waveform.reproject_waveform()
 
@@ -117,8 +118,8 @@ for w,testwav_name in enumerate(waveform_names):
         #exact_matches[w,n]=reconstruction['match_noweight']
         exact_matches[w,n]=reconstruction['match_aligo']
 
-        exact_residual_magnitude[w,n]=reconstruction['residual_magnitude']
-        exact_residual_phase[w,n]=reconstruction['residual_phase']
+        exact_magnitude_euclidean[w,n]=reconstruction['magnitude_euclidean']
+        exact_phase_euclidean[w,n]=reconstruction['phase_euclidean']
 
 
 # ***** Plot Results ***** #
@@ -126,15 +127,18 @@ for w,testwav_name in enumerate(waveform_names):
 #
 # Exact Matches
 #
-#f, ax = ppca.image_residuals(exact_residual_magnitude, waveform_names,
-#        title="Magnitudes")
+f, ax = ppca.image_euclidean(exact_magnitude_euclidean, waveform_names,
+        title="Magnitudes")
 
-#f, ax = ppca.image_residuals(exact_residual_phase, waveform_names,
-#        title="Phases")
+f, ax = ppca.image_euclidean(exact_phase_euclidean, waveform_names,
+        title="Phases")
+
 
 f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
         title="Reconstructing including the test waveform")
 
+pl.show()
+sys.exit()
 
 #
 # Eigenenergy
@@ -184,7 +188,8 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Create PMNS PCA instance for this catalogue
     #
-    pmpca = ppca.pmnsPCA(waveform_names_reduced)
+    pmpca = ppca.pmnsPCA(waveform_names_reduced, low_frequency_cutoff=1000,
+            fcenter=2710, nTsamples=nTsamples)
 
     #
     # Create test waveform
@@ -193,7 +198,8 @@ for w,testwav_name in enumerate(waveform_names):
     testwav_waveform.reproject_waveform()
 
     # Standardise
-    testwav_waveform_FD, fpeak = ppca.condition_spectrum(testwav_waveform.hplus.data)
+    testwav_waveform_FD, fpeak = ppca.condition_spectrum(testwav_waveform.hplus.data,
+                    nsamples=nTsamples)
 
     # Normalise
     testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,

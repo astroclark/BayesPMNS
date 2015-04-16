@@ -23,6 +23,7 @@ import cPickle as pickle
 import numpy as np
 from scipy import signal
 from scipy import optimize
+from scipy.spatial.distance import euclidean as euclidean_distance
 
 from sklearn.decomposition import PCA 
 from sklearn.decomposition import TruncatedSVD
@@ -41,6 +42,8 @@ from pycbc.psd import aLIGOZeroDetHighPower
 
 from IPython.core.debugger import Tracer; debug_here = Tracer()
 
+import cwt
+
 # _________________ FUNCTIONS  _________________ #
 
 
@@ -57,10 +60,12 @@ def perform_pca(magnitudes, phases):
             condition_phase(phases)
 
     mag_pca = PCA()
-    mag_pca.fit(magnitude_spectra_centered)
+    #mag_pca.fit(magnitude_spectra_centered)
+    mag_pca.fit(magnitudes)
 
     phase_pca = PCA()
-    phase_pca.fit(phase_spectra_centered)
+    #phase_pca.fit(phase_spectra_centered)
+    phase_pca.fit(phases)
 
     pcs_magphase={}
 
@@ -181,6 +186,11 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
         original_spectrum, fpeaks[w] = condition_spectrum(waveform.hplus.data,
                 nsamples=nTsamples)
 
+        # XXX
+        tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data,
+            delta_t=delta_t))
+        center_cwt(tfmap, fpeaks[w])
+
         del waveform
 
         # Normalise to unit hrss
@@ -219,7 +229,7 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
 
     # FFT
     timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
-    timeseries = pycbc.filter.highpass(timeseries, 1000, filter_order=8)
+    #timeseries = pycbc.filter.highpass(timeseries, 1000, filter_order=8)
 
     freqseries = timeseries.to_frequencyseries()
 
@@ -316,24 +326,120 @@ def fine_phase_spectrum(complex_spectrum, sample_frequencies, gamma=0.01):
     return np.interp(sample_frequencies, fine_frequencies, phase_spectrum_fine)
 
 
-def residual_power(vector1, vector2):
-    """
-    Compute the normalised squared-residuals between vectors 1 and 2:
-
-    result = (vector1-vector2)**2 / vector2**2
-
-    """
-
-    #return np.sqrt(sum((vector1-vector2)**2) / sum(vector2**2))
-    #return np.linalg.norm(vector1-vector2) / np.linalg.norm(vector2)
-    return np.sqrt(sum((vector1-vector2)**2))# / sum(vector2**2))
-
-
 def wrap_phase(phase):
     """
     Opposite of np.wrap()
     """
     return ( phase + np.pi) % (2 * np.pi ) - np.pi
+
+def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
+        fmax=4096):
+
+
+    # Make sure the timeseries peaks in the middle of the map
+    paddata = np.zeros(2*len(timeseries))
+    peakidx = np.argmax(timeseries.data)
+    datalen = len(timeseries)
+    paddata[datalen-peakidx:datalen] = timeseries.data[:peakidx]
+    paddata[datalen:datalen+datalen-peakidx] = timeseries.data[peakidx:]
+
+    timeseries = pycbc.types.TimeSeries(paddata, delta_t=timeseries.delta_t)
+
+    sample_rate = 1./timeseries.delta_t
+
+    # Range of wavelet scales we're interested in
+    scales = 1+np.arange(max_scale)
+
+    # Construct the 'mother wavelet'; we'll begin using a Morlet wavelet
+    # (sine-Gaussian) but we should/could investigate others
+    # Could also experiment with values of f0.  See cwt.Morlet for info
+
+    mother_wavelet = cwt.Morlet(len_signal = \
+            len(timeseries), scales = scales,
+            sampf=sample_rate, f0=mother_freq)
+
+    # Compute the CWT
+    wavelet = cwt.cwt(timeseries.data, mother_wavelet)
+
+    # Take the absolute values of coefficients 
+    tfmap = np.abs(wavelet.coefs)
+
+
+    # Reduce to useful frequencies
+    freqs = sample_rate * wavelet.motherwavelet.fc \
+            / wavelet.motherwavelet.scales
+    tfmap[(freqs<fmin)+(freqs>fmax),:] = 0.0
+
+    # Normalise
+    tfmap /= max(map(max,abs(wavelet.coefs)))
+
+    # Return a dictionary
+    timefreq = dict()
+    timefreq['map'] = tfmap
+    timefreq['times'] = timeseries.sample_times.data
+    timefreq['frequencies'] = freqs
+    timefreq['scales'] = scales
+    timefreq['mother_wavelet'] = mother_wavelet
+
+#    # Choose the number of colour levels to plo
+#    collevs=np.linspace(0, 1, 500)
+ 
+#   import matplotlib.cm as cm
+#   pl.figure()
+#   pl.contourf(timeseries.sample_times, freqs, tfmap,
+#           levels=collevs, cmap=cm.gnuplot2)
+#   #pl.contourf(timeseries.sample_times, scales, tfmap,
+#   #        levels=collevs, cmap=cm.gnuplot2)
+#   #pl.xlim(0,0.02)
+#   pl.ylim(1000,4096)
+#   pl.clim(0,1)
+#   pl.show()
+#
+#   sys.exit()
+
+    return timefreq
+
+
+
+def center_cwt(timefreqmap, fpeak):
+    """
+    Center and Scale the time / frequency map analogously to how we handle
+    spectra
+    """
+
+    outputmap = np.copy(timefreqmap['map'])
+
+    peak_scale = timefreqmap['scales']\
+            [abs(timefreqmap['frequencies']-fpeak).argmin()]
+
+    # shift columns
+    for c in xrange(np.shape(outputmap)[1]):
+        outputmap[:,c] = shift_vec(outputmap[:,c], timefreqmap['scales'],
+                peak_scale, 0.5*timefreqmap['scales'].max()).real
+ 
+
+    import matplotlib.cm as cm
+    # Choose the number of colour levels to plo
+    collevs=np.linspace(0, 1, 500)
+    pl.figure()
+    pl.contourf(timefreqmap['times'], timefreqmap['scales'],
+            timefreqmap['map'], levels=collevs, cmap=cm.gnuplot2)
+    pl.axhline(peak_scale, color='r', linewidth=2)
+    #pl.ylim(1000,4096)
+    pl.ylim(1,32)
+    pl.clim(0,1)
+
+    pl.figure()
+    pl.contourf(timefreqmap['times'], timefreqmap['scales'],
+            outputmap, levels=collevs, cmap=cm.gnuplot2)
+    #pl.ylim(1000,4096)
+    pl.ylim(1,32)
+    pl.clim(0,1)
+
+
+    pl.show()
+ 
+    sys.exit()
 
 # _________________ CLASSES  _________________ #
 
@@ -378,7 +484,7 @@ class pmnsPCA:
 
         # Do PCA
         print "Performing PCA"
-        self.pca = perform_pca(self.cat_align, self.magnitude_align, self.phase)
+        self.pca = perform_pca(self.magnitude_align, self.phase)
 
 
 
@@ -424,16 +530,19 @@ class pmnsPCA:
         testwav_magnitude_align = shift_vec(testwav_magnitude,
                 self.sample_frequencies, this_fpeak, self.fcenter).real
 
-#       #
-#       # Center & scale test spectrum
-#       #
+        #
+        # Center & scale test spectrum
+        #
         magnitude_cent = np.copy(testwav_magnitude_align)
-        magnitude_cent -= self.pca['magnitude_mean']
-        #magnitude_cent /= self.pca['magnitude_std']
+        #magnitude_cent -= self.pca['magnitude_mean']
+
+        projection['magnitude_cent'] = magnitude_cent
 
         phase_cent = np.copy(testwav_phase)
-        phase_cent -= self.pca['phase_mean']
-        phase_cent /= self.pca['phase_std']
+        #phase_cent -= self.pca['phase_mean']
+        #phase_cent /= self.pca['phase_std']
+
+        projection['phase_cent'] = phase_cent
 
         #
         # Finally, project test spectrum onto PCs
@@ -477,7 +586,7 @@ class pmnsPCA:
         # Original Waveforms
         #
         orimag = abs(freqseries)
-        oriphi = phase_of(freqseries)
+        oriphi = phase_of(freqseries) - phase_of(freqseries)[0]
         #oriphi = self.pca['phase_fits'][wfnum,:]
 
         phase_fit = poly4(np.arange(len(oriphi)), oriphi)
@@ -502,10 +611,8 @@ class pmnsPCA:
         recmag = np.zeros(shape=np.shape(orimag))
         recphi = np.zeros(shape=np.shape(oriphi))
 
-        recspec = np.zeros(shape=np.shape(oriphi))
-
         # Sum contributions from PCs
-        #npcs=10
+        npcs=10
         for i in xrange(npcs):
 
             recmag += \
@@ -517,14 +624,29 @@ class pmnsPCA:
                     self.pca['phase_pca'].components_[i,:]
 
 
+
         #
         # De-center the reconstruction
         #
-        #recmag = recmag * self.pca['magnitude_std'] 
-        recmag += self.pca['magnitude_mean']
 
-        recphi = recphi * self.pca['phase_std']
-        recphi += self.pca['phase_mean']
+#       recmag += self.pca['magnitude_mean']
+        recmag += self.pca['magnitude_pca'].mean_
+#
+#       recphi = recphi * self.pca['phase_std']
+#       recphi += self.pca['phase_mean']
+        recphi += self.pca['phase_pca'].mean_
+
+        # --- Raw reconstruction quality
+        idx = (self.sample_frequencies>self.low_frequency_cutoff) \
+                * (orimag>0.01*max(orimag))
+
+        reconstruction['magnitude_euclidean_raw'] = \
+                euclidean_distance(recmag[idx], projection['magnitude_cent'][idx])
+
+        reconstruction['phase_euclidean_raw'] = \
+                euclidean_distance(recphi[idx], projection['phase_cent'][idx])
+
+
 
         #recphi = phase_fit
 
@@ -534,14 +656,8 @@ class pmnsPCA:
         recmag = shift_vec(recmag, self.sample_frequencies,
                 fcenter=this_fpeak, fpeak=self.fcenter).real
 
-        recspec = shift_vec(recspec, self.sample_frequencies,
-                fcenter=this_fpeak, fpeak=self.fcenter).real
-
         reconstruction['recon_mag'] = np.copy(recmag)
         reconstruction['recon_phi'] = np.copy(recphi)
- 
-        reconstruction['residual_magnitude'] = residual_power(recmag, orimag)
-        reconstruction['residual_phase'] = residual_power(recphi, oriphi)
 
         #
         # Fourier spectrum reconstructions
@@ -554,14 +670,28 @@ class pmnsPCA:
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
 
+        reconstruction['recon_timeseries'] = \
+                reconstruction['recon_spectrum'].to_timeseries()
+
+
         # --- Match calculations for mag/phase reconstructions
         recon_spectrum = np.copy(reconstruction['recon_spectrum'].data)
 
-        recmag = abs(recon_spectrum)
-        recphi = phase_of(recon_spectrum)
-
 
         # --- Match calculations for full reconstructions
+
+
+        idx = (self.sample_frequencies>self.low_frequency_cutoff) \
+                * (orimag>0.01*max(orimag))
+
+
+        reconstruction['magnitude_euclidean'] = \
+                euclidean_distance(recmag[idx], orimag[idx])
+
+        reconstruction['phase_euclidean'] = \
+                euclidean_distance(recphi[idx], oriphi[idx])
+
+
         # make psd
         flen = len(self.sample_frequencies)
         psd = aLIGOZeroDetHighPower(flen, self.delta_f,
@@ -639,28 +769,28 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
 
     return fig, ax
 
-def image_residuals(residuals_matrix, waveform_names, title=None):
+def image_euclidean(euclidean_matrix, waveform_names, title=None):
 
-    text_thresh = 0.1
-    clims = (0.0,0.25)
-    bar_label = 'Residual'
+    text_thresh = 0.05
+    clims = (0.0,0.10)
+    bar_label = '$||\Phi - \Phi_r||$'
 
     #fig, ax = pl.subplots(figsize=(15,8))
     #fig, ax = pl.subplots(figsize=(7,7))
     fig, ax = pl.subplots()
-    nwaves = np.shape(residuals_matrix)[0]
-    npcs = np.shape(residuals_matrix)[1]
+    nwaves = np.shape(euclidean_matrix)[0]
+    npcs = np.shape(euclidean_matrix)[1]
 
-    im = ax.imshow(residuals_matrix, interpolation='nearest', origin='lower',
+    im = ax.imshow(euclidean_matrix, interpolation='nearest', origin='lower',
             aspect='auto')
 
     for x in xrange(nwaves):
         for y in xrange(npcs):
-            if residuals_matrix[x,y]<text_thresh:
-                ax.text(y, x, '%.2f'%(residuals_matrix[x,y]), \
+            if euclidean_matrix[x,y]<text_thresh:
+                ax.text(y, x, '%.2f'%(euclidean_matrix[x,y]), \
                     va='center', ha='center', color='k')
             else:
-                ax.text(y, x, '%.2f'%(residuals_matrix[x,y]), \
+                ax.text(y, x, '%.2f'%(euclidean_matrix[x,y]), \
                     va='center', ha='center', color='w')
 
     ax.set_xticks(range(0,npcs))
@@ -694,39 +824,6 @@ def image_residuals(residuals_matrix, waveform_names, title=None):
 # *******************************************************************************
 def main():
 
-    #
-    # Waveform catalogue
-    #
-
-    waveform_names=['apr_135135_lessvisc',
-                    'shen_135135_lessvisc',
-                    'dd2_135135_lessvisc' ,
-                    'dd2_165165_lessvisc' ,
-                    'nl3_135135_lessvisc' ,
-                    'nl3_1919_lessvisc'   ,
-                    'tm1_135135_lessvisc' ,
-                    'tma_135135_lessvisc' ,
-                    'sfhx_135135_lessvisc',
-                    'sfho_135135_lessvisc']#,
- 
-#   waveform_names=['apr_135135_lessvisc',
-#                   'shen_135135_lessvisc',
-#                   'shen_1215',
-#                   'dd2_135135_lessvisc' ,
-#                   'dd2_165165_lessvisc' ,
-#                   'nl3_1919_lessvisc' ,
-#                   'nl3_135135_lessvisc' ,
-#                   'tm1_135135_lessvisc' ,
-#                   'tma_135135_lessvisc' ,
-#                   'sfhx_135135_lessvisc',
-#                   'sfho_135135_lessvisc',
-#                   'tm1_1215',
-#                   'gs1_135135',
-#                   'gs2_135135',
-#                   'sly4_135135',
-#                   'ls220_135135',
-#                   'ls375_135135']
-#
 
 
     #
@@ -751,52 +848,6 @@ def main():
 
     # Reconstructions 
     reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=1)
-
-#   print reconstruction['match_aligo']
-#
-#
-#   f, ax = pl.subplots()
-#
-#   ax.plot(reconstruction['sample_frequencies'],
-#           abs(reconstruction['original_spectrum_align']), color='r',
-#           linewidth=2)
-#
-#   ax.plot(reconstruction['sample_frequencies'],
-#           abs(reconstruction['recon_spectrum_align']), color='k')
-#
-#   ax.set_xlim(0,1500)
-#
-#   #print projection['betas_magnitude']
-#
-#   pl.show()
-#
-#
-#   # -----------
-#   # Match Plots
-#
-#   #
-#   # aligned waveforms
-#   fig, ax = image_matches(shift_matches_ideal, waveform_names,
-#           title="Matches For Full Aligned Spectrum PCA")
-#
-#   for fileformat in imageformats:
-#       fig.savefig('shiftspec_ideal_matches.%s'%fileformat)
-#
-#
-#   # UN-aligned waveforms
-#   fig, ax = image_matches(unshift_matches_ideal, waveform_names,
-#           title="Matches For aligned Full Spectrum PCA")
-#
-#   for fileformat in imageformats:
-#       fig.savefig('unshiftspec_ideal_matches.%s'%fileformat)
-#
-#
-#   # Original waveforms
-#   fig, ax = image_matches(full_matches_ideal, waveform_names,
-#           title="Matches For Full Spectrum PCA")
-#
-#   for fileformat in imageformats:
-#       fig.savefig('fullspec_ideal_matches.%s'%fileformat)
 
 
 
