@@ -44,7 +44,7 @@ from IPython.core.debugger import Tracer; debug_here = Tracer()
 # _________________ FUNCTIONS  _________________ #
 
 
-def perform_pca(cpx, magnitudes, phases):
+def perform_pca(magnitudes, phases):
     """
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
@@ -55,11 +55,6 @@ def perform_pca(cpx, magnitudes, phases):
 
     phase_spectra_centered, phase_mean, phase_std, phase_trend, pfits = \
             condition_phase(phases)
-
-#   pl.figure()
-#   pl.plot(phases.T)
-#   pl.show()
-#   sys.exit()
 
     mag_pca = PCA()
     mag_pca.fit(magnitude_spectra_centered)
@@ -82,42 +77,8 @@ def perform_pca(cpx, magnitudes, phases):
     pcs_magphase['phase_trend'] = phase_trend
     pcs_magphase['phase_fits'] = pfits
 
-
-    # XXX
-
-    cpx_spectra_centered, cpx_mean, cpx_std = condition_cpx(cpx.real)
-
-    cpx_pca = PCA(whiten=False)
-    cpx_pca.fit(cpx_spectra_centered)
-
-    pcs_magphase['cpx_pca'] = cpx_pca
-
-    pcs_magphase['cpx_mean'] = cpx_mean
-    pcs_magphase['cpx_std'] = cpx_std
-
-
     return pcs_magphase
 
-def condition_cpx(cpx_spectra):
-    """
-    Center and scale the cpx spectrum with optional trend removal
-    """
-
-    cpx_spectra_centered = np.copy(cpx_spectra)
-
-    # --- Centering
-    cpx_mean = np.mean(cpx_spectra_centered, axis=0)
-    for w in xrange(np.shape(cpx_spectra)[0]):
-        cpx_spectra_centered[w,:] -= cpx_mean
-
-    # --- Scaling
-    cpx_std = np.std(cpx_spectra_centered, axis=0)
-
-    #for w in xrange(np.shape(cpx_spectra)[0]):
-        #cpx_spectra_centered[w,:] /= cpx_std
-        #cpx_spectra_centered[w,:] /= np.linalg.norm(cpx_spectra_centered[w,:])
-
-    return cpx_spectra_centered, cpx_mean, cpx_std
 
 def condition_magnitude(magnitude_spectra):
 
@@ -496,10 +457,6 @@ class pmnsPCA:
         phase_cent -= self.pca['phase_mean']
         phase_cent /= self.pca['phase_std']
 
-        cpx_cent = np.copy(freqseries_align.data.real)
-        cpx_cent -= self.pca['cpx_mean']
-        #cpx_cent /= self.pca['cpx_std']
-
         #
         # Finally, project test spectrum onto PCs
         #
@@ -509,10 +466,6 @@ class pmnsPCA:
 
         projection['phase_betas'] = np.concatenate(
                 self.pca['phase_pca'].transform(phase_cent)
-                )
-
-        projection['cpx_betas'] = np.concatenate(
-                self.pca['cpx_pca'].transform(cpx_cent)
                 )
 
         return projection
@@ -585,9 +538,6 @@ class pmnsPCA:
                     projection['phase_betas'][i]*\
                     self.pca['phase_pca'].components_[i,:]
 
-            recspec += \
-                    projection['cpx_betas'][i]*\
-                    self.pca['cpx_pca'].components_[i,:]
 
         #
         # De-center the reconstruction
@@ -599,10 +549,6 @@ class pmnsPCA:
         recphi += self.pca['phase_mean']
 
         #recphi = phase_fit
-
-        #recspec = recspec * self.pca['cpx_std']
-        recspec += self.pca['cpx_mean']
-
 
         #
         # Move the spectrum back to where it should be
@@ -625,19 +571,6 @@ class pmnsPCA:
 
         recon_spectrum = recmag * np.exp(1j*recphi)
 
-#       f, ax = pl.subplots(nrows=2)
-#
-#       ax[0].plot(recspec, label='real from pcs')
-#       ax[0].plot(np.real(freqseries), label='real sig')
-#
-#       ax[1].plot(-1*np.imag(signal.hilbert(recspec)), 
-#               label='imag from pcs (via hilbert)')
-#       ax[1].plot(np.imag(orimag*np.exp(1j*oriphi)), label='imag sig')
-#
-#       pl.show()
-#       sys.exit()
-#        recon_spectrum = recspec - 1j*np.imag(signal.hilbert(recspec))
-
  
         # --- Unit norm reconstruction
         reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
@@ -648,12 +581,6 @@ class pmnsPCA:
 
         recmag = abs(recon_spectrum)
         recphi = phase_of(recon_spectrum)
-
-#        reconstruction['recon_mag'] = np.copy(recmag)
-#        reconstruction['recon_phi'] = np.copy(recphi)
- 
-#        reconstruction['residual_magnitude'] = residual_power(recmag, orimag)
-#        reconstruction['residual_phase'] = residual_power(recphi, oriphi)
 
 
         # --- Match calculations for full reconstructions
@@ -673,26 +600,6 @@ class pmnsPCA:
                         reconstruction['original_spectrum'],
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
 
-
-        # compute overlap 'by hand':
-#       idx = self.sample_frequencies>=self.low_frequency_cutoff
-#
-#       phase_diff = oriphi[idx] - recphi[idx] 
-#       ampprod = recmag[idx] * orimag[idx]
-#
-#       numerator = ampprod*np.exp(1j*phase_diff)
-#       
-#       overlap = 4*np.real(np.trapz(numerator / psd.data[idx],
-#           self.sample_frequencies[idx]))
-#
-#       N1 = np.sqrt(4*np.real(np.trapz(recmag[idx]*recmag[idx] / psd.data[idx],
-#           self.sample_frequencies[idx])))
-#       N2 = np.sqrt(4*np.real(np.trapz(orimag[idx]*orimag[idx] / psd.data[idx],
-#           self.sample_frequencies[idx])))
-#
-#       N = N1*N2
-#
-#       reconstruction['match_aligo'] = overlap/N
 
         return reconstruction
 
