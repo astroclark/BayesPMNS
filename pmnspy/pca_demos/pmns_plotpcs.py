@@ -130,7 +130,7 @@ def plot_timefreqmap(ax, x, y, z, xlims=(-0.0025,0.025), ylims=(999,4096)):
     collevs=np.linspace(vmin, vmax, 100)
     cont = ax.contourf(x-0.5*x.max(), y, z, cmap=pl.cm.gnuplot2_r, levels=collevs)
 
-    c = pl.colorbar(cont, orientation='horizontal')
+#    c = pl.colorbar(cont, ax=ax, orientation='horizontal')
 
     ax.set_xlim(xlims)
     ax.set_ylim(ylims)
@@ -146,8 +146,7 @@ def plot_timefreqmap(ax, x, y, z, xlims=(-0.0025,0.025), ylims=(999,4096)):
     ax.grid()
 
 
-
-    return yticks
+    return yticks, cont
 
 def plot_timefreqpc(ax, x, y, z, xlims=(-0.0025,0.025), ylims=(128,300)):
 
@@ -208,8 +207,12 @@ fcat, axcat = pl.subplots(ncols=nexamples, nrows=3, figsize=(10,8))
 for w in xrange(3):
     tyticks  = plot_timeseries(axcat[0][w], pmpca.sample_times, pmpca.cat_timedomain[w,:])
     fyticks  = plot_freqseries(axcat[1][w], pmpca.sample_frequencies, abs(pmpca.cat_orig[w,:]))
-    tfyticks = plot_timefreqmap(axcat[2][w], pmpca.map_times,
-            pmpca.map_frequencies, pmpca.original_image_cat[w])
+    tfyticks, tfmap = plot_timefreqmap(axcat[2][w], pmpca.map_times, pmpca.map_frequencies, pmpca.original_image_cat[w])
+
+    c = pl.colorbar(tfmap, orientation='horizontal', ax=axcat[2][w],
+            shrink=0.9)
+
+
 
 # Prettify
 axcat[0][0].set_ylabel('h$_+$(t)')
@@ -221,8 +224,12 @@ axcat[1][0].set_yticklabels(fyticks)
 axcat[2][0].set_ylabel('Frequency [Hz]')
 axcat[2][0].set_yticklabels(tfyticks)
 
+
 fcat.tight_layout()
 fcat.subplots_adjust(wspace=0.0)
+
+pl.show()
+sys.exit()
 
 #
 # Plot Explained Variance
