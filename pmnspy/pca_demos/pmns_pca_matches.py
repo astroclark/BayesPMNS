@@ -122,6 +122,7 @@ for w,testwav_name in enumerate(waveform_names):
         exact_phase_euclidean[w,n]=reconstruction['phase_euclidean']
 
 
+sys.exit()
 # ***** Plot Results ***** #
 
 #

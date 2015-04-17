@@ -42,10 +42,36 @@ from pycbc.psd import aLIGOZeroDetHighPower
 
 from IPython.core.debugger import Tracer; debug_here = Tracer()
 
+import time
 import cwt
 
 # _________________ FUNCTIONS  _________________ #
 
+def perform_TFpca(aligned_maps):
+
+    tfmap_pca = PCA()
+
+    #
+    # Reshape data
+    #
+    n_samples, h, w = aligned_maps.shape
+    maps = aligned_maps.reshape((n_samples, h * w))
+    n_samples, n_features = maps.shape
+
+    # global centering
+    global_mean = maps.mean(axis=0)
+    maps_centered = maps - global_mean
+
+    # local centering
+    #maps_centered -= maps_centered.mean(axis=1).reshape(n_samples, -1)
+
+    #
+    # PCA
+    #
+    pca = PCA(whiten=True)
+    pca.fit(maps_centered)
+
+    return pca, global_mean
 
 def perform_pca(magnitudes, phases):
     """
@@ -174,6 +200,18 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
     original_cat = np.zeros(shape=(len(waveform_names), nFsamples), dtype=complex)
     fpeaks = np.zeros(len(waveform_names))
 
+    # Preallocate for the TF maps
+    example_map = example_tfmap(delta_t=delta_t)
+    mapdims = np.shape(example_map['map'])
+    times = example_map['times']
+    frequencies = example_map['frequencies']
+    scales = example_map['scales']
+
+    original_image_cat = np.zeros(shape=(len(waveform_names), mapdims[0],
+        mapdims[1]))
+    align_image_cat = np.zeros(shape=(len(waveform_names), mapdims[0],
+        mapdims[1]))
+
     for w, name in enumerate(waveform_names):
 
         #
@@ -186,10 +224,13 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
         original_spectrum, fpeaks[w] = condition_spectrum(waveform.hplus.data,
                 nsamples=nTsamples)
 
-        # XXX
+        # Time-frequency maps
         tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data,
             delta_t=delta_t))
-        center_cwt(tfmap, fpeaks[w])
+        original_image_cat[w,:,:] = tfmap['map']
+
+        aligned_tfmap = align_cwt(tfmap, fpeaks[w])
+        align_image_cat[w,:,:] = aligned_tfmap
 
         del waveform
 
@@ -209,7 +250,22 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
         aligned_cat[w,:] = unit_hrss(aligned_spectrum,
                 delta=original_spectrum.delta_f, domain='frequency').data
 
-    return (original_frequencies, aligned_cat, original_cat, fpeaks)
+    return (original_frequencies, aligned_cat, original_cat, fpeaks,
+            original_image_cat, align_image_cat, times, scales, frequencies)
+
+def example_tfmap(name='shen_135135_lessvisc', delta_t=1./16384):
+
+        #
+        # Create waveform instance: pmns_utils
+        #
+        waveform = pmns_utils.Waveform(name)
+        waveform.reproject_waveform()
+
+        tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data,
+            delta_t=delta_t))
+
+        return tfmap
+
 
 def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     """
@@ -333,15 +389,14 @@ def wrap_phase(phase):
     return ( phase + np.pi) % (2 * np.pi ) - np.pi
 
 def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
-        fmax=4096):
+        fmax=4096, maplen=2048):
 
 
     # Make sure the timeseries peaks in the middle of the map
-    paddata = np.zeros(2*len(timeseries))
+    paddata = np.zeros(maplen)
     peakidx = np.argmax(timeseries.data)
-    datalen = len(timeseries)
-    paddata[datalen-peakidx:datalen] = timeseries.data[:peakidx]
-    paddata[datalen:datalen+datalen-peakidx] = timeseries.data[peakidx:]
+    paddata[0.5*maplen-peakidx:0.5*maplen] = timeseries.data[:peakidx]
+    paddata[0.5*maplen:0.5*maplen+len(timeseries.data)-peakidx] = timeseries.data[peakidx:]
 
     timeseries = pycbc.types.TimeSeries(paddata, delta_t=timeseries.delta_t)
 
@@ -380,10 +435,11 @@ def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
     timefreq['frequencies'] = freqs
     timefreq['scales'] = scales
     timefreq['mother_wavelet'] = mother_wavelet
+    timefreq['image_shape'] = np.shape(tfmap)
 
-#    # Choose the number of colour levels to plo
-#    collevs=np.linspace(0, 1, 500)
- 
+#   # Choose the number of colour levels to plo
+#   collevs=np.linspace(0, 1, 500)
+#
 #   import matplotlib.cm as cm
 #   pl.figure()
 #   pl.contourf(timeseries.sample_times, freqs, tfmap,
@@ -401,7 +457,7 @@ def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
 
 
 
-def center_cwt(timefreqmap, fpeak):
+def align_cwt(timefreqmap, fpeak):
     """
     Center and Scale the time / frequency map analogously to how we handle
     spectra
@@ -418,28 +474,29 @@ def center_cwt(timefreqmap, fpeak):
                 peak_scale, 0.5*timefreqmap['scales'].max()).real
  
 
-    import matplotlib.cm as cm
-    # Choose the number of colour levels to plo
-    collevs=np.linspace(0, 1, 500)
-    pl.figure()
-    pl.contourf(timefreqmap['times'], timefreqmap['scales'],
-            timefreqmap['map'], levels=collevs, cmap=cm.gnuplot2)
-    pl.axhline(peak_scale, color='r', linewidth=2)
-    #pl.ylim(1000,4096)
-    pl.ylim(1,32)
-    pl.clim(0,1)
+#  import matplotlib.cm as cm
+#  # Choose the number of colour levels to plo
+#  collevs=np.linspace(0, 1, 500)
+#  pl.figure()
+#  pl.contourf(timefreqmap['times'], timefreqmap['scales'],
+#          timefreqmap['map'], levels=collevs, cmap=cm.gnuplot2)
+#  pl.axhline(peak_scale, color='r', linewidth=2)
+#  #pl.ylim(1000,4096)
+#  pl.ylim(1,32)
+#  pl.clim(0,1)
+#
+#  pl.figure()
+#  pl.contourf(timefreqmap['times'], timefreqmap['scales'],
+#          outputmap, levels=collevs, cmap=cm.gnuplot2)
+#  #pl.ylim(1000,4096)
+#  pl.ylim(1,256)
+#  pl.clim(0,1)
+#
+#  pl.show()
 
-    pl.figure()
-    pl.contourf(timefreqmap['times'], timefreqmap['scales'],
-            outputmap, levels=collevs, cmap=cm.gnuplot2)
-    #pl.ylim(1000,4096)
-    pl.ylim(1,32)
-    pl.clim(0,1)
-
-
-    pl.show()
+    return outputmap
  
-    sys.exit()
+#    sys.exit()
 
 # _________________ CLASSES  _________________ #
 
@@ -461,8 +518,10 @@ class pmnsPCA:
 
         print "Building catalogue"
         (self.sample_frequencies, self.cat_align, self.cat_orig,
-                self.fpeaks)=build_catalogues(self.waveform_list, self.fcenter,
-                        nTsamples=nTsamples)
+                self.fpeaks, self.original_image_cat, self.align_image_cat,
+                self.map_times, self.map_scales, self.map_frequencies) = \
+                        build_catalogues(self.waveform_list, self.fcenter,
+                                nTsamples=nTsamples)
         self.delta_f = np.diff(self.sample_frequencies)[0]
 
         # min freq for match calculations
@@ -482,10 +541,19 @@ class pmnsPCA:
             self.magnitude_align[i,:] = shift_vec(self.magnitude[i,:],
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
 
-        # Do PCA
-        print "Performing PCA"
+        # -- Do PCA
+        print "Performing Spectral PCA"
+        t0 = time.time()
         self.pca = perform_pca(self.magnitude_align, self.phase)
+        train_time = (time.time() - t0)
+        print("...done in %0.3fs" % train_time)
 
+        print "Performing Time-Frequency PCA"
+        t0 = time.time()
+        self.pca['timefreq_pca'], self.pca['timefreq_mean'] = \
+                perform_TFpca(self.align_image_cat)
+        train_time = (time.time() - t0)
+        print("...done in %0.3fs" % train_time)
 
 
     def project(self, freqseries, this_fpeak=None):
@@ -612,7 +680,6 @@ class pmnsPCA:
         recphi = np.zeros(shape=np.shape(oriphi))
 
         # Sum contributions from PCs
-        npcs=10
         for i in xrange(npcs):
 
             recmag += \
