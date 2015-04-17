@@ -128,7 +128,9 @@ def plot_timefreqmap(ax, x, y, z, xlims=(-0.0025,0.025), ylims=(999,4096)):
 
     vmin, vmax = 0, z.max()
     collevs=np.linspace(vmin, vmax, 100)
-    ax.contourf(x-0.5*x.max(), y, z, cmap=pl.cm.gnuplot2_r, levels=collevs)
+    cont = ax.contourf(x-0.5*x.max(), y, z, cmap=pl.cm.gnuplot2_r, levels=collevs)
+
+    c = pl.colorbar(cont, orientation='horizontal')
 
     ax.set_xlim(xlims)
     ax.set_ylim(ylims)
@@ -142,6 +144,8 @@ def plot_timefreqmap(ax, x, y, z, xlims=(-0.0025,0.025), ylims=(999,4096)):
     xticks = np.arange(0,max(xlims),0.005)
     ax.set_xticks(xticks)
     ax.grid()
+
+
 
     return yticks
 
@@ -277,6 +281,24 @@ ax[1].set_ylabel('Frequency [arb. units]')
 
 f.tight_layout()
 
+#
+# Plot centered spectra & maps
+#
+f, ax = pl.subplots(nrows=2, ncols=3, figsize=(10,5))
+for w in xrange(3):
+    fyticks = plot_freqpc(ax[0][w], pmpca.sample_frequencies,
+            pmpca.magnitude_align[w,:] - pmpca.pca['magnitude_mean'])
+    ax[0][w].set_ylim(-0.01,0.01)
+
+    plot_timefreqpc(ax[1][w], pmpca.map_times, pmpca.map_frequencies,
+            pmpca.align_image_cat[w])
+
+ax[0][0].set_yticklabels(fyticks)
+
+f.tight_layout()
+f.subplots_adjust(wspace=0.0)
+
+pl.show()
 
 #
 # Plot spectral PCs
