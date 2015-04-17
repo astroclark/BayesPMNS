@@ -210,7 +210,7 @@ for w in xrange(3):
     tfyticks, tfmap = plot_timefreqmap(axcat[2][w], pmpca.map_times, pmpca.map_frequencies, pmpca.original_image_cat[w])
 
     c = pl.colorbar(tfmap, orientation='horizontal', ax=axcat[2][w],
-            shrink=0.9)
+            shrink=0.9, pad=.25)
 
 
 
