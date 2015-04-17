@@ -193,9 +193,10 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
 
     delta_t=1./sample_freq
     nFsamples=nTsamples/2 + 1
-    times=np.arange(0, delta_t*nTsamples, delta_t)
+    sample_times=np.arange(0, delta_t*nTsamples, delta_t)
 
     # Preallocation
+    timedomain_cat = np.zeros(shape=(len(waveform_names), len(sample_times)))
     aligned_cat = np.zeros(shape=(len(waveform_names), nFsamples),  dtype=complex)
     original_cat = np.zeros(shape=(len(waveform_names), nFsamples), dtype=complex)
     fpeaks = np.zeros(len(waveform_names))
@@ -221,8 +222,11 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
         waveform.reproject_waveform()
 
         # Waveform conditioning
-        original_spectrum, fpeaks[w] = condition_spectrum(waveform.hplus.data,
-                nsamples=nTsamples)
+        original_spectrum, fpeaks[w], timeseries = \
+                condition_spectrum(waveform.hplus.data, nsamples=nTsamples)
+
+        # Populate time series catalogue
+        timedomain_cat[w, :] = np.copy(timeseries.data)
 
         # Time-frequency maps
         tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data,
@@ -250,7 +254,7 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
         aligned_cat[w,:] = unit_hrss(aligned_spectrum,
                 delta=original_spectrum.delta_f, domain='frequency').data
 
-    return (original_frequencies, aligned_cat, original_cat, fpeaks,
+    return (sample_times, original_frequencies, timedomain_cat, aligned_cat, original_cat, fpeaks,
             original_image_cat, align_image_cat, times, scales, frequencies)
 
 def example_tfmap(name='shen_135135_lessvisc', delta_t=1./16384):
@@ -285,6 +289,7 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
 
     # FFT
     timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
+    timeseries = unit_hrss(paddata, delta_t, 'time')
     #timeseries = pycbc.filter.highpass(timeseries, 1000, filter_order=8)
 
     freqseries = timeseries.to_frequencyseries()
@@ -294,7 +299,7 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     high_freq = freqseries.sample_frequencies.data[high_idx] 
     fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
     
-    return freqseries, fpeak
+    return freqseries, fpeak, timeseries
 
 def poly4(x, y, idx=None):
     """
@@ -517,9 +522,10 @@ class pmnsPCA:
         self.waveform_list=waveform_list
 
         print "Building catalogue"
-        (self.sample_frequencies, self.cat_align, self.cat_orig,
-                self.fpeaks, self.original_image_cat, self.align_image_cat,
-                self.map_times, self.map_scales, self.map_frequencies) = \
+        (self.sample_times, self.sample_frequencies, self.cat_timedomain,
+                self.cat_align, self.cat_orig, self.fpeaks,
+                self.original_image_cat, self.align_image_cat, self.map_times,
+                self.map_scales, self.map_frequencies) = \
                         build_catalogues(self.waveform_list, self.fcenter,
                                 nTsamples=nTsamples)
         self.delta_f = np.diff(self.sample_frequencies)[0]
