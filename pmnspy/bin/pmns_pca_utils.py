@@ -250,12 +250,13 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
         aligned_spectrum = shift_vec(original_spectrum.data, original_frequencies,
                 fpeaks[w], fshift_center)
 
-        # Populate catalogue with reconstructed, normalised aligned spectrum
+        # Populate catalogue with normalised aligned spectrum
         aligned_cat[w,:] = unit_hrss(aligned_spectrum,
                 delta=original_spectrum.delta_f, domain='frequency').data
 
-    return (sample_times, original_frequencies, timedomain_cat, aligned_cat, original_cat, fpeaks,
-            original_image_cat, align_image_cat, times, scales, frequencies)
+    return (sample_times, original_frequencies, timedomain_cat, aligned_cat,
+            original_cat, fpeaks, original_image_cat, align_image_cat, times,
+            scales, frequencies)
 
 def example_tfmap(name='shen_135135_lessvisc', delta_t=1./16384):
 
@@ -562,7 +563,7 @@ class pmnsPCA:
         print("...done in %0.3fs" % train_time)
 
 
-    def project(self, freqseries, this_fpeak=None):
+    def project_freqseries(self, freqseries, this_fpeak=None):
         """
         Project the frequency series freqseries onto the principal components to
         represent that waveform in the new basis.  The projection yields the
@@ -631,7 +632,51 @@ class pmnsPCA:
 
         return projection
 
-    def reconstruct(self, freqseries, npcs=1, this_fpeak=None, wfnum=None):
+    def project_tfmap(self, tfmap, this_fpeak=None):
+        """
+        Project the frequency series freqseries onto the principal components to
+        represent that waveform in the new basis.  The projection yields the
+        coefficients {beta} such that the freqseries can be reconstructed as a
+        linear combination of the beta-weighted PCs
+
+        Procedure:
+        1) Align test spectrum (peak) to 1kHz
+        2) Normalise test spectrum to unit hrss
+        3) Convert to polar representation
+        4) Center the test spectrum
+        5) Take projection
+
+        """
+
+        if this_fpeak==None:
+            print >> sys.stderr, "require desired fpeak"
+            sys.exit()
+
+        # Dictionary to hold input and results of projection
+        projection = dict()
+        projection['tfmap'] = np.copy(tfmap)
+
+        # Align test spectrum
+        tfmap_align = align_cwt(tfmap, fpeak=this_fpeak)
+
+        # Global centering
+        
+        #
+        # Reshape
+        #
+        h, w = tfmap_align.shape
+        reshaped_map = tfmap_align.reshape((h * w))
+
+        #
+        # Finally, project test map onto PCs
+        #
+        projection['timefreq_betas'] = np.concatenate(
+                self.pca['timefreq_pca'].transform(reshaped_map)
+                )
+
+        return projection
+
+    def reconstruct_freqseries(self, freqseries, npcs=1, this_fpeak=None, wfnum=None):
         """
         Reconstruct the waveform in freqseries using <npcs> principal components
         from the catalogue
@@ -653,8 +698,8 @@ class pmnsPCA:
             this_fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
 
         # Get projection:
-        projection = self.project(freqseries)
-        reconstruction=dict()
+        projection = self.project_freqseries(freqseries)
+        fd_reconstruction=dict()
 
         #
         # Original Waveforms
@@ -667,15 +712,15 @@ class pmnsPCA:
 
         orispec = orimag*np.exp(1j*oriphi)
 
-        reconstruction['original_spectrum'] = unit_hrss(orispec,
+        fd_reconstruction['original_spectrum'] = unit_hrss(orispec,
                 delta=self.delta_f, domain='frequency')
 
         freqseries_align = shift_vec(freqseries, self.sample_frequencies,
                 fcenter=self.fcenter, fpeak=this_fpeak)
-        reconstruction['original_spectrum_align'] = unit_hrss(freqseries_align,
+        fd_reconstruction['original_spectrum_align'] = unit_hrss(freqseries_align,
                 delta=self.delta_f, domain='frequency')
 
-        reconstruction['sample_frequencies'] = np.copy(self.sample_frequencies)
+        fd_reconstruction['sample_frequencies'] = np.copy(self.sample_frequencies)
 
         #
         # Magnitude and phase reconstructions
@@ -713,10 +758,10 @@ class pmnsPCA:
         idx = (self.sample_frequencies>self.low_frequency_cutoff) \
                 * (orimag>0.01*max(orimag))
 
-        reconstruction['magnitude_euclidean_raw'] = \
+        fd_reconstruction['magnitude_euclidean_raw'] = \
                 euclidean_distance(recmag[idx], projection['magnitude_cent'][idx])
 
-        reconstruction['phase_euclidean_raw'] = \
+        fd_reconstruction['phase_euclidean_raw'] = \
                 euclidean_distance(recphi[idx], projection['phase_cent'][idx])
 
 
@@ -729,8 +774,8 @@ class pmnsPCA:
         recmag = shift_vec(recmag, self.sample_frequencies,
                 fcenter=this_fpeak, fpeak=self.fcenter).real
 
-        reconstruction['recon_mag'] = np.copy(recmag)
-        reconstruction['recon_phi'] = np.copy(recphi)
+        fd_reconstruction['recon_mag'] = np.copy(recmag)
+        fd_reconstruction['recon_phi'] = np.copy(recphi)
 
         #
         # Fourier spectrum reconstructions
@@ -740,15 +785,15 @@ class pmnsPCA:
 
  
         # --- Unit norm reconstruction
-        reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
+        fd_reconstruction['recon_spectrum'] = unit_hrss(recon_spectrum,
                 delta=self.delta_f, domain='frequency')
 
-        reconstruction['recon_timeseries'] = \
-                reconstruction['recon_spectrum'].to_timeseries()
+        fd_reconstruction['recon_timeseries'] = \
+                fd_reconstruction['recon_spectrum'].to_timeseries()
 
 
         # --- Match calculations for mag/phase reconstructions
-        recon_spectrum = np.copy(reconstruction['recon_spectrum'].data)
+        recon_spectrum = np.copy(fd_reconstruction['recon_spectrum'].data)
 
 
         # --- Match calculations for full reconstructions
@@ -758,10 +803,10 @@ class pmnsPCA:
                 * (orimag>0.01*max(orimag))
 
 
-        reconstruction['magnitude_euclidean'] = \
+        fd_reconstruction['magnitude_euclidean'] = \
                 euclidean_distance(recmag[idx], orimag[idx])
 
-        reconstruction['phase_euclidean'] = \
+        fd_reconstruction['phase_euclidean'] = \
                 euclidean_distance(recphi[idx], oriphi[idx])
 
 
@@ -770,19 +815,19 @@ class pmnsPCA:
         psd = aLIGOZeroDetHighPower(flen, self.delta_f,
                 low_freq_cutoff=self.low_frequency_cutoff)
  
-        reconstruction['match_aligo'] = \
-                pycbc.filter.match(reconstruction['recon_spectrum'],
-                        reconstruction['original_spectrum'], psd = psd,
+        fd_reconstruction['match_aligo'] = \
+                pycbc.filter.match(fd_reconstruction['recon_spectrum'],
+                        fd_reconstruction['original_spectrum'], psd = psd,
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
  
 
-        reconstruction['match_noweight'] = \
-                pycbc.filter.match(reconstruction['recon_spectrum'],
-                        reconstruction['original_spectrum'],
+        fd_reconstruction['match_noweight'] = \
+                pycbc.filter.match(fd_reconstruction['recon_spectrum'],
+                        fd_reconstruction['original_spectrum'],
                         low_frequency_cutoff = self.low_frequency_cutoff)[0]
 
 
-        return reconstruction
+        return fd_reconstruction
 
 
 
@@ -799,8 +844,8 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
         bar_label = 'match'
 
     #fig, ax = pl.subplots(figsize=(15,8))
-    fig, ax = pl.subplots(figsize=(8,4))
-    #fig, ax = pl.subplots()
+    #fig, ax = pl.subplots(figsize=(8,4))
+    fig, ax = pl.subplots()
     nwaves = np.shape(match_matrix)[0]
     npcs = np.shape(match_matrix)[1]
 
@@ -842,10 +887,12 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
 
     return fig, ax
 
-def image_euclidean(euclidean_matrix, waveform_names, title=None):
+def image_euclidean(euclidean_matrix, waveform_names, title=None, clims=None):
 
-    text_thresh = 0.05
-    clims = (0.0,0.10)
+    #clims = (0.0,0.10)
+    if clims is None:
+        clims = (0.0, euclidean_matrix.max())
+    text_thresh = 0.5*max(clims)
     bar_label = '$||\Phi - \Phi_r||$'
 
     #fig, ax = pl.subplots(figsize=(15,8))

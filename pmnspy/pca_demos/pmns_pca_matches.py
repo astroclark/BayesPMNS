@@ -27,6 +27,7 @@ import numpy as np
 
 from matplotlib import pyplot as pl
 
+import pycbc.types
 import pmns_utils as pu
 import pmns_pca_utils as ppca
 
@@ -93,12 +94,13 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Create test waveform
     #
+
     #testwav_name='nl3_1919_lessvisc'
     testwav_waveform = pu.Waveform(testwav_name)
     testwav_waveform.reproject_waveform()
 
     # Standardise
-    testwav_waveform_FD, fpeak = \
+    testwav_waveform_FD, fpeak, _ = \
             ppca.condition_spectrum(testwav_waveform.hplus.data,
                     nsamples=nTsamples)
 
@@ -106,47 +108,49 @@ for w,testwav_name in enumerate(waveform_names):
     testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,
             delta=testwav_waveform_FD.delta_f, domain='frequency')
 
+    # Time-frequency map
+    testwav_waveform_TF = ppca.build_cwt(pycbc.types.TimeSeries(
+        testwav_waveform.hplus.data, delta_t=testwav_waveform.hplus.delta_t))
+
+    sys.exit()
+
     #
     # Reconstruct 
     #
-
     for n, npcs in enumerate(xrange(1,catlen+1)):
-        reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs,
-                wfnum=w)
-        #reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
+        fd_reconstruction = pmpca.reconstruct_freqseries(testwav_waveform_FD.data,
+                npcs=npcs, wfnum=w)
+        #fd_reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
-        #exact_matches[w,n]=reconstruction['match_noweight']
-        exact_matches[w,n]=reconstruction['match_aligo']
+        #exact_matches[w,n]=fd_reconstruction['match_noweight']
+        exact_matches[w,n]=fd_reconstruction['match_aligo']
 
-        exact_magnitude_euclidean[w,n]=reconstruction['magnitude_euclidean']
-        exact_phase_euclidean[w,n]=reconstruction['phase_euclidean']
+        exact_magnitude_euclidean[w,n]=fd_reconstruction['magnitude_euclidean']
+        exact_phase_euclidean[w,n]=fd_reconstruction['phase_euclidean']
 
 
-sys.exit()
 # ***** Plot Results ***** #
 
 #
 # Exact Matches
 #
 f, ax = ppca.image_euclidean(exact_magnitude_euclidean, waveform_names,
-        title="Magnitudes")
+        title="Magnitudes: Euclidean Distance")
 
 f, ax = ppca.image_euclidean(exact_phase_euclidean, waveform_names,
-        title="Phases")
+        title="Phases: Euclidean Distance")
 
 
 f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
-        title="Reconstructing including the test waveform")
+        title="Match: training data includes the test waveform")
 
-pl.show()
-sys.exit()
 
 #
 # Eigenenergy
 #
 catlen=len(waveform_names)
 
-f, ax = pl.subplots(ncols=1,figsize=(7,5))
+f, ax = pl.subplots(ncols=1)
 
 ax.plot(range(1,catlen+1),
         100*(np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_)), 
@@ -179,6 +183,9 @@ print "Setting up realistic match analysis"
 real_matches=np.zeros(shape=(catlen, catlen-1))
 real_matches_align=np.zeros(shape=(catlen, catlen-1))
 
+real_magnitude_euclidean=np.zeros(shape=(catlen, catlen-1))
+real_phase_euclidean=np.zeros(shape=(catlen, catlen-1))
+
 for w,testwav_name in enumerate(waveform_names):
     print "Analysing %s (real match)"%testwav_name
 
@@ -199,8 +206,8 @@ for w,testwav_name in enumerate(waveform_names):
     testwav_waveform.reproject_waveform()
 
     # Standardise
-    testwav_waveform_FD, fpeak = ppca.condition_spectrum(testwav_waveform.hplus.data,
-                    nsamples=nTsamples)
+    testwav_waveform_FD, fpeak, _ = ppca.condition_spectrum(
+            testwav_waveform.hplus.data, nsamples=nTsamples)
 
     # Normalise
     testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,
@@ -211,9 +218,14 @@ for w,testwav_name in enumerate(waveform_names):
     #
     for n, npcs in enumerate(xrange(1,catlen-1+1)):
 
-        reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs, wfnum=w)
+        fd_reconstruction = pmpca.reconstruct_freqseries(testwav_waveform_FD.data,
+                npcs=npcs, wfnum=w)
 
-        real_matches[w,n]=reconstruction['match_aligo']
+        real_matches[w,n]=fd_reconstruction['match_aligo']
+
+        real_magnitude_euclidean[w,n]=fd_reconstruction['magnitude_euclidean']
+        real_phase_euclidean[w,n]=fd_reconstruction['phase_euclidean']
+
 
 
 # ***** Plot Results ***** #
@@ -221,8 +233,15 @@ for w,testwav_name in enumerate(waveform_names):
 #
 # Realistic Matches
 #
+f, ax = ppca.image_euclidean(real_magnitude_euclidean, waveform_names,
+        title="Magnitudes: Euclidean Distance (exc. test waveform)")
+
+f, ax = ppca.image_euclidean(real_phase_euclidean, waveform_names,
+        title="Phases: Euclidean Distance (exc. test waveform)")
+
+
 f, ax = ppca.image_matches(real_matches, waveform_names, mismatch=False,
-        title="Reconstructing excluding the test waveform")
+        title="Match: training data (exc. test waveform)")
 
 
 
