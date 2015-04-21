@@ -112,12 +112,12 @@ for w,testwav_name in enumerate(waveform_names):
     testwav_waveform_TF = ppca.build_cwt(pycbc.types.TimeSeries(
         testwav_waveform.hplus.data, delta_t=testwav_waveform.hplus.delta_t))
 
-    sys.exit()
-
     #
     # Reconstruct 
     #
     for n, npcs in enumerate(xrange(1,catlen+1)):
+
+        # --- F-domain reconstruction
         fd_reconstruction = pmpca.reconstruct_freqseries(testwav_waveform_FD.data,
                 npcs=npcs, wfnum=w)
         #fd_reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
@@ -127,6 +127,13 @@ for w,testwav_name in enumerate(waveform_names):
 
         exact_magnitude_euclidean[w,n]=fd_reconstruction['magnitude_euclidean']
         exact_phase_euclidean[w,n]=fd_reconstruction['phase_euclidean']
+
+        # --- TF reconstruction
+        tf_reconstruction = pmpca.reconstruct_tfmap(testwav_waveform_TF,
+                this_fpeak=fpeak)
+        sys.exit()
+
+
 
 
 # ***** Plot Results ***** #

@@ -443,21 +443,6 @@ def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
     timefreq['mother_wavelet'] = mother_wavelet
     timefreq['image_shape'] = np.shape(tfmap)
 
-#   # Choose the number of colour levels to plo
-#   collevs=np.linspace(0, 1, 500)
-#
-#   import matplotlib.cm as cm
-#   pl.figure()
-#   pl.contourf(timeseries.sample_times, freqs, tfmap,
-#           levels=collevs, cmap=cm.gnuplot2)
-#   #pl.contourf(timeseries.sample_times, scales, tfmap,
-#   #        levels=collevs, cmap=cm.gnuplot2)
-#   #pl.xlim(0,0.02)
-#   pl.ylim(1000,4096)
-#   pl.clim(0,1)
-#   pl.show()
-#
-#   sys.exit()
 
     return timefreq
 
@@ -477,28 +462,25 @@ def align_cwt(timefreqmap, fpeak):
     # shift columns
     for c in xrange(np.shape(outputmap)[1]):
         outputmap[:,c] = shift_vec(outputmap[:,c], timefreqmap['scales'],
-                peak_scale, 0.5*timefreqmap['scales'].max()).real
- 
+                peak_scale, 0.25*timefreqmap['scales'].max()).real
 
-#  import matplotlib.cm as cm
-#  # Choose the number of colour levels to plo
-#  collevs=np.linspace(0, 1, 500)
-#  pl.figure()
-#  pl.contourf(timefreqmap['times'], timefreqmap['scales'],
-#          timefreqmap['map'], levels=collevs, cmap=cm.gnuplot2)
-#  pl.axhline(peak_scale, color='r', linewidth=2)
-#  #pl.ylim(1000,4096)
-#  pl.ylim(1,32)
-#  pl.clim(0,1)
-#
-#  pl.figure()
-#  pl.contourf(timefreqmap['times'], timefreqmap['scales'],
-#          outputmap, levels=collevs, cmap=cm.gnuplot2)
-#  #pl.ylim(1000,4096)
-#  pl.ylim(1,256)
-#  pl.clim(0,1)
-#
-#  pl.show()
+    return outputmap
+
+def dealign_cwt(timefreqmap, fpeak):
+    """
+    Center and Scale the time / frequency map analogously to how we handle
+    spectra
+    """
+
+    outputmap = np.copy(timefreqmap['map'])
+
+    peak_scale = timefreqmap['scales']\
+            [abs(timefreqmap['frequencies']-fpeak).argmin()]
+
+    # shift columns
+    for c in xrange(np.shape(outputmap)[1]):
+        outputmap[:,c] = shift_vec(outputmap[:,c], timefreqmap['scales'],
+                0.25*timefreqmap['scales'].max(), peak_scale).real
 
     return outputmap
  
@@ -632,49 +614,6 @@ class pmnsPCA:
 
         return projection
 
-    def project_tfmap(self, tfmap, this_fpeak=None):
-        """
-        Project the frequency series freqseries onto the principal components to
-        represent that waveform in the new basis.  The projection yields the
-        coefficients {beta} such that the freqseries can be reconstructed as a
-        linear combination of the beta-weighted PCs
-
-        Procedure:
-        1) Align test spectrum (peak) to 1kHz
-        2) Normalise test spectrum to unit hrss
-        3) Convert to polar representation
-        4) Center the test spectrum
-        5) Take projection
-
-        """
-
-        if this_fpeak==None:
-            print >> sys.stderr, "require desired fpeak"
-            sys.exit()
-
-        # Dictionary to hold input and results of projection
-        projection = dict()
-        projection['tfmap'] = np.copy(tfmap)
-
-        # Align test spectrum
-        tfmap_align = align_cwt(tfmap, fpeak=this_fpeak)
-
-        # Global centering
-        
-        #
-        # Reshape
-        #
-        h, w = tfmap_align.shape
-        reshaped_map = tfmap_align.reshape((h * w))
-
-        #
-        # Finally, project test map onto PCs
-        #
-        projection['timefreq_betas'] = np.concatenate(
-                self.pca['timefreq_pca'].transform(reshaped_map)
-                )
-
-        return projection
 
     def reconstruct_freqseries(self, freqseries, npcs=1, this_fpeak=None, wfnum=None):
         """
@@ -698,7 +637,7 @@ class pmnsPCA:
             this_fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
 
         # Get projection:
-        projection = self.project_freqseries(freqseries)
+        fd_projection = self.project_freqseries(freqseries)
         fd_reconstruction=dict()
 
         #
@@ -734,11 +673,11 @@ class pmnsPCA:
         for i in xrange(npcs):
 
             recmag += \
-                    projection['magnitude_betas'][i]*\
+                    fd_projection['magnitude_betas'][i]*\
                     self.pca['magnitude_pca'].components_[i,:]
                                 
             recphi += \
-                    projection['phase_betas'][i]*\
+                    fd_projection['phase_betas'][i]*\
                     self.pca['phase_pca'].components_[i,:]
 
 
@@ -759,10 +698,10 @@ class pmnsPCA:
                 * (orimag>0.01*max(orimag))
 
         fd_reconstruction['magnitude_euclidean_raw'] = \
-                euclidean_distance(recmag[idx], projection['magnitude_cent'][idx])
+                euclidean_distance(recmag[idx], fd_projection['magnitude_cent'][idx])
 
         fd_reconstruction['phase_euclidean_raw'] = \
-                euclidean_distance(recphi[idx], projection['phase_cent'][idx])
+                euclidean_distance(recphi[idx], fd_projection['phase_cent'][idx])
 
 
 
@@ -829,6 +768,121 @@ class pmnsPCA:
 
         return fd_reconstruction
 
+
+    def project_tfmap(self, tfmap, this_fpeak=None):
+        """
+        Project the frequency series freqseries onto the principal components to
+        represent that waveform in the new basis.  The projection yields the
+        coefficients {beta} such that the freqseries can be reconstructed as a
+        linear combination of the beta-weighted PCs
+
+        Procedure:
+        1) Align test spectrum (peak) to 1kHz
+        2) Normalise test spectrum to unit hrss
+        3) Convert to polar representation
+        4) Center the test spectrum
+        5) Take projection
+
+        """
+
+        if this_fpeak==None:
+            print >> sys.stderr, "require desired fpeak"
+            sys.exit()
+
+        # Dictionary to hold input and results of projection
+        projection = dict()
+        projection['tfmap'] = np.copy(tfmap['map'])
+
+        # Align test spectrum
+        projection['tfmap_align'] = align_cwt(tfmap, fpeak=this_fpeak)
+
+        
+        # Reshape
+        h, w = projection['tfmap_align'].shape
+        reshaped_map = projection['tfmap_align'].reshape((h * w))
+
+        #
+        # Finally, project test map onto PCs
+        #
+        projection['timefreq_betas'] = np.concatenate(
+                self.pca['timefreq_pca'].transform(reshaped_map)
+                )
+
+        return projection
+
+    def reconstruct_tfmap(self, tfmap, npcs=1 , this_fpeak=None, wfnum=None):
+        """
+        Reconstruct the given timefrequency map tfmap by projecting onto the
+        current instance's PCs
+        """
+
+        if this_fpeak==None:
+            print >> sys.stderr, "require desired fpeak"
+            sys.exit()
+
+        #
+        # Compute projection of this map onto the PCs
+        #
+        tf_projection = self.project_tfmap(tfmap, this_fpeak=this_fpeak)
+
+        #
+        # Reconstruct the waveform
+        #
+        h, w = tfmap['map'].shape
+        reshaped_map = tfmap['map'].reshape((h * w))
+
+        recmap_align = dict()
+        recmap_align['map'] = np.zeros(np.shape(reshaped_map))
+        npcs=10
+        for i in xrange(npcs):
+            if np.allclose(0,\
+                    self.pca['timefreq_pca'].explained_variance_ratio_[i]):
+                continue
+            else:
+                recmap_align['map'] += tf_projection['timefreq_betas'][i]*\
+                        self.pca['timefreq_pca'].components_[i,:]
+
+        #
+        # De-center and realign the reconstruction
+        #
+
+        pl.figure()
+        pl.plot(recmap_align['map'] + self.pca['timefreq_mean'])
+        pl.plot(tf_projection['tfmap_align'].reshape((h * w)))
+        pl.show()
+        sys.exit()
+
+        # Reshape
+        recmap_align['map'] += self.pca['timefreq_mean']
+        recmap_align['map'] = recmap_align['map'].reshape(h,w)
+
+
+        recmap_align['times'] = np.copy(tfmap['times'])
+        recmap_align['frequencies'] = np.copy(tfmap['frequencies'])
+        recmap_align['scales'] = np.copy(tfmap['scales'])
+        recmap_align['mother_wavelet'] = tfmap['mother_wavelet']
+        recmap_align['image_shape'] = tfmap['image_shape']
+
+        pl.figure()
+        pl.contourf(recmap_align['map'])
+        pl.figure()
+        pl.contourf(tf_projection['tfmap_align'])
+        pl.show()
+        sys.exit()
+
+        # realign
+        recmap = recmap_align.copy()
+        recmap['map'] = dealign_cwt(recmap, this_fpeak)
+
+
+        #
+        # Populate the output dictionary
+        #
+        tf_reconstruction=dict()
+        tf_reconstruction['orig_map'] = recmap
+        tf_reconstruction['align_map'] = recmap_align
+
+        return tf_reconstruction
 
 
 def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
