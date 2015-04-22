@@ -68,7 +68,8 @@ def perform_TFpca(aligned_maps):
     #
     # PCA
     #
-    pca = PCA(whiten=True)
+    #pca = PCA(whiten=True)
+    pca = PCA(whiten=False)
     pca.fit(maps_centered)
 
     return pca, global_mean
@@ -795,11 +796,11 @@ class pmnsPCA:
 
         # Align test spectrum
         projection['tfmap_align'] = align_cwt(tfmap, fpeak=this_fpeak)
-
         
         # Reshape
         h, w = projection['tfmap_align'].shape
-        reshaped_map = projection['tfmap_align'].reshape((h * w))
+        reshaped_map = projection['tfmap_align'].reshape((h * w)) \
+                - self.pca['timefreq_mean']
 
         #
         # Finally, project test map onto PCs
@@ -829,33 +830,22 @@ class pmnsPCA:
         # Reconstruct the waveform
         #
         h, w = tfmap['map'].shape
-        reshaped_map = tfmap['map'].reshape((h * w))
 
         recmap_align = dict()
-        recmap_align['map'] = np.zeros(np.shape(reshaped_map))
-        npcs=10
+        recmap_align['map'] = np.zeros(h*w)
+
         for i in xrange(npcs):
-            if np.allclose(0,\
-                    self.pca['timefreq_pca'].explained_variance_ratio_[i]):
-                continue
-            else:
-                recmap_align['map'] += tf_projection['timefreq_betas'][i]*\
-                        self.pca['timefreq_pca'].components_[i,:]
+            recmap_align['map'] += tf_projection['timefreq_betas'][i]*\
+                    self.pca['timefreq_pca'].components_[i,:]
 
         #
         # De-center and realign the reconstruction
         #
-
-        pl.figure()
-        pl.plot(recmap_align['map'] + self.pca['timefreq_mean'])
-        pl.plot(tf_projection['tfmap_align'].reshape((h * w)))
-        pl.show()
-        sys.exit()
-
+ 
         # Reshape
         recmap_align['map'] += self.pca['timefreq_mean']
+        recmap_align['map'][recmap_align['map']<0] = 0.0
         recmap_align['map'] = recmap_align['map'].reshape(h,w)
-
 
         recmap_align['times'] = np.copy(tfmap['times'])
         recmap_align['frequencies'] = np.copy(tfmap['frequencies'])
@@ -863,24 +853,25 @@ class pmnsPCA:
         recmap_align['mother_wavelet'] = tfmap['mother_wavelet']
         recmap_align['image_shape'] = tfmap['image_shape']
 
-        pl.figure()
-        pl.contourf(recmap_align['map'])
-        pl.figure()
-        pl.contourf(tf_projection['tfmap_align'])
-        pl.show()
-        sys.exit()
-
         # realign
         recmap = recmap_align.copy()
         recmap['map'] = dealign_cwt(recmap, this_fpeak)
-
 
         #
         # Populate the output dictionary
         #
         tf_reconstruction=dict()
-        tf_reconstruction['orig_map'] = recmap
-        tf_reconstruction['align_map'] = recmap_align
+        tf_reconstruction['orig_map'] = recmap.copy()
+        tf_reconstruction['align_map'] = recmap_align.copy()
+
+        tf_reconstruction['tfmap_euclidean_raw'] = euclidean_distance(
+                recmap_align['map'].reshape(h*w),
+                tf_projection['tfmap_align'].reshape(h*w)
+                )
+
+        tf_reconstruction['tfmap_euclidean'] = euclidean_distance(
+                recmap['map'].reshape(h*w), tfmap['map'].reshape(h*w))
+
 
         return tf_reconstruction
 
