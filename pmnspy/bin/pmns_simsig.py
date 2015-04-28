@@ -154,7 +154,6 @@ class DetData:
         hplus.data.data *= 20.0 / self.ext_params.distance
         hcross.data.data *= 20.0 / self.ext_params.distance
 
-
         tmp = lalsim.SimDetectorStrainREAL8TimeSeries(hplus, hcross,
                 self.ext_params.ra, self.ext_params.dec,
                 self.ext_params.polarization, self.det_site) 
@@ -332,6 +331,10 @@ class DetData:
                     self.td_signal.delta_t))
         signal.data.data = self.td_signal.data
 
+        win = lal.CreateTukeyREAL8Window(len(signal.data.data),0.1)
+        signal.data.data[len(signal.data.data):] = 1.0
+        signal.data.data *= win.data.data
+
         # sum
         noise_plus_signal = lal.AddREAL8TimeSeries(noise, signal)
 
@@ -343,12 +346,12 @@ class DetData:
 
         # Finally, zero-pad the signal vector to have the same length as the actual data
         # vector
-        no_noise = lal.CreateREAL8TimeSeries('blah', self.td_noise.start_time, 0,
+        no_noise = lal.CreateREAL8TimeSeries('blah', self.epoch, 0,
                 self.td_noise.delta_t, lal.StrainUnit, 
-                int(np.ceil(self.td_noise.duration / self.td_noise.delta_t)))
+                int(self.td_noise.duration / self.td_noise.delta_t))
 
         no_noise.data.data = np.zeros(\
-                int(np.ceil(self.td_noise.duration / self.td_noise.delta_t)))
+                int(self.td_noise.duration / self.td_noise.delta_t))
 
         signal = lal.AddREAL8TimeSeries(no_noise, signal)
 

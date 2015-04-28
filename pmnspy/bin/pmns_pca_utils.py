@@ -281,13 +281,12 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
 
     # Time-domain Window
     win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.1)
-    #waveform_timeseries = np.copy(ts.data)
+    win.data.data[len(win.data.data):] = 1.0
     waveform_timeseries *= win.data.data
 
     # Zero-pad
     paddata = np.zeros(nsamples)
     paddata[:len(waveform_timeseries)] = np.copy(waveform_timeseries)
-
 
     # FFT
     timeseries = pycbc.types.TimeSeries(initial_array=paddata, delta_t=delta_t)
@@ -640,6 +639,8 @@ class pmnsPCA:
         # Get projection:
         fd_projection = self.project_freqseries(freqseries)
         fd_reconstruction=dict()
+
+        fd_reconstruction['fd_projection'] = fd_projection
 
         #
         # Original Waveforms

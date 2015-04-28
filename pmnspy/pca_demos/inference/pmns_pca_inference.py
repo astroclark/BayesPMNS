@@ -20,7 +20,7 @@
 from __future__ import division
 import os,sys
 import numpy as np
-np.seterr(all="raise", under="ignore")
+#np.seterr(all="raise", under="ignore")
 from optparse import OptionParser
 import ConfigParser
 import random
@@ -28,7 +28,7 @@ import time
 import cPickle as pickle
 
 import matplotlib
-matplotlib.use("Agg")
+#matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 
 import lal
@@ -76,22 +76,33 @@ def PCtemplatePSD(theta):
     Construct a template for the power spectrum from the beta-weighted linear
     superposition of the PCs in PCarray
     """
-    hrss, fpeak, betas = theta
+    hrss, fpeak, magnitude_betas = theta
 
     # Build spectrum
     template_spectrum = np.copy(pca_result.pca['magnitude_mean'])
-    for b, beta in enumerate(betas):
-        template_spectrum += betas[b] * \
-                pca_result.pca['magnitude_pca'].components_[b,:]
+    #for b, beta in enumerate(magnitude_betas):
+    #    template_spectrum += magnitude_betas[b] * \
+    #            pca_result.pca['magnitude_pca'].components_[b,:]
+    template_spectrum += magnitude_betas * \
+            pca_result.pca['magnitude_pca'].components_[0,:]
 
     # Re-align spectrum to this fpeak
     template_spectrum = ppca.shift_vec(template_spectrum,
             pca_result.sample_frequencies, fcenter=fpeak, fpeak=fcenter).real
 
+
+    # Force non-negative values in spectrum
+    template_spectrum[template_spectrum<=0] = 1e-10
+
+
     # Scale to this hrss
-    hrss2 = hrss*hrss
-    norm  = np.inner(template_spectrum, template_spectrum)
-    template_spectrum *= hrss2/norm
+    inband = (pca_result.sample_frequencies>1000)*(pca_result<4000)
+    norm  = 4*np.inner(template_spectrum[inband],
+            template_spectrum[inband])*pca_result.delta_f
+
+    # Power spectrum:
+    template_spectrum *= template_spectrum
+    template_spectrum *= hrss*hrss/norm
 
     return template_spectrum
 
@@ -103,9 +114,9 @@ def lnprob(theta, data, psd):
     The log-posterior
     """
     lp = lnprior(theta)
-    if not np.isinfinite(lp):
+    if np.isinf(lp):
         return -np.inf
-    return lp + lnlike(theta, data, psd)
+    return lnprior(theta) + lnlike(theta, data, psd)
 
 from scipy.stats import ncx2
 def lnlike(theta, data, psd):
@@ -114,25 +125,26 @@ def lnlike(theta, data, psd):
     by the template
     """
 
+    inband = (pca_result.sample_frequencies>1000)*(pca_result<4000)
+
     # Construct the template (non-centrality), normalised by the noise variance
-    template = PCtemplatePSD(theta) / psd
+    template = PCtemplatePSD(theta)[inband] / psd[inband]
 
     # Normalise by the noise variance
-    data_normed = data / psd
+    data_normed = data[inband] / psd[inband]
 
     # likelihood of each frequency
-    lnlikelihoods = ncx2.logpdf(data_normed, 2, data_normed)
+    lnlikelihoods = ncx2.logpdf(data_normed, 2, template)
 
-    inband = (pca_result.sample_frequencies>1000)*(pca_result<4000)
-    return sum(lnlikelihoods[inband])
+    return sum(lnlikelihoods)
 
 def lnprior(theta):
     """
     the log-prior probability of the parameters theta
     """
-    hrss, fpeak, betas = theta
-    if 1e-24 < hrss < 1e-19 and 1500 < fpeak < 4000 and (abs(betas)<0.1).all():
-        # XXX: betas probably shouldn't be independent, surely???  We know that
+    hrss, fpeak, magnitude_betas = theta
+    if 1e-24 < hrss < 1e-19 and 1500 < fpeak < 4000 and abs(magnitude_betas)<0.1:
+        # XXX: magnitude_betas probably shouldn't be independent, surely???  We know that
         # the first PC should have a much larger coefficient than the second PC
         # etc...
         return 0.0
@@ -278,6 +290,8 @@ for i in xrange( ninject ):
     # Compute optimal SNR for injection
     det1_optSNR=pycbc.filter.sigma(det1_data.td_signal, psd=det1_data.psd,
             low_frequency_cutoff=flow, high_frequency_cutoff=0.5*srate)
+    det1_hrss=pycbc.filter.sigma(det1_data.td_signal,
+            low_frequency_cutoff=flow, high_frequency_cutoff=0.5*srate)
 
 
     te=time.time()
@@ -325,6 +339,104 @@ for i in xrange( ninject ):
     '''
 
     # XXX: READY TO MCMCMCMCMCMCMCMCMCMC
+
+    npcs = 1
+    ndim = npcs+2
+    nwalkers = 100
+    ntemps = 20
+
+    #
+    # Get initial Parameters
+    #
+
+    # -----------------------------------------------------
+    # PCA coefficients
+    # Standardise
+
+    # Normalise
+    waveform_FD = ppca.unit_hrss(det1_data.fd_signal.data,
+            delta=det1_data.fd_signal.delta_f, domain='frequency')
+
+    # F-domain reconstruction
+    fd_reconstruction = pca_result.reconstruct_freqseries(waveform_FD.data,
+            npcs=npcs) 
+
+    magnitude_betas = fd_reconstruction['fd_projection']['magnitude_betas'][0]
+
+    # -----------------------------------------------------
+
+    # Initial 'guesses'
+    theta0 = (det1_hrss, waveform.fpeak, magnitude_betas)
+
+
+    print >> sys.stdout, " ... Commencing sampling ... "
+
+    import emcee
+
+    #
+    # --- Regular Ensemble Sampling
+    #
+
+    ensemble_sampling=True
+    if ensemble_sampling:
+        # intial positions of walkers
+        pos0 = np.tile(theta0, (nwalkers,1))
+        for i in xrange(ndim):
+            pos0[:,i] += 0.1*theta0[i]*np.random.randn(nwalkers)
+
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,
+                args=(abs(det1_data.fd_response.data)**2, det1_data.psd.data[1:]))
+        sampler.run_mcmc(pos0, 5000)
+
+        samples = sampler.chain[:, 10:, :].reshape((-1, ndim))
+
+    elif parallel_tempering:
+        #
+        # --- Setup parallel-tempering sampler
+        #
+
+        # intiial positions of walkers
+        pos0 = np.tile(theta0, (ntemps, nwalkers,1))
+        for i in xrange(ntemps):
+            for j in xrange(ndim):
+                pos0[i,:,j] += 0.1*theta0[j]*np.random.randn(nwalkers)
+
+        sampler = emcee.PTSampler(ntemps=ntemps, nwalkers=nwalkers, dim=ndim,
+                logl=lnlike, logp=lnprior,
+                loglargs=(abs(det1_data.fd_response.data)**2,
+                    det1_data.psd.data[1:]), threads=1)
+
+        # --- Burn-in
+        print >> sys.stdout, "burning"
+        for pos, lnprob_val, lnlike_val in sampler.sample(pos0, iterations=10):
+            pass
+        sampler.reset()
+        print >> sys.stdout, "burn-in complete"
+
+        for p, lnprob_val, lnlike_val in sampler.sample(pos, lnprob0=lnprob_val,
+                lnlike0=lnlike_val, iterations=100, thin=2):
+            pass
+
+        samples = sampler.chain[0,...].reshape((-1,ndim))
+
+np.savez('results', samples=samples, snr=det1_optSNR)
+
+#   # XXX: sanity check template
+#   test_tmplt = PCtemplatePSD(theta0)
+#   from pylab import *
+#
+#   figure()
+#   plot(abs(pca_result.cat_orig[1,:]))
+#   plot(abs(waveform_FD))
+#   plot(fd_reconstruction['recon_mag'])
+#
+#
+#   figure()
+#   plot(abs(det1_data.fd_signal.data))
+#   plot(test_tmplt, '--')
+#
+#   show()
+
 
 
 
