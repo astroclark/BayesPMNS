@@ -225,6 +225,8 @@ fcat.suptitle('Example Waveforms')
 fcat.tight_layout()
 fcat.subplots_adjust(wspace=0.0)
 
+fcat.savefig('example_waveforms.png')
+
 
 #
 # Plot Explained Variance
@@ -244,6 +246,8 @@ ylims=ax.get_ylim()
 ax.set_ylim(min(ylims),1)
 ax.grid()
 f.tight_layout()
+
+f.savefig('explained_variance.png')
 
 
 #
@@ -289,6 +293,8 @@ ax[1].set_ylabel('Frequency [arb. units]')
 f.suptitle('Global Averages')
 f.tight_layout()
 
+f.savefig('global_means.png')
+
 #
 # Plot centered spectra & maps
 #
@@ -313,6 +319,8 @@ ax[0][0].set_yticklabels(fyticks)
 f.tight_layout()
 f.subplots_adjust(wspace=0.0)
 f.suptitle('Centered Data')
+
+f.savefig('centered_example_waveforms.png')
 
 pl.show()
 
@@ -341,4 +349,26 @@ ax[1][0].set_ylabel('Frequency \n [arb. units]')
 f.suptitle('Principal Components (1-3)')
 f.tight_layout()
 f.subplots_adjust(wspace=0.0)
+
+f.savefig('top3_principal_components.png')
+
+pl.show()
+
+
+#
+# Save data
+#
+import scipy.io as sio
+outputdata = {'time_domain_waveforms':pmpca.cat_timedomain,
+        'frequency_domain_waveforms':pmpca.cat_orig,
+        'freqency_domain_waveforms_aligned':pmpca.cat_align,
+        'magnitude_spectrum_global_mean':pmpca.pca['magnitude_mean'],
+        'magnitude_principal_components':pmpca.pca['magnitude_pca'].components_,
+        'timefreq_global_mean':pmpca.pca['timefreq_mean'],
+        'timefreq_principal_components':pmpca.pca['timefreq_pca'].components_}
+sio.savemat('postmergerpca.mat', outputdata)
+
+
+
+
 

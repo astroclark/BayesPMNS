@@ -35,6 +35,7 @@ import lal
 import pycbc.filter
 import pmns_utils
 import pmns_simsig as simsig
+import pmns_pca_utils as ppca
 from pylal import antenna
 
 from sklearn.neighbors.kde import KernelDensity
@@ -70,6 +71,73 @@ def kde_sklearn(x, x_grid, bandwidth=0.2, **kwargs):
     log_pdf = kde_skl.score_samples(x_grid[:, np.newaxis])
     return np.exp(log_pdf)
 
+def PCtemplatePSD(theta):
+    """
+    Construct a template for the power spectrum from the beta-weighted linear
+    superposition of the PCs in PCarray
+    """
+    hrss, fpeak, betas = theta
+
+    # Build spectrum
+    template_spectrum = np.copy(pca_result.pca['magnitude_mean'])
+    for b, beta in enumerate(betas):
+        template_spectrum += betas[b] * \
+                pca_result.pca['magnitude_pca'].components_[b,:]
+
+    # Re-align spectrum to this fpeak
+    template_spectrum = ppca.shift_vec(template_spectrum,
+            pca_result.sample_frequencies, fcenter=fpeak, fpeak=fcenter).real
+
+    # Scale to this hrss
+    hrss2 = hrss*hrss
+    norm  = np.inner(template_spectrum, template_spectrum)
+    template_spectrum *= hrss2/norm
+
+    return template_spectrum
+
+#
+# Probability functions
+#
+def lnprob(theta, data, psd):
+    """
+    The log-posterior
+    """
+    lp = lnprior(theta)
+    if not np.isinfinite(lp):
+        return -np.inf
+    return lp + lnlike(theta, data, psd)
+
+from scipy.stats import ncx2
+def lnlike(theta, data, psd):
+    """
+    The log-likelihood.  Non-central chiquared with 2 dof, noncentrality given
+    by the template
+    """
+
+    # Construct the template (non-centrality), normalised by the noise variance
+    template = PCtemplatePSD(theta) / psd
+
+    # Normalise by the noise variance
+    data_normed = data / psd
+
+    # likelihood of each frequency
+    lnlikelihoods = ncx2.logpdf(data_normed, 2, data_normed)
+
+    inband = (pca_result.sample_frequencies>1000)*(pca_result<4000)
+    return sum(lnlikelihoods[inband])
+
+def lnprior(theta):
+    """
+    the log-prior probability of the parameters theta
+    """
+    hrss, fpeak, betas = theta
+    if 1e-24 < hrss < 1e-19 and 1500 < fpeak < 4000 and (abs(betas)<0.1).all():
+        # XXX: betas probably shouldn't be independent, surely???  We know that
+        # the first PC should have a much larger coefficient than the second PC
+        # etc...
+        return 0.0
+    return -np.inf
+
 
 # --- End Defs
 
@@ -96,8 +164,11 @@ trigtime=0.5*datalen+epoch
 if opts.output_dir is None:
     outdir=cp.get('program', 'output-dir')
 
+ts0=time.time()
+
 ######################################################################
 # Data Generation
+
 print >> sys.stdout, '''
 -------------------------------------
 Beginning pmns_pca_inference:
@@ -108,14 +179,12 @@ Beginning pmns_pca_inference:
 #
 # Generate Signal Data
 #
-ts0=time.time()
 
 print >> sys.stdout, "generating waveform..."
 waveform = pmns_utils.Waveform('%s_lessvisc'%opts.waveform_name)
 waveform.compute_characteristics()
 
 te=time.time()
-
 print >> sys.stdout, "...waveform construction took: %f sec"%(te-ts0)
 
 
@@ -131,9 +200,9 @@ max_sig_len=int(np.ceil(max_sig*16384))
 
 # Sanity check: data segment must contain full extent of max signal
 # duration, when the signal is injected in the middle of the segment
-if max_sig > 0.5*datalen:
-    print >> sys.stderr, "templates will lie outside data segment: extend data length"
-    sys.exit()
+#if max_sig > 0.5*datalen:
+    #print >> sys.stderr, "templates will lie outside data segment: extend data length"
+    #sys.exit()
 
 # ------------------------------------------------------------------------------------
 # Begin Loop over injections (if required)
@@ -216,6 +285,46 @@ for i in xrange( ninject ):
     print >> sys.stdout, "Injected SNR=%.2f"%det1_optSNR
     print >> sys.stdout, "...data generation took %f sec"%(te-ts)
     print >> sys.stdout, "Total elapsed time: %f sec"%(te-ts0)
+
+    ######################################################################
+    # Initialise Principal Components
+    print >> sys.stdout, '''
+2) Initialising PCA
+    '''
+
+
+    waveform_names=['apr_135135_lessvisc',
+                    'shen_135135_lessvisc',
+                    'dd2_135135_lessvisc' ,
+                    'dd2_165165_lessvisc' ,
+                    'nl3_135135_lessvisc' ,
+                    'nl3_1919_lessvisc'   ,
+                    'tm1_135135_lessvisc' ,
+                    'tma_135135_lessvisc' ,
+                    'sfhx_135135_lessvisc',
+                    'sfho_135135_lessvisc']#,
+    catlen = len(waveform_names)
+
+    #
+    # Create PMNS PCA instance for this catalogue
+    #
+    fcenter=2710
+    pca_result = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000,
+            fcenter=fcenter, nTsamples=len(det1_data.td_response))
+
+    te=time.time()
+    print >> sys.stdout, "...PCA took: %f sec"%(te-ts0)
+
+
+    ######################################################################
+    # PCA-based Spectral Analysis
+
+    print >> sys.stdout, '''
+-------------------------------------
+3) Fitting spectra
+    '''
+
+    # XXX: READY TO MCMCMCMCMCMCMCMCMCMC
 
 
 
