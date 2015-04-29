@@ -25,6 +25,8 @@ import matplotlib
 #matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 
+import cPickle as pickle
+
 import triangle
 
 from sklearn.neighbors.kde import KernelDensity
@@ -37,16 +39,16 @@ __author__ = "James Clark <james.clark@ligo.org>"
 
 class PosteriorResults:
 
-    def __init__(self, samples_file, inj_theta=None):
+    def __init__(self, samples_file, theta0=None):
 
         self.params = ['hrss','fpeak','beta1']
 
         self.samples_file = samples_file
         
-        if inj_theta is None:
-            self.inj_theta = [None, None, None]
+        if theta0 is None:
+            self.theta0 = [None, None, None]
         else:
-            self.inj_theta = inj_theta
+            self.theta0 = theta0
 
         self.binSizes = {'hrss':5e-24, 'fpeak':1, 'beta1':0.01}
         self.levels = [0.67, 0.9, 0.95]
@@ -108,21 +110,24 @@ def main():
     #
     # Load Data
     #
-    results_from_file = np.load(sys.argv[1])
-    samples_file = sys.argv[2]
+    results_name = sys.argv[1]
+    samples_file = results_name+'.txt'
+    pickled_file = sys.argv[1] + '.pickle'
 
-    inj_theta = results_from_file['inj_theta']
-    parvals={'hrss':inj_theta[0], 'fpeak':inj_theta[1], 'beta1':inj_theta[2]}
+    (det1_optSNR, theta0) = \
+            pickle.load(open(pickled_file,'rb'))
+
+    parvals={'hrss':theta0[0], 'fpeak':theta0[1], 'beta1':theta0[2]}
 
     pos_result = PosteriorResults(samples_file=samples_file,
-            inj_theta=inj_theta)
+            theta0=theta0)
 
     # 
     # Triangle Plot
     #
     f = plot_corner(pos_result.posterior, [.05, .50, .95], parvals)
     f.savefig(samples_file.replace('.txt','_corner.png'))
-    pl.show()
+    #pl.show()
 
     #
     # Text dump of summary statistics

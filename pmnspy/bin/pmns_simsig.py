@@ -340,8 +340,8 @@ class DetData:
         signal.data.data = self.td_signal.data
 
         win = lal.CreateTukeyREAL8Window(len(signal.data.data),0.1)
-        signal.data.data[len(signal.data.data):] = 1.0
-        signal.data.data *= win.data.data
+        win.data.data[len(signal.data.data):] = 1.0
+        #signal.data.data *= win.data.data
 
         # --- Scale to a target snr
         print '---'
