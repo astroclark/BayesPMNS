@@ -49,6 +49,7 @@ def parser():
     parser.add_option("-S", "--init-seed", type=int, default=101)
     parser.add_option("-N", "--ninject", type=int, default=None)
     parser.add_option("-o", "--output-dir", type=str, default=None)
+    parser.add_option("-s", "--target-snr", type=float, default=None)
 
     #parser.add_option("-Dmin", "--min-distance")
     #parser.add_option("-Dmax", "--max-distance")
@@ -170,6 +171,10 @@ srate=cp.getfloat('analysis','srate')
 seed=opts.init_seed
 seed+=random.randint(0,lal.GPSTimeNow())
 
+target_snr=opts.target_snr
+if target_snr is None and cp.has_option('injections','target-snr'):
+    target_snr=cp.getfloat('injections','target-snr')
+
 epoch=0.0
 trigtime=0.5*datalen+epoch
 
@@ -285,11 +290,13 @@ for i in xrange( ninject ):
     det1_data = simsig.DetData(det_site=cp.get('analysis','ifo1'),
             noise_curve=cp.get('analysis','noise-curve'), waveform=waveform,
             ext_params=ext_params, duration=datalen, seed=seed, epoch=epoch,
-            f_low=flow, taper=cp.getboolean('analysis','taper-inspiral'))
+            f_low=flow, taper=cp.getboolean('analysis','taper-inspiral'),
+            target_snr=target_snr)
 
     # Compute optimal SNR for injection
     det1_optSNR=pycbc.filter.sigma(det1_data.td_signal, psd=det1_data.psd,
             low_frequency_cutoff=flow, high_frequency_cutoff=0.5*srate)
+
     det1_hrss=pycbc.filter.sigma(det1_data.td_signal,
             low_frequency_cutoff=flow, high_frequency_cutoff=0.5*srate)
 
@@ -386,56 +393,54 @@ for i in xrange( ninject ):
 
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,
                 args=(abs(det1_data.fd_response.data)**2, det1_data.psd.data[1:]))
-        sampler.run_mcmc(pos0, 5000)
+        sampler.run_mcmc(pos0, 1000)
 
         samples = sampler.chain[:, 10:, :].reshape((-1, ndim))
+        probabilities = sampler.lnprobability[:,10:].reshape(-1)
 
-    elif parallel_tempering:
-        #
-        # --- Setup parallel-tempering sampler
-        #
-
-        # intiial positions of walkers
-        pos0 = np.tile(theta0, (ntemps, nwalkers,1))
-        for i in xrange(ntemps):
-            for j in xrange(ndim):
-                pos0[i,:,j] += 0.1*theta0[j]*np.random.randn(nwalkers)
-
-        sampler = emcee.PTSampler(ntemps=ntemps, nwalkers=nwalkers, dim=ndim,
-                logl=lnlike, logp=lnprior,
-                loglargs=(abs(det1_data.fd_response.data)**2,
-                    det1_data.psd.data[1:]), threads=1)
-
-        # --- Burn-in
-        print >> sys.stdout, "burning"
-        for pos, lnprob_val, lnlike_val in sampler.sample(pos0, iterations=10):
-            pass
-        sampler.reset()
-        print >> sys.stdout, "burn-in complete"
-
-        for p, lnprob_val, lnlike_val in sampler.sample(pos, lnprob0=lnprob_val,
-                lnlike0=lnlike_val, iterations=100, thin=2):
-            pass
-
-        samples = sampler.chain[0,...].reshape((-1,ndim))
-
-np.savez('results', samples=samples, snr=det1_optSNR)
-
-#   # XXX: sanity check template
-#   test_tmplt = PCtemplatePSD(theta0)
-#   from pylab import *
+#   elif parallel_tempering:
+#       #
+#       # --- Setup parallel-tempering sampler
+#       #
 #
-#   figure()
-#   plot(abs(pca_result.cat_orig[1,:]))
-#   plot(abs(waveform_FD))
-#   plot(fd_reconstruction['recon_mag'])
+#       # intiial positions of walkers
+#       pos0 = np.tile(theta0, (ntemps, nwalkers,1))
+#       for i in xrange(ntemps):
+#           for j in xrange(ndim):
+#               pos0[i,:,j] += 0.1*theta0[j]*np.random.randn(nwalkers)
 #
+#       sampler = emcee.PTSampler(ntemps=ntemps, nwalkers=nwalkers, dim=ndim,
+#               logl=lnlike, logp=lnprior,
+#               loglargs=(abs(det1_data.fd_response.data)**2,
+#                   det1_data.psd.data[1:]), threads=1)
 #
-#   figure()
-#   plot(abs(det1_data.fd_signal.data))
-#   plot(test_tmplt, '--')
+#       # --- Burn-in
+#       print >> sys.stdout, "burning"
+#       for pos, lnprob_val, lnlike_val in sampler.sample(pos0, iterations=10):
+#           pass
+#       sampler.reset()
+#       print >> sys.stdout, "burn-in complete"
 #
-#   show()
+#       for p, lnprob_val, lnlike_val in sampler.sample(pos, lnprob0=lnprob_val,
+#               lnlike0=lnlike_val, iterations=100, thin=2):
+#           pass
+#
+#       samples = sampler.chain[0,...].reshape((-1,ndim))
+        
+
+np.savez('results_snr-%.2f'%det1_optSNR, samples=samples, snr=det1_optSNR,
+        inj_theta=theta0)
+
+#
+# LALInference-friendly output
+#
+f = open('results_snr-%.2f.txt'%det1_optSNR,'w')
+f.writelines("# hrss fpeak beta1 posterior\n")
+for s in xrange(len(samples)):
+    f.writelines("%e %f %f %f\n"%(
+        samples[s,0], samples[s,1], samples[s,2], probabilities[s])
+        )
+f.close()
 
 
 

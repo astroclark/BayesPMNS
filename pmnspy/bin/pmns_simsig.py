@@ -27,6 +27,7 @@ import pmns_utils
 
 import pycbc.noise
 import pycbc.types
+import pycbc.filter
 
 import lal
 import lalsimulation as lalsim
@@ -44,7 +45,7 @@ class DetData:
     def __init__(self, det_site="H1", noise_curve='aLIGO', epoch=0.0,
             duration=10.0, f_low=10.0, delta_t=1./16384, waveform=None,
             ext_params=None, seed=0, signal_only=False, taper=False,
-            optimal_injection=False):
+            optimal_injection=False, target_snr=None):
 
         # dictionary of detector locations
         det_sites = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR], 
@@ -65,9 +66,14 @@ class DetData:
         self.duration = duration
         self.f_low = f_low
         self.delta_t = delta_t
-        self.delta_f = 1.0 / self.duration
+        #self.delta_f = 1.0 / self.duration
+        self.delta_f = 1.0 / (int(self.duration/self.delta_t)*self.delta_t)
         self.tlen = int(np.ceil(self.duration / self.delta_t))
         self.flen = int(np.ceil(self.tlen/2 + 1))
+        self.target_snr = target_snr
+
+        # --- Make noise
+        self.make_noise(signal_only)
 
         # --- Make signal
         if waveform is not None:
@@ -76,9 +82,6 @@ class DetData:
             self.waveform_name = waveform.waveform_name
         else:
             self.waveform_name = None
-
-        # --- Make noise
-        self.make_noise(signal_only)
 
         # --- Add signal to noise
         if waveform is not None:
@@ -158,15 +161,20 @@ class DetData:
                 self.ext_params.ra, self.ext_params.dec,
                 self.ext_params.polarization, self.det_site) 
 
+        # Pad the end so we have the same length signal and noise (useful for
+        # snr and psds)
+        sigdata = np.zeros(len(self.td_noise))
+        sigdata[:len(tmp.data.data)] = np.copy(tmp.data.data)
+
         # Project waveform onto these extrinsic parameters
         self.td_signal = \
-                pycbc.types.timeseries.TimeSeries(initial_array=np.copy(tmp.data.data),
+                pycbc.types.timeseries.TimeSeries(initial_array=sigdata,
                         delta_t=tmp.deltaT, epoch=tmp.epoch)
+
         del tmp
 
-
         # Remove extraneous data
-        self.td_signal = self.td_signal.trim_zeros()
+        #self.td_signal = self.td_signal.trim_zeros()
 
 
     def make_noise(self, signal_only):
@@ -195,9 +203,9 @@ class DetData:
             self.td_noise = pycbc.noise.noise_from_psd(int(tmplen), self.delta_t,
                     self.psd, seed=self.seed)
 
-            zeroidx=self.td_noise.sample_times.data>self.duration
-            self.td_noise.data[zeroidx] = 0.0
-            self.td_noise = self.td_noise.trim_zeros()
+            self.td_noise = \
+                    pycbc.types.TimeSeries(self.td_noise.data[:self.duration/self.delta_t],
+                            delta_t=self.delta_t)
 
             # XXX not sure if this is a good idea...
             self.td_noise.start_time = float(self.epoch)
@@ -335,6 +343,20 @@ class DetData:
         signal.data.data[len(signal.data.data):] = 1.0
         signal.data.data *= win.data.data
 
+        # --- Scale to a target snr
+        print '---'
+        if self.target_snr is not None:
+
+            tmp_sig = pycbc.types.TimeSeries(signal.data.data,
+                    delta_t=self.td_signal.delta_t)
+
+            current_snr = pycbc.filter.sigma(tmp_sig, psd=self.psd,
+                    low_frequency_cutoff=self.f_low,
+                    high_frequency_cutoff=0.5/self.delta_t)
+
+            signal.data.data *= self.target_snr / current_snr
+        # ----
+
         # sum
         noise_plus_signal = lal.AddREAL8TimeSeries(noise, signal)
 
@@ -358,7 +380,6 @@ class DetData:
         self.td_signal = \
                 pycbc.types.timeseries.TimeSeries(initial_array=np.copy(signal.data.data),
                         delta_t=signal.deltaT, epoch=noise_plus_signal.epoch)
-
 
         del noise, signal, noise_plus_signal
         
