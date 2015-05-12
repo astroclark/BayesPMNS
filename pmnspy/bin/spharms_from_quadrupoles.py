@@ -51,6 +51,9 @@ def parser():
     parser.add_option("-D", "--extraction-distance", type=float, default=None)
     parser.add_option("-f", "--sample-rate", type=float, default=16384)
     parser.add_option("-s", "--ninja-units", default=False, action="store_true")
+    parser.add_option("-q", "--mass-ratio", default=1.0, type=float)
+    parser.add_option("-g", "--nr-group", default="unspecified", type=str)
+    parser.add_option("-d", "--simulation-details", default=None)
 
     (opts,args) = parser.parse_args()
 
@@ -104,6 +107,11 @@ opts, args = parser()
 
 simdatafile=args[0]
 waveformlabel=opts.waveform_name
+if opts.simulation_details is None:
+    simulation_details = opts.waveform_name
+else:
+    simulation_details = opts.simulation_details
+
 extract_dist=opts.extraction_distance
 
 sample_rate = opts.sample_rate * lal.MTSUN_SI
@@ -173,10 +181,13 @@ inifile = open(waveformlabel+".ini", 'w')
 # XXX: hard-coding the mass-ratio and mass-scale here.  We can add these as
 # arguments later if desired.  Mass ratio is irrelevant for general matter
 # waveforms, but is needed by the existing ninja codes
-headerstr="""mass-ratio = 1.0
+headerstr="""mass-ratio = {0}
 mass-scale = 1
-simulation-details = {0}\n
-""".format(waveformlabel)
+simulation-details = {1}
+nr-group = {2}\n
+""".format(opts.mass_ratio, 
+        simulation_details,
+        opts.nr_group)
 inifile.writelines(headerstr)
 
 # Loop over harmonics
