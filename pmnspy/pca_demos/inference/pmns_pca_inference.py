@@ -395,8 +395,8 @@ for i in xrange( ninject ):
                 args=(abs(det1_data.fd_response.data)**2, det1_data.psd.data[1:]))
         sampler.run_mcmc(pos0, 1000)
 
-        samples = sampler.chain[:, 10:, :].reshape((-1, ndim))
-        probabilities = sampler.lnprobability[:,10:].reshape(-1)
+        samples = sampler.chain[:, 100:, :].reshape((-1, ndim))
+        probabilities = sampler.lnprobability[:,100:].reshape(-1)
 
 #   elif parallel_tempering:
 #       #
