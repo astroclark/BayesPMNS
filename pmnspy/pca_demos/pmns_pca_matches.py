@@ -87,6 +87,8 @@ exact_matches=np.zeros(shape=(catlen, catlen))
 exact_magnitude_euclidean=np.zeros(shape=(catlen, catlen))
 exact_phase_euclidean=np.zeros(shape=(catlen, catlen))
 
+#sys.exit()
+
 for w,testwav_name in enumerate(waveform_names):
 
     print "Analysing %s (exact match)"%testwav_name
@@ -131,7 +133,6 @@ for w,testwav_name in enumerate(waveform_names):
         # --- TF reconstruction
         tf_reconstruction = pmpca.reconstruct_tfmap(testwav_waveform_TF,
                 this_fpeak=fpeak)
-        sys.exit()
 
 
 
@@ -176,6 +177,7 @@ f.tight_layout()
 
 pl.show()
 
+#sys.exit()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Realistic catalogues
 #

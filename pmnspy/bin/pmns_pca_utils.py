@@ -526,14 +526,17 @@ class pmnsPCA:
         self.magnitude, self.phase = complex_to_polar(self.cat_orig)
 
         self.magnitude_align = np.zeros(np.shape(self.magnitude))
+        self.phase_align = np.zeros(np.shape(self.phase))
         for i in xrange(np.shape(self.magnitude)[0]):
             self.magnitude_align[i,:] = shift_vec(self.magnitude[i,:],
+                    self.sample_frequencies, self.fpeaks[i], self.fcenter).real
+            self.phase_align[i,:] = shift_vec(self.phase[i,:],
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
 
         # -- Do PCA
         print "Performing Spectral PCA"
         t0 = time.time()
-        self.pca = perform_pca(self.magnitude_align, self.phase)
+        self.pca = perform_pca(self.magnitude_align, self.phase_align)
         train_time = (time.time() - t0)
         print("...done in %0.3fs" % train_time)
 
@@ -586,6 +589,8 @@ class pmnsPCA:
 
         testwav_magnitude_align = shift_vec(testwav_magnitude,
                 self.sample_frequencies, this_fpeak, self.fcenter).real
+        testwav_phase_align = shift_vec(testwav_phase,
+                self.sample_frequencies, this_fpeak, self.fcenter).real
 
         #
         # Center & scale test spectrum
@@ -595,7 +600,8 @@ class pmnsPCA:
 
         projection['magnitude_cent'] = magnitude_cent
 
-        phase_cent = np.copy(testwav_phase)
+        #phase_cent = np.copy(testwav_phase)
+        phase_cent = np.copy(testwav_phase_align)
         #phase_cent -= self.pca['phase_mean']
         #phase_cent /= self.pca['phase_std']
 
@@ -713,6 +719,8 @@ class pmnsPCA:
         # Move the spectrum back to where it should be
         #
         recmag = shift_vec(recmag, self.sample_frequencies,
+                fcenter=this_fpeak, fpeak=self.fcenter).real
+        recphi = shift_vec(recphi, self.sample_frequencies,
                 fcenter=this_fpeak, fpeak=self.fcenter).real
 
         fd_reconstruction['recon_mag'] = np.copy(recmag)
