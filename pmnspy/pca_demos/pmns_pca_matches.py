@@ -87,7 +87,7 @@ exact_matches=np.zeros(shape=(catlen, catlen))
 exact_magnitude_euclidean=np.zeros(shape=(catlen, catlen))
 exact_phase_euclidean=np.zeros(shape=(catlen, catlen))
 
-#sys.exit()
+sys.exit()
 
 for w,testwav_name in enumerate(waveform_names):
 
@@ -153,12 +153,16 @@ f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
         title="Match: training data includes the test waveform")
 
 
+# -- Bars of the 90% variance matches
+f, ax = ppca.bar_matches(exact_matches, waveform_names, npcs=1)
+
+
 #
 # Eigenenergy
 #
 catlen=len(waveform_names)
 
-f, ax = pl.subplots(ncols=1)
+f, ax = pl.subplots(ncols=1,figsize=(6,8))
 
 ax.plot(range(1,catlen+1),
         100*(np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_)), 
@@ -177,7 +181,7 @@ f.tight_layout()
 
 pl.show()
 
-#sys.exit()
+sys.exit()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Realistic catalogues
 #

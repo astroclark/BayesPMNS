@@ -91,9 +91,13 @@ def plot_freqseries(ax,x,y,xlims=(999,4096),ylims=(0, 0.035)):
 
     return yticks
 
-def plot_freqpc(ax,x,y,xlims=(999,4096),ylims=(0, 0.035)):
+def plot_freqpc(ax,x,y,xlims=(999,4096),ylims=(0, 0.035),w=None):
 
-    ax.plot(x, y, color='k')
+    if w==None:
+        ax.plot(x, y, color='k')
+    else:
+        ax.plot(x, y, color='k', label='PC %d'%w)
+        ax.legend()
     ax.set_xlim(xlims)
 #    ax.set_ylim(ylims)
     ax.set_xlabel('Frequency [arb. units]')
@@ -191,6 +195,30 @@ nTsamples=16384
 
 pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710,
         nTsamples=nTsamples)
+
+# --- Generate PC coefficients for storage
+magnitude_betas=np.zeros(shape=(len(waveform_names),len(waveform_names)))
+phase_betas=np.zeros(shape=(len(waveform_names),len(waveform_names)))
+for w, testwav_name in enumerate(waveform_names):
+    print "Projecting %s"%testwav_name
+
+    testwav_waveform = pu.Waveform(testwav_name)
+    testwav_waveform.reproject_waveform()
+
+    # Standardise
+    testwav_waveform_FD, fpeak, _ = \
+            ppca.condition_spectrum(testwav_waveform.hplus.data,
+                    nsamples=nTsamples)
+
+    # Normalise
+    testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,
+            delta=testwav_waveform_FD.delta_f, domain='frequency')
+
+    projection = pmpca.project_freqseries(testwav_waveform_FD)
+
+    magnitude_betas[w,:] = projection['magnitude_betas']
+    phase_betas[w,:]     = projection['phase_betas']
+
 
 #
 # Plot Sample waveforms
@@ -331,7 +359,7 @@ f, ax = pl.subplots(nrows=2, ncols=3, figsize=(10,5))
 for w in xrange(3):
 
     fyticks = plot_freqpc(ax[0][w], pmpca.sample_frequencies,
-            pmpca.pca['magnitude_pca'].components_[w,:])
+            pmpca.pca['magnitude_pca'].components_[w,:], w=w)
 
     clims = (-0.025,0.025)
     tfmap = plot_timefreqpc(ax[1][w], pmpca.map_times, pmpca.map_frequencies,
@@ -354,18 +382,48 @@ f.savefig('top3_principal_components.png')
 
 pl.show()
 
+#
+# Plot mean spectra & PCs
+#
+f, ax = pl.subplots(nrows=1, ncols=4, figsize=(12,4))
+
+# Magnitude spectrum
+ax[0].plot(pmpca.sample_frequencies, pmpca.pca['magnitude_mean'], color='k',
+        label='mean spectrum')
+ax[0].legend()
+ax[0].set_xlim(999,4096)
+ax[0].minorticks_on()
+ax[0].grid()
+ax[0].set_xlabel('Frequency [arb. units]')
+ax[0].set_xticklabels([])
+ax[0].set_ylabel('|H$_+$(f)|')
+
+for w in xrange(1,4):
+
+    fyticks = plot_freqpc(ax[w], pmpca.sample_frequencies,
+            pmpca.pca['magnitude_pca'].components_[w,:], w=w)
+
+#f.suptitle('Principal Components (1-3)')
+f.tight_layout()
+f.subplots_adjust(wspace=0.0)
+
 
 #
 # Save data
 #
 import scipy.io as sio
-outputdata = {'time_domain_waveforms':pmpca.cat_timedomain,
+outputdata = {'sample_frequencies':pmpca.sample_frequencies,
+        'time_domain_waveforms':pmpca.cat_timedomain,
+        'fcenter':2710.0,
+        'fpeaks':np.concatenate(pmpca.fpeaks),
         'frequency_domain_waveforms':pmpca.cat_orig,
         'freqency_domain_waveforms_aligned':pmpca.cat_align,
         'magnitude_spectrum_global_mean':pmpca.pca['magnitude_mean'],
         'magnitude_principal_components':pmpca.pca['magnitude_pca'].components_,
+        'magnitude_coeffficients':magnitude_betas,
         'timefreq_global_mean':pmpca.pca['timefreq_mean'],
         'timefreq_principal_components':pmpca.pca['timefreq_pca'].components_}
+
 sio.savemat('postmergerpca.mat', outputdata)
 
 

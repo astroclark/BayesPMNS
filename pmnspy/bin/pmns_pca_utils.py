@@ -185,14 +185,12 @@ def complex_to_polar(catalogue):
 def phase_of(z):
     return np.unwrap(np.angle(z))# - 2*np.pi
 
-def build_catalogues(waveform_names, fshift_center, nTsamples=16384):
+def build_catalogues(waveform_names, fshift_center, nTsamples=16384,
+        delta_t=1./16384):
     """
     Build the data matrix
     """
 
-    sample_freq=16384
-
-    delta_t=1./sample_freq
     nFsamples=nTsamples/2 + 1
     sample_times=np.arange(0, delta_t*nTsamples, delta_t)
 
@@ -267,8 +265,7 @@ def example_tfmap(name='shen_135135_lessvisc', delta_t=1./16384):
         waveform = pmns_utils.Waveform(name)
         waveform.reproject_waveform()
 
-        tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data,
-            delta_t=delta_t))
+        tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data))
 
         return tfmap
 
@@ -397,7 +394,6 @@ def wrap_phase(phase):
 def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
         fmax=4096, maplen=2048):
 
-
     # Make sure the timeseries peaks in the middle of the map
     paddata = np.zeros(maplen)
     peakidx = np.argmax(timeseries.data)
@@ -436,6 +432,7 @@ def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
 
     # Return a dictionary
     timefreq = dict()
+    timefreq['analysed_data'] = timeseries
     timefreq['map'] = tfmap
     timefreq['times'] = timeseries.sample_times.data
     timefreq['frequencies'] = freqs
@@ -512,6 +509,7 @@ class pmnsPCA:
                         build_catalogues(self.waveform_list, self.fcenter,
                                 nTsamples=nTsamples)
         self.delta_f = np.diff(self.sample_frequencies)[0]
+        self.delta_t = 1./16384
 
         # min freq for match calculations
         self.low_frequency_cutoff=low_frequency_cutoff
@@ -992,6 +990,36 @@ def image_euclidean(euclidean_matrix, waveform_names, title=None, clims=None):
     fig.tight_layout()
 
     return fig, ax
+
+def bar_matches(matches, waveform_names, npcs):
+    labels=[name.replace('_lessvisc','') for name in waveform_names]
+
+    ind = np.arange(len(waveform_names))
+    width = 0.4 
+    gap   = 0.05
+
+    f, ax = pl.subplots(ncols=1,figsize=(6,8))
+    f.subplots_adjust(bottom=0.1,top=.95,left=0.2)
+    matchbar_exact = ax.barh(ind, matches[:,npcs-1], height=width, color='k',
+            linewidth=0.5)
+
+    ax.set_xlabel('Match')
+    ax.set_ylabel('Waveform')
+    ax.set_yticks(ind+width)
+    ytickNames = pl.setp(ax, yticklabels=labels)
+    #pl.setp(ytickNames, rotation=45)
+    ax.set_xlim(0.5,1)
+    ax.set_ylim(-.5,len(waveform_names))
+    ax.minorticks_on()
+    #ax1.legend(loc='lower right')
+    ax.grid(linestyle='-',color='grey')
+    ax.xaxis.grid(True, linestyle=':', which='minor', color='grey')
+    ax.set_axisbelow(True)
+    f.tight_layout()
+
+    return f, ax
+
+
 
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 

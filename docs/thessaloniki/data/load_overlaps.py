@@ -25,6 +25,12 @@ import matplotlib
 #matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 
+font = {'family' : 'normal',
+        'weight' : 'bold',
+        'size'   : 16}
+
+matplotlib.rc('font', **font)
+
 def parse_file(filename):
 
     f = open(filename,'r')
@@ -137,7 +143,7 @@ ax1.set_xlabel('network SNR of reconstruction')
 ax1.set_ylabel('Match')
 ax1.minorticks_on()
 
-f1.savefig('recSNR_vs_match.png')
+f1.savefig('recSNR_vs_match.pdf')
 
 small_scale_overlaps=np.concatenate(small_scale_overlaps)
 small_scale_overlaps=small_scale_overlaps[np.isfinite(small_scale_overlaps)]
@@ -146,7 +152,7 @@ ax2.hist(small_scale_overlaps, histtype='stepfilled', alpha=0.5, bins=50)
 ax2.set_xlabel('Reconstruction Match (all EOS) @ 4 Mpc (sky-averaged)')
 ax2.set_xlim(0,1)
 
-f2.savefig('small_scale_matches.png')
+f2.savefig('small_scale_matches.pdf')
 
 pl.show()
 
