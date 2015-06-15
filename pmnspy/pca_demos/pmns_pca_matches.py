@@ -87,7 +87,6 @@ exact_matches=np.zeros(shape=(catlen, catlen))
 exact_magnitude_euclidean=np.zeros(shape=(catlen, catlen))
 exact_phase_euclidean=np.zeros(shape=(catlen, catlen))
 
-sys.exit()
 
 for w,testwav_name in enumerate(waveform_names):
 
@@ -181,7 +180,7 @@ f.tight_layout()
 
 pl.show()
 
-sys.exit()
+#sys.exit()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Realistic catalogues
 #
