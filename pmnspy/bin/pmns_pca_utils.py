@@ -125,7 +125,10 @@ def condition_magnitude(magnitude_spectra):
     magnitude_std = np.std(magnitude_spectra, axis=0)
 
     #for w in xrange(np.shape(magnitude_spectra)[0]):
-        #magnitude_spectra_centered[w,:] /= magnitude_std
+        #magnitude_spectra_centered[w,:] /= \
+        #        magnitude_spectra_centered[w,:].max()
+        #magnitude_spectra_centered[w,:] /= \
+        #        np.linalg.norm(magnitude_spectra_centered[w,:])
 
     return magnitude_spectra_centered, magnitude_mean, magnitude_std
 
@@ -196,7 +199,6 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384,
 
     # Preallocation
     timedomain_cat = np.zeros(shape=(len(waveform_names), len(sample_times)))
-    aligned_cat = np.zeros(shape=(len(waveform_names), nFsamples),  dtype=complex)
     original_cat = np.zeros(shape=(len(waveform_names), nFsamples), dtype=complex)
     fpeaks = np.zeros(len(waveform_names))
 
@@ -219,6 +221,10 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384,
         #
         waveform = pmns_utils.Waveform(name)
         waveform.reproject_waveform()
+
+        # apply window
+        #window = lal.CreateTukeyREAL8Window(len(waveform.hplus), 0.2)
+        #waveform.hplus.data *= window.data.data
 
         # Waveform conditioning
         original_spectrum, fpeaks[w], timeseries = \
@@ -250,10 +256,8 @@ def build_catalogues(waveform_names, fshift_center, nTsamples=16384,
                 fpeaks[w], fshift_center)
 
         # Populate catalogue with normalised aligned spectrum
-        aligned_cat[w,:] = unit_hrss(aligned_spectrum,
-                delta=original_spectrum.delta_f, domain='frequency').data
 
-    return (sample_times, original_frequencies, timedomain_cat, aligned_cat,
+    return (sample_times, original_frequencies, timedomain_cat,
             original_cat, fpeaks, original_image_cat, align_image_cat, times,
             scales, frequencies)
 
@@ -265,7 +269,8 @@ def example_tfmap(name='shen_135135_lessvisc', delta_t=1./16384):
         waveform = pmns_utils.Waveform(name)
         waveform.reproject_waveform()
 
-        tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data))
+        tfmap = build_cwt(pycbc.types.TimeSeries(waveform.hplus.data,
+            delta_t=delta_t))
 
         return tfmap
 
@@ -276,10 +281,10 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     standard length (16384 samples)
     """
 
-    # Time-domain Window
-    win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.1)
-    win.data.data[len(win.data.data):] = 1.0
-    waveform_timeseries *= win.data.data
+#   # Time-domain Window
+#   win=lal.CreateTukeyREAL8Window(len(waveform_timeseries),0.1)
+#   win.data.data[len(win.data.data):] = 1.0
+#   waveform_timeseries *= win.data.data
 
     # Zero-pad
     paddata = np.zeros(nsamples)
@@ -406,6 +411,7 @@ def build_cwt(timeseries, max_scale=256, mother_freq=2, Norm=True, fmin=1000.0,
 
     # Range of wavelet scales we're interested in
     scales = 1+np.arange(max_scale)
+    #scales = np.logspace(0,np.log10(max_scale),max_scale)
 
     # Construct the 'mother wavelet'; we'll begin using a Morlet wavelet
     # (sine-Gaussian) but we should/could investigate others
@@ -503,11 +509,12 @@ class pmnsPCA:
 
         print "Building catalogue"
         (self.sample_times, self.sample_frequencies, self.cat_timedomain,
-                self.cat_align, self.cat_orig, self.fpeaks,
+                self.cat_orig, self.fpeaks,
                 self.original_image_cat, self.align_image_cat, self.map_times,
                 self.map_scales, self.map_frequencies) = \
                         build_catalogues(self.waveform_list, self.fcenter,
                                 nTsamples=nTsamples)
+
         self.delta_f = np.diff(self.sample_frequencies)[0]
         self.delta_t = 1./16384
 
@@ -528,8 +535,15 @@ class pmnsPCA:
         for i in xrange(np.shape(self.magnitude)[0]):
             self.magnitude_align[i,:] = shift_vec(self.magnitude[i,:],
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
+
+#            m = self.magnitude_align[i,self.sample_frequencies>1000].max()
+#            self.magnitude_align[i,:] /= m
+
             self.phase_align[i,:] = shift_vec(self.phase[i,:],
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
+
+#        self.magnitude_align[:,self.sample_frequencies<1000] = 0.0
+#        self.phase_align[:,self.sample_frequencies<1000] = 0.0
 
         # -- Do PCA
         print "Performing Spectral PCA"

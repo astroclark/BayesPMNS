@@ -46,6 +46,7 @@ class Waveform:
         #self.allowed_radii()
         self.theta = theta
         self.phi = phi
+        self.distance=distance
         self.noise_curve = noise_curve
 
         self.load_quadrupoles()
@@ -58,7 +59,7 @@ class Waveform:
         """
 
         self.hplus, self.hcross = project_waveform(self.Hlm, 
-                theta=theta, phi=phi)
+                theta=theta, phi=phi, distance=self.distance)
 
 
     def compute_characteristics(self,flow=1000,fupp=8192):
@@ -71,7 +72,8 @@ class Waveform:
         # requested
 
         # Generate optimally oriented signal
-        hplustmp, hcrosstmp = project_waveform(self.Hlm, theta=0.0, phi=0.0)
+        hplustmp, hcrosstmp = project_waveform(self.Hlm, theta=0.0, phi=0.0,
+                distance=self.distance)
 
         # Create zero-padded time series for better accuracy
         nsamp = 16384
@@ -203,6 +205,7 @@ class Waveform:
                 'av16'                         :r'$\textrm{av16}$',
                 'apr_135135_lessvisc'          :r'$\textrm{APR}$',
                 'shen_135135_lessvisc'         :r'$\textrm{Shen}$',
+                'dd2av16_135135_lessvisc'          :r'$\textrm{DD2}$',
                 'dd2_135135_lessvisc'          :r'$\textrm{DD2}$',
                 'dd2_165165_lessvisc'          :r'$\textrm{DD2}_{3.3M_{\odot}}$',
                 'nl3_135135_lessvisc'          :r'$\textrm{NL3}$',
@@ -243,6 +246,7 @@ class Waveform:
                 'shen_135135_lessvisc'         : 14.53,
                 'dd2_135135'                   : 13.26,
                 'dd2_135135_lessvisc'          : 13.26,
+                'dd2av16_135135_lessvisc'          : 13.26,
                 'dd2_165165'                   : 13.26,
                 'dd2_165165_lessvisc'          : 13.26,
                 'nl3_135135'                   : 14.8,
@@ -307,6 +311,7 @@ class Waveform:
                 'apr_135135_lessvisc',
                 'dd2_135135',
                 'dd2_135135_lessvisc',
+                'dd2av16_135135_lessvisc',
                 'nl3_135135',
                 'nl3_135135_lessvisc',
                 'sfho_135135_lessvisc',
@@ -342,7 +347,7 @@ class Waveform:
 
 
 
-    def compute_angle_averaged_snr(self, flow=1000.0, fupp=4000.0, psddata=None,
+    def compute_angle_averaged_snr(self, flow=1000.0, fupp=8192.0, psddata=None,
             taper=False, distance=20):
         """
         Flanagan & Hughes eqn 2.30: angle-averaged SNR @ 20 Mpc
@@ -623,6 +628,13 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
     # Scale up by 40% for quadrupole approximation
     hplus*=1.4
     hcross*=1.4
+
+    #hplus = taper_start(hplus)
+    #hcross = taper_start(hcross)
+    # Window:
+    window = lal.CreateTukeyREAL8Window(len(hplus), 0.1)
+    hplus *= window.data.data
+    hcross *= window.data.data
 
     hplus  = pycbc.types.TimeSeries(initial_array=hplus,  delta_t = 1.0/16384)
     hcross = pycbc.types.TimeSeries(initial_array=hcross, delta_t = 1.0/16384)
@@ -975,6 +987,21 @@ def window_inspiral(input_data, delay=0.0):
 
     return timeseries.data.data
 
+def taper_start(input_data):
+    """
+    Window out the inspiral (everything prior to the biggest peak)
+    """
+
+    timeseries = lal.CreateREAL8TimeSeries('blah', 0.0, 0,
+            1.0/16384, lal.StrainUnit, int(len(input_data)))
+    timeseries.data.data = np.copy(input_data)
+
+    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
+        lalsim.SIM_INSPIRAL_TAPER_START)
+    lalsim.SimInspiralREAL8WaveTaper(timeseries.data,
+        lalsim.SIM_INSPIRAL_TAPER_START)
+
+    return timeseries.data.data
 
 
 def main():
@@ -1061,6 +1088,129 @@ def main():
         pl.xlim(waveform.fpeak-500,waveform.fpeak+500)
     
     pl.show()
+
+def make_noise_curve(f_low=10, flen=2048, delta_f=0.5, noise_curve='aLIGO'):
+
+    ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
+            'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
+            'lowNN', 'lowSPOT', 'lowST', 'lowSei']
+
+    if noise_curve=='aLIGO': 
+        from pycbc.psd import aLIGOZeroDetHighPower
+        psd = aLIGOZeroDetHighPower(flen, delta_f, f_low) 
+    elif noise_curve=='aLIGO2':
+        # XXX  this this the upgraded curve from
+        # http://arxiv.org/pdf/1410.5882v2.pdf; basically just a factor of 2
+        # better at Quantum noise
+        from pycbc.psd import aLIGOZeroDetHighPower
+        psd = aLIGOZeroDetHighPower(flen, delta_f, f_low) 
+        psd.data *= 0.5
+    elif noise_curve=='adVirgo':
+        from pycbc.psd import AdvVirgo
+        psd = AdvVirgo(flen, delta_f, f_low) 
+    elif noise_curve=='GEOHF':
+        from pycbc.psd import GEOHF
+        psd = GEOHF(flen, delta_f, f_low) 
+    elif noise_curve=='KAGRA':
+        from pycbc.psd import KAGRA
+        psd = KAGRA(flen, delta_f, f_low) 
+
+    elif noise_curve=='Green' or noise_curve=='Red':
+
+        # Load from ascii
+        pmnspy_path=os.getenv('PMNSPY_PREFIX')
+
+        psd_path=pmnspy_path+'/ligo3/PSD/%sPSD.txt'%noise_curve
+
+        psd_data=np.loadtxt(psd_path)
+
+        target_freqs = np.arange(0.0, flen*delta_f,
+                delta_f)
+        target_psd = np.zeros(len(target_freqs))
+
+        # Interpolate existing psd data to target frequencies
+        existing = \
+                np.concatenate(np.argwhere(
+                    (target_freqs<=psd_data[-1,0]) *
+                    (target_freqs>=psd_data[0,0])
+                    ))
+
+        target_psd[existing] = \
+                np.interp(target_freqs[existing], psd_data[:,0],
+                        psd_data[:,1])
+
+        # Extrapolate to higher frequencies assuming f^2 for QN
+        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
+                (psd_data[:,0]<=psd_data[-1,0])))
+
+        p = np.polyfit(x=psd_data[fit_idx,0], \
+                y=psd_data[fit_idx,1], deg=2)
+
+        target_psd[existing[-1]+1:] = \
+                p[0]*target_freqs[existing[-1]+1:]**2 +  \
+                p[1]*target_freqs[existing[-1]+1:] + \
+                p[2]
+
+        # After all that, reset everything below f_low to zero (this saves
+        # significant time in noise generation if we only care about high
+        # frequencies)
+        target_psd[target_freqs<f_low] = 0.0
+
+        # Create psd as standard frequency series object
+        psd = pycbc.types.FrequencySeries(
+                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
+
+    elif noise_curve in ligo3_curves:
+
+        # Load from ascii
+        pmnspy_path=os.getenv('PMNSPY_PREFIX')
+
+        psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_%s-PSD_20140904.txt'%noise_curve
+
+        psd_data=np.loadtxt(psd_path)
+
+        target_freqs = np.arange(0.0, flen*delta_f,
+                delta_f)
+        target_psd = np.zeros(len(target_freqs))
+
+        # Interpolate existing psd data to target frequencies
+        existing = \
+                np.concatenate(np.argwhere(
+                    (target_freqs<=psd_data[-1,0]) *
+                    (target_freqs>=psd_data[0,0])
+                    ))
+
+        target_psd[existing] = \
+                np.interp(target_freqs[existing], psd_data[:,0],
+                        psd_data[:,1])
+
+        # Extrapolate to higher frequencies assuming f^2 for QN
+        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
+                (psd_data[:,0]<=psd_data[-1,0])))
+
+        p = np.polyfit(x=psd_data[fit_idx,0], \
+                y=psd_data[fit_idx,1], deg=2)
+
+        target_psd[existing[-1]+1:] = \
+                p[0]*target_freqs[existing[-1]+1:]**2 +  \
+                p[1]*target_freqs[existing[-1]+1:] + \
+                p[2]
+
+        # After all that, reset everything below f_low to zero (this saves
+        # significant time in noise generation if we only care about high
+        # frequencies)
+        target_psd[target_freqs<f_low] = 0.0
+
+        # Create psd as standard frequency series object
+        psd = pycbc.types.FrequencySeries(
+                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
+
+    else:
+        print >> sys.stderr, "error: noise curve (%s) not"\
+            " supported"%noise_curve
+        sys.exit(-1)
+
+    return psd
 
 
 #
