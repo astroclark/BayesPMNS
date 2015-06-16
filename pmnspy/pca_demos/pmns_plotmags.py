@@ -54,10 +54,17 @@ from pmns_utils import pmns_pca as ppca
 #
 # Create the list of dictionaries which comprises our catalogue
 #
-#waveform_data = pdata.WaveData(mass='135135', viscosity='lessvisc')
-waveform_data = pdata.WaveData()
+waveform_data = pdata.WaveData(viscosity='lessvisc')
+#waveform_data = pdata.WaveData()
 
-labels=[ wave['eos'] for wave in waveform_data.waves[:3] ]
+
+#
+# Get indices and labels of example waveforms
+#
+eos_examples = ['apr', 'tm1', 'dd2']
+mass_examples = ['135135', '135135', '135135']
+viscosity = 'lessvisc'
+labels=[ eos.upper() for eos in eos_examples ]
 
 #
 # Create PMNS PCA instance for this catalogue
@@ -77,14 +84,21 @@ f4, ax4 = pl.subplots(figsize=(8,3))
 f5, ax5 = pl.subplots(figsize=(8,3))
 
 for i in xrange(3):
-    ax1.plot(pmpca.sample_frequencies, pmpca.magnitude[i,:],
+
+    example_idx = [j for j in xrange(waveform_data.nwaves) if
+            waveform_data.waves[j]['eos']==eos_examples[i] and
+            waveform_data.waves[j]['mass']==mass_examples[i] and
+            waveform_data.waves[j]['viscosity']==viscosity
+            ][0]
+
+    ax1.plot(pmpca.sample_frequencies, pmpca.magnitude[example_idx,:],
             label=labels[i])
 
-    ax2.plot(pmpca.sample_frequencies, pmpca.magnitude_align[i,:],
+    ax2.plot(pmpca.sample_frequencies, pmpca.magnitude_align[example_idx,:],
             label=labels[i])
 
     ax3.plot(pmpca.sample_frequencies,
-            pmpca.magnitude_align[i,:]-pmpca.pca['magnitude_mean'],
+            pmpca.magnitude_align[example_idx,:]-pmpca.pca['magnitude_mean'],
             label=labels[i])
 
 
@@ -92,8 +106,6 @@ ax4.plot(pmpca.sample_frequencies, pmpca.pca['magnitude_mean'], color='k')
 ax5.plot(pmpca.sample_frequencies, pmpca.pca['magnitude_pca'].components_[0,:], color='k')
 
 ax1.legend()
-#ax2.legend()
-#ax3.legend()
 
 ax1.set_xlim(999,4096)
 ax1.minorticks_on()
@@ -151,7 +163,7 @@ ax.set_xlabel('Number of Principal Components')
 ax.set_ylabel('Cumulative Explained Variance')
 ax.legend(loc='lower right')
 ylims=ax.get_ylim()
-ax.set_ylim(0.5,1)
+ax.set_ylim(0.0,1)
 ax.set_xlim(0,waveform_data.nwaves+0.5)
 #ax.grid()
 f.tight_layout()
