@@ -27,8 +27,8 @@ import numpy as np
 
 from matplotlib import pyplot as pl
 
-import pmns_utils as pu
-import pmns_pca_utils as ppca
+from pmns_utils import pmns_waveform_data as pdata
+from pmns_utils import pmns_pca as ppca
 
 #fig_width_pt = 223.0  # Get this from LaTeX using \showthe\columnwidth
 #inches_per_pt = 1.0/72.27               # Convert pt to inch
@@ -50,60 +50,42 @@ import pmns_pca_utils as ppca
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Construct the full waveform catalogue and perform PCA
 #
-# Produces: 1) Explained variance calculation
-#           2) Matches for waveforms reconstructed from their own PCs
 
-waveform_names=['apr_135135_lessvisc',
-                'tm1_135135_lessvisc' ,
-                'dd2_135135_lessvisc' ,
-                'dd2_165165_lessvisc' ,
-                'shen_135135_lessvisc',
-                'nl3_135135_lessvisc' ,
-                'nl3_1919_lessvisc'   ,
-                'tm1_135135_lessvisc' ,
-                'tma_135135_lessvisc' ,
-                'sfhx_135135_lessvisc',
-                'sfho_135135_lessvisc']#,
+#
+# Create the list of dictionaries which comprises our catalogue
+#
+#waveform_data = pdata.WaveData(mass='135135', viscosity='lessvisc')
+waveform_data = pdata.WaveData()
+
+labels=[ wave['eos'] for wave in waveform_data.waves[:3] ]
 
 #
 # Create PMNS PCA instance for this catalogue
 #
 
-labels=sys.argv[1].split(',')
-
-nTsamples=16384
-
-pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710,
-        nTsamples=nTsamples)
+pmpca = ppca.pmnsPCA(waveform_data, low_frequency_cutoff=1000, fcenter=2710,
+        nTsamples=16384)
 
 
 #
 # Plotting
 #
-#f, ax = pl.subplots(ncols=3, figsize=(15,5))#, sharey=True)
-f1, ax1 = pl.subplots(figsize=(8,3))#, sharey=True)
-f2, ax2 = pl.subplots(figsize=(8,3))#, sharey=True)
-f3, ax3 = pl.subplots(figsize=(8,3))#, sharey=True)
-f4, ax4 = pl.subplots(figsize=(8,3))#, sharey=True)
-f5, ax5 = pl.subplots(figsize=(8,3))#, sharey=True)
+f1, ax1 = pl.subplots(figsize=(8,3))
+f2, ax2 = pl.subplots(figsize=(8,3))
+f3, ax3 = pl.subplots(figsize=(8,3))
+f4, ax4 = pl.subplots(figsize=(8,3))
+f5, ax5 = pl.subplots(figsize=(8,3))
 
 for i in xrange(3):
     ax1.plot(pmpca.sample_frequencies, pmpca.magnitude[i,:],
             label=labels[i])
-            #label=waveform_names[i].replace('_135135_lessvisc',''))
-#    ax[0].set_title('Original Spectra')
 
     ax2.plot(pmpca.sample_frequencies, pmpca.magnitude_align[i,:],
             label=labels[i])
-            #label=waveform_names[i].replace('_135135_lessvisc',''))
-#    ax[1].set_title('Aligned Spectra')
 
     ax3.plot(pmpca.sample_frequencies,
             pmpca.magnitude_align[i,:]-pmpca.pca['magnitude_mean'],
             label=labels[i])
-            #label=waveform_names[i].replace('_135135_lessvisc',''))
-
-#    ax[2].set_title('Aligned & Centered Spectra')
 
 
 ax4.plot(pmpca.sample_frequencies, pmpca.pca['magnitude_mean'], color='k')
@@ -157,10 +139,10 @@ f5.tight_layout()
 
 
 f, ax = pl.subplots()#figsize=(5,4))
-ax.bar(np.arange(1,len(waveform_names)+1)-0.5,
+ax.bar(np.arange(1,waveform_data.nwaves+1)-0.5,
                 np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_),
                         label='Phase spectra', color='k')
-ax.bar(np.arange(1,len(waveform_names)+1)-0.5,
+ax.bar(np.arange(1,waveform_data.nwaves+1)-0.5,
                 np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_),
                         label='Magnitude spectra', color='grey')
 
@@ -170,7 +152,7 @@ ax.set_ylabel('Cumulative Explained Variance')
 ax.legend(loc='lower right')
 ylims=ax.get_ylim()
 ax.set_ylim(0.5,1)
-ax.set_xlim(0,len(waveform_names)+0.5)
+ax.set_xlim(0,waveform_data.nwaves+0.5)
 #ax.grid()
 f.tight_layout()
 

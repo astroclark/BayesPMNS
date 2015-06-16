@@ -14,7 +14,7 @@ PMNSPATH="${PMNSPY_PREFIX}/../waveform_data"
 
 echo "# add script directory to path" > "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "export PATH=$PMNSPY_PREFIX/bin:\$PATH" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
-echo "export PYTHONPATH=$PMNSPY_PREFIX/bin:$PMNSPY_PREFIX/pmns_utils:\${PYTHONPATH}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
+echo "export PYTHONPATH=$PMNSPY_PREFIX/bin:$PMNSPY_PREFIX:\${PYTHONPATH}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "# define variable for location of waveform data" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "export PMNSPATH=${PMNSPATH}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"
 echo "export PMNSPY_PREFIX=${PMNSPY_PREFIX}" >> "${PMNSPY_PREFIX}/etc/pmnspy-user-env.sh"

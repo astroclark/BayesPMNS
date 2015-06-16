@@ -28,6 +28,8 @@ import pycbc.filter
 
 from scipy import optimize,stats,signal
 
+from pmns_utils import pmns_waveform_data 
+
 __author__ = "James Clark <james.clark@ligo.org>"
 
 class Waveform:
@@ -35,19 +37,25 @@ class Waveform:
     A class to store waveforms and compute attributes.  Loads
     """
 
-    def __init__(self, waveform_name, theta=0.0, phi=0.0,
+    def __init__(self, eos, mass, viscosity='lessvisc', theta=0.0, phi=0.0,
             distance=20.0, noise_curve='aLIGO'):
 
         # waveform labels and directory setup
-        self.waveform_name  = waveform_name
-        # XXX
-        #self.set_tex_label(waveform_name)
-        #self.set_R16(waveform_name)
-        #self.allowed_radii()
         self.theta = theta
         self.phi = phi
         self.distance=distance
         self.noise_curve = noise_curve
+
+        # Create data object and identify the requested waveform
+        wavedata = pmns_waveform_data.WaveData()
+        this_waveform = wavedata.select_wave(eos=eos, mass=mass,
+                viscosity=viscosity)
+        if len(this_waveform)>1:
+            print >> sys.stderr, "ERROR, too many files match the requested eos/mass/viscosity combination"
+            sys.exit(-1)
+        self.eos = eos
+        self.mass = mass
+        self.data = this_waveform[0]['data']
 
         self.load_quadrupoles()
 
@@ -67,9 +75,8 @@ class Waveform:
         Computes SNRs, peak and characteristic frequencies and hrss for an
         optimally oriented signal.
         """
-        # TODO: make this a general function to act on any timeseries and then
-        # call it here for the particular hplus, cross (maybe also skylocation)
-        # requested
+        # XXX: re-do this with zero padding
+
 
         # Generate optimally oriented signal
         hplustmp, hcrosstmp = project_waveform(self.Hlm, theta=0.0, phi=0.0,
@@ -88,8 +95,8 @@ class Waveform:
                 hcrosstmp.data
 
         # Generate noise curve
-        Hplus  = hplus.to_frequencyseries()
-        Hcross = hcross.to_frequencyseries()
+        Hplus    = hplus.to_frequencyseries()
+        Hcross   = hcross.to_frequencyseries()
         self.psd = create_noise_curve(self.noise_curve, flen=len(Hplus), delta_f=Hplus.delta_f)
 
         #
@@ -103,15 +110,6 @@ class Waveform:
         self.hrss_plus = pycbc.filter.sigma(Hplus)
         self.hrss_cross = pycbc.filter.sigma(Hcross)
         self.hrss = np.sqrt(self.hrss_plus**2 + self.hrss_cross**2)
-
-        # TODO: write a dedicated function for this to do it carefully
-#       # energy (assume elliptical polarisation)
-#       D = 20.0 * 1e6 * lal.PC_SI
-#       Egw = 8.0 * lal.PI**2 * lal.C_SI**3 * D*D * \
-#               np.trapz(freq*freq*self.hrss**2, x=freq)
-#       Egw /= 5*lal.G_SI
-#
-#       Egw /= lal.MSUN_SI * lal.C_SI * lal.C_SI
 
         # Angle-averaged SNR:
         self.angle_av_snr = self.compute_angle_averaged_snr(flow=flow,
@@ -139,212 +137,21 @@ class Waveform:
             self.fpeak = freq[np.argmax(abs(Hplus.data[idx_peak]**2))]
 
 
-#           # Get FWHM of peak
-#           idx_inband = (self.freq_axis>flow) * (self.freq_axis<fupp) 
-#
-#           self.fwhm  = find_fwhm(self.freq_axis[idx_inband],
-#                   self.PSD_plus[idx_inband])
-#
-#           # Get fitted values
-#           self.amp_fit, self.fpeak_fit, self.fwhm_fit = fit_gaussian_peak(self)
-#
-#           self.gauss_fit = gauss_curve(self.freq_axis, self.amp_fit,
-#                   self.fpeak_fit, 0.5*self.fwhm_fit)
-#
-#           # compute xoptimal_snr measures at 2-sigma interval around peak
-#           flow = self.fpeak-self.fwhm
-#           fupp = self.fpeak+self.fwhm
-#
-#           self.snr_plus_peak, self.hrss_plus_peak, self.fchar_peak, \
-#                   self.fpeak_peak, self.Egw_peak = \
-#                   optimal_snr(self.hplus,freqmin=flow,freqmax=fupp)
-#
-#           self.snr_cross_peak, self.hrss_cross_peak, _, _ , _ = \
-#                   optimal_snr(self.hcross,freqmin=flow,freqmax=fupp)
-#
-#           self.hrss_peak = np.sqrt(self.hrss_plus_peak**2 +
-#                   self.hrss_cross_peak**2)
-
-#            # expected frequency bias
-#            self.delta_fpeak = abs(self.fpeak - self.fpeak_fit)
-
-            # Expected R16 measurement
-            #self.set_R16_fpeak()
-
-
-
     def load_quadrupoles(self):
         """
         Add the mode expansion coefficient data to the waveform object for later
         manipulation
         """
 
-        try:
-            secderivs_path = os.environ['SECDERIVS']
-        except KeyError:
-            print >> sys.stderr, "SECDERIVS environment variable not" \
-                    " set, please checenv"
 
         # Retrieve quadrupole time derivatives for this waveform (i.e., simulation
         # data)
         times, self.Ixx, self.Ixy, self.Ixz, self.Iyy, self.Iyz, self.Izz = \
-                get_quadrupole_data(secderivs_path, self.waveform_name)
+                get_quadrupole_data(self.data)
 
         # Construct expansion coefficients Hlm (see T1000553)
         self.Hlm = construct_Hlm(self.Ixx, self.Ixy, self.Ixz, self.Iyy,
                 self.Iyz, self.Izz)
-
-
-
-    def set_tex_label(self,waveform_name):
-        """
-        Dictionary of labels to use for each waveform name
-        """
-        labels={
-                'av15'                         :r'$\textrm{av15}$',
-                'av16'                         :r'$\textrm{av16}$',
-                'apr_135135_lessvisc'          :r'$\textrm{APR}$',
-                'shen_135135_lessvisc'         :r'$\textrm{Shen}$',
-                'dd2av16_135135_lessvisc'          :r'$\textrm{DD2}$',
-                'dd2_135135_lessvisc'          :r'$\textrm{DD2}$',
-                'dd2_165165_lessvisc'          :r'$\textrm{DD2}_{3.3M_{\odot}}$',
-                'nl3_135135_lessvisc'          :r'$\textrm{NL3}$',
-                'nl3_1919_lessvisc'            :r'$\textrm{NL3}_{3.8M_{\odot}}$',
-                'tm1_135135_lessvisc'          :r'$\textrm{TM1}$',
-                'tma_135135_lessvisc'          :r'$\textrm{TMa}$',
-                'sfhx_135135_lessvisc'         :r'$\textrm{SFHx}$',
-                'sfho_135135_lessvisc'         :r'$\textrm{SFHo}$',
-                'sfho_1616'                    :r'$\textrm{SFHo}_{3.2M_{\odot}}$',
-                'hybrid_apr_135135_lessvisc_0_0p5'          :r'$\textrm{hlAPR}^{\dagger}$',
-                'hybrid_apr_135135_lessvisc_0_0p5_0p018'    :r'$\textrm{hsAPR}^{\dagger}$',
-                'hybrid_apr_135135_lessvisc_0p05_0p5'       :r'$\textrm{hlAPR}^{*}$',
-                'hybrid_apr_135135_lessvisc_0p05_0p5_0p018' :r'$\textrm{hsAPR}^{*}$',
-                'hybrid_dd2_135135_lessvisc_0_0p5'          :r'$\textrm{hlDD2}^{\dagger}$',
-                'hybrid_dd2_135135_lessvisc_0_0p5_0p028'    :r'$\textrm{hsDD2}^{\dagger}$',
-                'hybrid_dd2_135135_lessvisc_0p05_0p5'       :r'$\textrm{hlDD2}^{*}$',
-                'hybrid_dd2_135135_lessvisc_0p05_0p5_0p028' :r'$\textrm{hsDD2}^{*}$',
-                'SG_highfreq' :  r'$\textrm{SG_{3.5}^{250}}$', 
-                'SG_lowfreq'  :  r'$\textrm{SG_{2.1}^{250}}$'
-                }
-                #'hybrid_dd2_135135_0df_0p5'    :r'$\textrm{DD2}^*_0$',
-                #'hybrid_dd2_135135_0p05df_0p5' :r'$\textrm{DD2}^*_{0.05}$',
-                #'hybrid_dd2_135135_lessvisc_0p05df_0p5_0p4':r'$_{0.4}\textrm{DD2}^*_{0.05}$',
-                #'hybrid_dd2_135135_0p1df_0p5'  :r'$\textrm{DD2}^*_{0.1}$'
-
-        self.tex_label=labels[waveform_name]
-
-    def set_R16(self,waveform_name):
-        """
-        Dictionary of R16 values for each waveform
-        """
-        R16={
-                'av15'                         : 13.26,
-                'av16'                         : 13.26,
-                'apr_135135'                   : 11.25,
-                'apr_135135_lessvisc'          : 11.25,
-                'shen_135135'                  : 14.53,
-                'shen_135135_lessvisc'         : 14.53,
-                'dd2_135135'                   : 13.26,
-                'dd2_135135_lessvisc'          : 13.26,
-                'dd2av16_135135_lessvisc'          : 13.26,
-                'dd2_165165'                   : 13.26,
-                'dd2_165165_lessvisc'          : 13.26,
-                'nl3_135135'                   : 14.8,
-                'nl3_135135_lessvisc'          : 14.8,
-                'nl3_1919'                     : 11.25,
-                'nl3_1919_lessvisc'            : 11.25,
-                'tm1_135135_lessvisc'          : 14.36,
-                'tma_135135_lessvisc'          : 13.73,
-                'sfhx_135135_lessvisc'         : 11.98,
-                'sfho_135135_lessvisc'         : 11.76,
-                'sfho_1616'                    : 11.76,
-                'hybrid_apr_135135_lessvisc_0_0p2'       :11.25,
-                'hybrid_apr_135135_lessvisc_0_0p5'       :11.25,
-                'hybrid_apr_135135_lessvisc_0_0p5_0p018' :11.25,
-                'hybrid_apr_135135_lessvisc_0p05_0p2'    :11.25,
-                'hybrid_apr_135135_lessvisc_0p05_0p5'    :11.25,
-                'hybrid_apr_135135_lessvisc_0p05_0p5_0p018' :11.25,
-                'hybrid_apr_135135_lessvisc_0p1_0p2'     :11.25,
-                'hybrid_apr_135135_lessvisc_0p1_0p5'     :11.25,
-                'hybrid_dd2_135135_0_0p2'                :13.26,
-                'hybrid_dd2_135135_0_0p5'                :13.26,
-                'hybrid_dd2_135135_0p05_0p2'             :13.26,
-                'hybrid_dd2_135135_0p05_0p5'             :13.26,
-                'hybrid_dd2_135135_0p1_0p2'              :13.26,
-                'hybrid_dd2_135135_0p1_0p5'              :13.26,
-                'hybrid_dd2_135135_lessvisc_0_0p2'       :13.26,
-                'hybrid_dd2_135135_lessvisc_0_0p5'       :13.26,
-                'hybrid_dd2_135135_lessvisc_0_0p5_0p028' :13.26,
-                'hybrid_dd2_135135_lessvisc_0p05_0p2'    :13.26,
-                'hybrid_dd2_135135_lessvisc_0p05_0p5_0p4':13.26,
-                'hybrid_dd2_135135_lessvisc_0p05_0p5'    :13.26,
-                'hybrid_dd2_135135_lessvisc_0p05_0p5_0p028' :13.26,
-                'hybrid_dd2_135135_lessvisc_0p1_0p2'     :13.26,
-                'hybrid_dd2_135135_lessvisc_0p1_0p5'     :13.26,
-                'SG_highfreq' :np.nan,
-                'SG_lowfreq'  :np.nan
-                }
-
-        self.R16=R16[waveform_name]
- 
-    def set_R16_fpeak(self):
-        """
-        Set the expected value for R16 measured from fpeak
-        """
-
-        # Assign expected radius measurement
-        if self.waveform_name in self.allowed_radii:
-            if not hasattr(self,'fpeak'): self.compute_characteristics()
-            self.R16_fpeak = fpeak_to_R16(self.fpeak)[0]
-            # Expected error (magnitude) in meters
-            self.deltaR16_fpeak = 1e3*abs(self.R16_fpeak - self.R16)
-        else:
-            self.R16_fpeak = np.nan
-            self.deltaR16_fpeak = np.nan
-
-    def allowed_radii(self):
-
-        self.allowed_radii=[
-                'av15',
-                'av16',
-                'apr_135135',
-                'apr_135135_lessvisc',
-                'dd2_135135',
-                'dd2_135135_lessvisc',
-                'dd2av16_135135_lessvisc',
-                'nl3_135135',
-                'nl3_135135_lessvisc',
-                'sfho_135135_lessvisc',
-                'sfhx_135135_lessvisc',
-                'shen_135135',
-                'shen_135135_lessvisc',
-                'tm1_135135_lessvisc',
-                'tma_135135_lessvisc',
-                'hybrid_apr_135135_lessvisc_0_0p2',
-                'hybrid_apr_135135_lessvisc_0_0p5',
-                'hybrid_apr_135135_lessvisc_0_0p5_0p018',
-                'hybrid_apr_135135_lessvisc_0p05_0p2',
-                'hybrid_apr_135135_lessvisc_0p05_0p5',
-                'hybrid_apr_135135_lessvisc_0p05_0p5_0p018',
-                'hybrid_apr_135135_lessvisc_0p1_0p2',
-                'hybrid_apr_135135_lessvisc_0p1_0p5',
-                'hybrid_dd2_135135_0_0p2'           ,
-                'hybrid_dd2_135135_0_0p5'           ,
-                'hybrid_dd2_135135_0p05_0p2'        ,
-                'hybrid_dd2_135135_0p05_0p5'        ,
-                'hybrid_dd2_135135_0p1_0p2'         ,
-                'hybrid_dd2_135135_0p1_0p5'         ,
-                'hybrid_dd2_135135_lessvisc_0_0p2'  ,
-                'hybrid_dd2_135135_lessvisc_0_0p5'  ,
-                'hybrid_dd2_135135_lessvisc_0_0p5_0p028' ,
-                'hybrid_dd2_135135_lessvisc_0p05_0p2'    ,
-                'hybrid_dd2_135135_lessvisc_0p05_0p5_0p4',
-                'hybrid_dd2_135135_lessvisc_0p05_0p5'    ,
-                'hybrid_dd2_135135_lessvisc_0p05_0p5_0p028',
-                'hybrid_dd2_135135_lessvisc_0p1_0p2'     ,
-                'hybrid_dd2_135135_lessvisc_0p1_0p5'
-                ]
-
 
 
     def compute_angle_averaged_snr(self, flow=1000.0, fupp=8192.0, psddata=None,
@@ -422,8 +229,6 @@ class Waveform:
         return (
                 1.4*np.sqrt(fac*df*np.trapz(dEdf_term[idxlow:idxupp]/psd[idxlow:idxupp],dx=df))
                 )
-
-
 
 #
 # general use functions
@@ -550,15 +355,14 @@ def create_noise_curve(noise_curve, flen, f_low=10.0, delta_f=0.5, pmnspy_path=N
 
     return psd
 
-def get_quadrupole_data(secderivs_path, waveform_name):
+def get_quadrupole_data(waveform_path):
     """
     Retrieve the original secderive quadruopole data and scale into SI units
     """
 
     # Load data
-    times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz = sim_data = \
-            np.loadtxt("{0}/secderivqpoles_16384Hz_{1}.dat".format(
-                secderivs_path, waveform_name), unpack=True)
+    times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz = \
+            np.loadtxt(waveform_path, unpack=True)
 
 
     # Convert to SI
@@ -642,60 +446,6 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
     return hplus, hcross
 
 
-def optimal_snr(tSeries,freqmin=1000,freqmax=4096):
-    """
-    Compute optimal snr, characteristic frequency and peak time (see
-    xoptimalsnr.m)
-    """
-
-    # Compute fft
-    fSpec,freq=lal_fft(tSeries)
-
-    p_FD = 2*abs(fSpec.data.data)**2
-
-    p_FD = p_FD[(freq>=freqmin)*(freq<freqmax)]
-    freq = freq[(freq>=freqmin)*(freq<freqmax)]
-
-    # Generate PSD
-    if 1:
-        psd=np.zeros(len(freq))
-        for i in range(len(freq)):
-            psd[i]=lalsim.SimNoisePSDaLIGOZeroDetHighPower(freq[i])
-    else:
-        # Load PSD
-        psd_file = '/Users/jclark/Projects/HMNS/spectrum_quantile_plot/H-H1_spectrum_quantiles.txt'
-        psd_data = np.loadtxt(psd_file)
-        psd_freq = psd_data[:,0]
-        psd = psd_data[:,1]/np.log(2)
-        psd = np.interp(freq,psd_freq,psd)
-
-    # SNR^2 versus frequency.
-    rho2f = 2.0*p_FD/psd;
-
-    # Get peak frequency
-    idx = np.argwhere(freq>1500)
-    fPeak = freq[idx][np.argmax(p_FD[idx])]
-
-    # Characteristic frequency.
-    fChar = np.trapz(freq*rho2f,x=freq)/np.trapz(rho2f,x=freq);
-
-    # SNR 
-    rho = np.sqrt(np.trapz(rho2f,x=freq))
-
-    # hrss
-    hrss = np.trapz(p_FD,x=freq)**0.5
-
-    # energy (assume elliptical polarisation)
-    D = 20.0 * 1e6 * lal.PC_SI
-    Egw = 8.0 * lal.PI**2 * lal.C_SI**3 * D*D * \
-            np.trapz(freq*freq*p_FD, x=freq)
-    Egw /= 5*lal.G_SI
-
-    Egw /= lal.MSUN_SI * lal.C_SI * lal.C_SI
-
-    # return Egw in solar masses
-
-    return rho,hrss,fChar,fPeak,Egw
 
 def find_fwhm(Fsearch,Psearch,peak_idx=None):
     """
@@ -1004,91 +754,6 @@ def taper_start(input_data):
     return timeseries.data.data
 
 
-def main():
-    """
-    Create a waveform class for the user-specified waveform and print
-    interesting attributes to stdout
-    """
-    waveform = Waveform(sys.argv[1])
-
-    # compute characteristics
-    waveform.compute_characteristics()
-
-    if waveform.waveform_name!='sfho_1616':
-        outstr="""
-    {waveform} summary
-    *******************
-    fchar: {fchar}
-    fpeak: {fpeak}
-    fwhm: {fwhm}
-    fpeak_fit: {fpeak_fit}
-    fwhm_fit: {fwhm_fit}
-    R16: {R16}
-    R16_fit: {R16_fit}
-    Brodband content:
-    SNR: {snr}
-    hrss: {hrss}
-    Egw: {Egw}
-    Narrowband content:
-    SNR: {snr_peak}
-    hrss: {hrss_peak}
-    Egw: {Egw_peak}
-        """.format(waveform=waveform.waveform_name,
-                snr=waveform.snr_plus,
-                hrss=waveform.hrss,
-                Egw=waveform.Egw,
-                snr_peak=waveform.snr_plus_peak,
-                hrss_peak=waveform.hrss_peak,
-                Egw_peak=waveform.Egw_peak,
-                fchar=waveform.fchar,
-                fpeak=waveform.fpeak,
-                fwhm=waveform.fwhm,
-                fpeak_fit=waveform.fpeak_fit,
-                fwhm_fit=waveform.fwhm_fit,
-                R16=waveform.R16_fpeak,
-                R16_fit=waveform.R16_fpeak
-                )
-    else:
-        outstr="""
-    {waveform} summary
-    *******************
-    fchar: {fchar}
-    fpeak: {fpeak}
-    Brodband content:
-    SNR: {snr}
-    hrss: {hrss}
-    Egw: {Egw}
-        """.format(waveform=waveform.waveform_name,
-                snr=waveform.snr_plus,
-                hrss=waveform.hrss,
-                Egw=waveform.Egw,
-                fchar=waveform.fchar,
-                fpeak=waveform.fpeak
-                )
-
-    print >> sys.stdout, outstr
-
-
-    import pylab as pl
-    pl.figure(figsize=(10,4))
-    pl.subplot(121)
-    pl.plot(waveform.time_axis,waveform.hplus.data.data)
-    pl.xlim(-0.01,0.02)
-    pl.minorticks_on()
-
-    pl.subplot(122)
-    if not hasattr(waveform, 'PSD_plus'): waveform.make_wf_freqseries()
-    pl.plot(waveform.freq_axis, waveform.PSD_plus)
-
-    if waveform.waveform_name != 'sfho_1616':
-        pl.plot(waveform.freq_axis, waveform.gauss_fit,'r')
-        pl.axvline(waveform.fpeak,color='r')
-        pl.axvline(waveform.fpeak-0.5*waveform.fwhm,color='r',linestyle='--')
-        pl.axvline(waveform.fpeak+0.5*waveform.fwhm,color='r',linestyle='--')
-        pl.xlim(waveform.fpeak-500,waveform.fpeak+500)
-    
-    pl.show()
-
 def make_noise_curve(f_low=10, flen=2048, delta_f=0.5, noise_curve='aLIGO'):
 
     ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
@@ -1211,6 +876,10 @@ def make_noise_curve(f_low=10, flen=2048, delta_f=0.5, noise_curve='aLIGO'):
         sys.exit(-1)
 
     return psd
+
+def main():
+
+    print 'hello'
 
 
 #

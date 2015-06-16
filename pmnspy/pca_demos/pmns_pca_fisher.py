@@ -32,7 +32,7 @@ import pycbc.types
 import pycbc.filter
 from pycbc.psd import aLIGOZeroDetHighPower
 
-import pmns_utils as pu
+from pmns_utils import waveform 
 import pmns_pca_utils as ppca
 
 
@@ -184,7 +184,7 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Create test waveform
     #
-    testwav_waveform = pu.Waveform(testwav_name)
+    testwav_waveform = waveform.Waveform(testwav_name)
     testwav_waveform.reproject_waveform()
     testwav_waveform.compute_characteristics()
     Hplus = testwav_waveform.hplus.to_frequencyseries()
@@ -202,7 +202,7 @@ for w,testwav_name in enumerate(waveform_names):
     #
     # Construct PSD
     #
-    psd = pu.make_noise_curve(f_low=10, flen=len(testwav_waveform_FD),
+    psd = waveform.make_noise_curve(f_low=10, flen=len(testwav_waveform_FD),
             delta_f=testwav_waveform_FD.delta_f, noise_curve=noise_curve)
 
     #
