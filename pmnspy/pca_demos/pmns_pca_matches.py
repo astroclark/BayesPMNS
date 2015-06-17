@@ -28,76 +28,51 @@ import numpy as np
 from matplotlib import pyplot as pl
 
 import pycbc.types
-import pmns_utils as pu
-import pmns_pca_utils as ppca
 
+from pmns_utils import pmns_waveform as pwave
+from pmns_utils import pmns_waveform_data as pdata
+from pmns_utils import pmns_pca as ppca
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Construct the full waveform catalogue and perform PCA
-#
-# Produces: 1) Explained variance calculation
-#           2) Matches for waveforms reconstructed from their own PCs
+
+# XXX: Hardcoding
+nTsamples=16384
+low_frequency_cutoff=1000
+fcenter=2710
 
 print "Setting up exact match analysis"
 
-waveform_names=['apr_135135_lessvisc',
-                'shen_135135_lessvisc',
-                'dd2_135135_lessvisc' ,
-                'dd2_165165_lessvisc' ,
-                'nl3_135135_lessvisc' ,
-                'nl3_1919_lessvisc'   ,
-                'tm1_135135_lessvisc' ,
-                'tma_135135_lessvisc' ,
-                'sfhx_135135_lessvisc',
-                'sfho_135135_lessvisc']#,
-
-#waveform_names=['apr_135135_lessvisc',
-#                'shen_135135_lessvisc',
-#                'shen_1215',
-#                'dd2_135135_lessvisc' ,
-#                'dd2_165165_lessvisc' ,
-#                'nl3_1919_lessvisc' ,
-#                'nl3_135135_lessvisc' ,
-#                'tm1_135135_lessvisc' ,
-#                'tma_135135_lessvisc' ,
-#                'tm1_1215',
-#                'gs1_135135',
-#                'gs2_135135',
-#                'sly4_135135',
-#                'ls220_135135',
-#                'ls375_135135']
-
-
-catlen = len(waveform_names)
+#
+# Create the list of dictionaries which comprises our catalogue
+#
+waveform_data = pdata.WaveData(viscosity='lessvisc', mass='135135')
 
 #
 # Create PMNS PCA instance for this catalogue
 #
-
-nTsamples=int(sys.argv[1])
-
-pmpca = ppca.pmnsPCA(waveform_names, low_frequency_cutoff=1000, fcenter=2710,
-        nTsamples=nTsamples)
+pmpca = ppca.pmnsPCA(waveform_data, low_frequency_cutoff=low_frequency_cutoff,
+        fcenter=fcenter, nTsamples=nTsamples)
 
 #
 # Exact matches (include test waveform in training data)
 #
-exact_matches=np.zeros(shape=(catlen, catlen))
+exact_matches=np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
 
-exact_magnitude_euclidean=np.zeros(shape=(catlen, catlen))
-exact_phase_euclidean=np.zeros(shape=(catlen, catlen))
+exact_magnitude_euclidean=np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
+exact_phase_euclidean=np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
 
 
-for w,testwav_name in enumerate(waveform_names):
+for w, wave in enumerate(waveform_data.waves):
 
-    print "Analysing %s (exact match)"%testwav_name
+    print "Matching %s, %s (%s) [%d of %d]"%(wave['eos'], wave['mass'],
+            wave['viscosity'], w, waveform_data.nwaves)
 
     #
     # Create test waveform
     #
-
-    #testwav_name='nl3_1919_lessvisc'
-    testwav_waveform = pu.Waveform(testwav_name)
+    testwav_waveform = pwave.Waveform(eos=wave['eos'], mass=wave['mass'],
+            viscosity=wave['viscosity'])
     testwav_waveform.reproject_waveform()
 
     # Standardise
@@ -114,25 +89,18 @@ for w,testwav_name in enumerate(waveform_names):
         testwav_waveform.hplus.data, delta_t=testwav_waveform.hplus.delta_t))
 
     #
-    # Reconstruct 
+    # Reconstruct as a function of number of principal components
     #
-    for n, npcs in enumerate(xrange(1,catlen+1)):
+    for n, npcs in enumerate(xrange(1,waveform_data.nwaves+1)):
 
         # --- F-domain reconstruction
         fd_reconstruction = pmpca.reconstruct_freqseries(testwav_waveform_FD.data,
                 npcs=npcs, wfnum=w)
-        #fd_reconstruction = pmpca.reconstruct(testwav_waveform_FD.data, npcs=npcs)
 
-        #exact_matches[w,n]=fd_reconstruction['match_noweight']
+        # --- FOMs
         exact_matches[w,n]=fd_reconstruction['match_aligo']
-
         exact_magnitude_euclidean[w,n]=fd_reconstruction['magnitude_euclidean']
         exact_phase_euclidean[w,n]=fd_reconstruction['phase_euclidean']
-
-        # --- TF reconstruction
-        tf_reconstruction = pmpca.reconstruct_tfmap(testwav_waveform_TF,
-                this_fpeak=fpeak)
-
 
 
 
@@ -141,122 +109,17 @@ for w,testwav_name in enumerate(waveform_names):
 #
 # Exact Matches
 #
-f, ax = ppca.image_euclidean(exact_magnitude_euclidean, waveform_names,
+f, ax = ppca.image_euclidean(exact_magnitude_euclidean, waveform_data,
         title="Magnitudes: Euclidean Distance")
 
-f, ax = ppca.image_euclidean(exact_phase_euclidean, waveform_names,
+f, ax = ppca.image_euclidean(exact_phase_euclidean, waveform_data,
         title="Phases: Euclidean Distance")
 
-
-f, ax = ppca.image_matches(exact_matches, waveform_names, mismatch=False,
+f, ax = ppca.image_matches(exact_matches, waveform_data, mismatch=False,
         title="Match: training data includes the test waveform")
 
 
 # -- Bars of the 90% variance matches
-f, ax = ppca.bar_matches(exact_matches, waveform_names, npcs=1)
-
-
-#
-# Eigenenergy
-#
-catlen=len(waveform_names)
-
-f, ax = pl.subplots(ncols=1,figsize=(6,8))
-
-ax.plot(range(1,catlen+1),
-        100*(np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_)), 
-            label='magnitudes')
-
-ax.plot(range(1,catlen+1),
-        100*(np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_)),
-            label='phases', color='b', linestyle='--')
-
-ax.set_xlabel('Number of Principal Components')
-ax.set_ylabel('% Variance Explained')
-ax.minorticks_on()
-ax.grid()
-ax.legend(loc='lower right')
-f.tight_layout()
+#f, ax = ppca.bar_matches(exact_matches, waveform_names, npcs=1)
 
 pl.show()
-
-#sys.exit()
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Realistic catalogues
-#
-# Produces: 1) matches for waveforms reconstructed from the OTHER waveforms' PCs 
-
-print "Setting up realistic match analysis"
-
-#
-# Exact matches (include test waveform in training data)
-#
-
-real_matches=np.zeros(shape=(catlen, catlen-1))
-real_matches_align=np.zeros(shape=(catlen, catlen-1))
-
-real_magnitude_euclidean=np.zeros(shape=(catlen, catlen-1))
-real_phase_euclidean=np.zeros(shape=(catlen, catlen-1))
-
-for w,testwav_name in enumerate(waveform_names):
-    print "Analysing %s (real match)"%testwav_name
-
-    # Remove testwave_name from the catalogue:
-    waveform_names_reduced = \
-            [ name for name in waveform_names if not name==testwav_name ]
-    
-    #
-    # Create PMNS PCA instance for this catalogue
-    #
-    pmpca = ppca.pmnsPCA(waveform_names_reduced, low_frequency_cutoff=1000,
-            fcenter=2710, nTsamples=nTsamples)
-
-    #
-    # Create test waveform
-    #
-    testwav_waveform = pu.Waveform(testwav_name)
-    testwav_waveform.reproject_waveform()
-
-    # Standardise
-    testwav_waveform_FD, fpeak, _ = ppca.condition_spectrum(
-            testwav_waveform.hplus.data, nsamples=nTsamples)
-
-    # Normalise
-    testwav_waveform_FD = ppca.unit_hrss(testwav_waveform_FD.data,
-            delta=testwav_waveform_FD.delta_f, domain='frequency')
-
-    #
-    # Reconstruct 
-    #
-    for n, npcs in enumerate(xrange(1,catlen-1+1)):
-
-        fd_reconstruction = pmpca.reconstruct_freqseries(testwav_waveform_FD.data,
-                npcs=npcs, wfnum=w)
-
-        real_matches[w,n]=fd_reconstruction['match_aligo']
-
-        real_magnitude_euclidean[w,n]=fd_reconstruction['magnitude_euclidean']
-        real_phase_euclidean[w,n]=fd_reconstruction['phase_euclidean']
-
-
-
-# ***** Plot Results ***** #
-
-#
-# Realistic Matches
-#
-f, ax = ppca.image_euclidean(real_magnitude_euclidean, waveform_names,
-        title="Magnitudes: Euclidean Distance (exc. test waveform)")
-
-f, ax = ppca.image_euclidean(real_phase_euclidean, waveform_names,
-        title="Phases: Euclidean Distance (exc. test waveform)")
-
-
-f, ax = ppca.image_matches(real_matches, waveform_names, mismatch=False,
-        title="Match: training data (exc. test waveform)")
-
-
-
-pl.show()
-
-sys.exit()

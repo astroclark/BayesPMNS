@@ -37,6 +37,10 @@ class WaveData:
         EOS, masses and simulation type
         """
 
+        self.eos = eos
+        self.mass = mass
+        self.viscosity = viscosity
+
         #
         # Get the waveform data location
         #
@@ -99,6 +103,7 @@ class WaveData:
         return waves
 
 
+    # ----------------------------------------------------------------------
     def select_wave(self, eos=None, mass=None, viscosity=None):
         """
         Return a reduced list of waves corresponding to the specified EOS, mass
@@ -183,6 +188,25 @@ class WaveData:
     def _select_eos(waves, eos=None):
 
         return [wave for wave in waves if wave['eos']==eos]
+
+    # ----------------------------------------------------------------------
+
+
+
+    def remove_wave(self, wave):
+        """
+        Remove the item wave from the list of waves
+        """
+        self.waves.remove(wave)
+
+    def copy(self):
+        """
+        Make a copy of this object
+        """
+
+        return WaveData(eos=self.eos, mass=self.mass, viscosity=self.viscosity)
+
+
 
 
 

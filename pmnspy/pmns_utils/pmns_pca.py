@@ -901,7 +901,7 @@ class pmnsPCA:
         return tf_reconstruction
 
 
-def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
+def image_matches(match_matrix, waveform_data, title=None, mismatch=False):
 
     if mismatch:
         match_matrix = 1-match_matrix
@@ -937,7 +937,15 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
     xlabels=range(1,npcs+1)
     ax.set_xticklabels(xlabels)
 
-    ylabels=[name.replace('_lessvisc','') for name in waveform_names]
+    ylabels=[]
+    for wave in waveform_data.waves:
+        if wave['viscosity']=='lessvisc':
+            ylabels.append("%s, %s"%(wave['eos'], wave['mass']))
+        else:
+            ylabels.append("%s$^{\dagger}$, %s"%(wave['eos'], wave['mass']))
+    ax.set_yticklabels(ylabels)
+
+
     ax.set_yticklabels(ylabels)
 
     im.set_clim(clims)
@@ -957,7 +965,7 @@ def image_matches(match_matrix, waveform_names, title=None, mismatch=False):
 
     return fig, ax
 
-def image_euclidean(euclidean_matrix, waveform_names, title=None, clims=None):
+def image_euclidean(euclidean_matrix, waveform_data, title=None, clims=None):
 
     #clims = (0.0,0.10)
     if clims is None:
@@ -989,7 +997,13 @@ def image_euclidean(euclidean_matrix, waveform_names, title=None, clims=None):
     xlabels=range(1,npcs+1)
     ax.set_xticklabels(xlabels)
 
-    ylabels=[name.replace('_lessvisc','') for name in waveform_names]
+    
+    ylabels=[]
+    for wave in waveform_data.waves:
+        if wave['viscosity']=='lessvisc':
+            ylabels.append("%s, %s"%(wave['eos'], wave['mass']))
+        else:
+            ylabels.append("%s$^{\dagger}$, %s"%(wave['eos'], wave['mass']))
     ax.set_yticklabels(ylabels)
 
     im.set_clim(clims)
