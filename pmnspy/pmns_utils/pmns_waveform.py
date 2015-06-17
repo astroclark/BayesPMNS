@@ -126,15 +126,12 @@ class Waveform:
 
         self.fchar = float(np.trapz(freq*rho2f,x=freq)/np.trapz(rho2f,x=freq))
 
-        # no more attributes if prompt collapse
-        if self.waveform_name != 'sfho_1616': 
+        # Find peak frequency
+        idx_peak = (Hplus.sample_frequencies.data > 2000) * \
+                (Hplus.sample_frequencies.data < fupp)
 
-            # Find peak frequency
-            idx_peak = (Hplus.sample_frequencies.data > 2000) * \
-                    (Hplus.sample_frequencies.data < fupp)
-
-            freq = Hplus.sample_frequencies.data[idx_peak]
-            self.fpeak = freq[np.argmax(abs(Hplus.data[idx_peak]**2))]
+        freq = Hplus.sample_frequencies.data[idx_peak]
+        self.fpeak = freq[np.argmax(abs(Hplus.data[idx_peak]**2))]
 
 
     def load_quadrupoles(self):

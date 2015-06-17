@@ -39,13 +39,6 @@ from pmns_utils import pmns_pca as ppca
 
 def compute_inner(recwav, targetwav, target_snr, psd, flow=1000.0):
 
-    # make psd
-    # XXX: DANGER HARDCODING
-#    flen = len(targetwav.sample_frequencies)
-#    psd = aLIGOZeroDetHighPower(flen, targetwav.delta_f,
-#            low_freq_cutoff=flow)
-
-
     # make sure amplitudes are scaled correctly
     recwav_snr = pycbc.filter.sigma(recwav, psd=psd,
             low_frequency_cutoff=flow)
@@ -59,14 +52,8 @@ def compute_inner(recwav, targetwav, target_snr, psd, flow=1000.0):
     diff = targetwav_tmp - recwav
 
     # --- Including time/phase maximisation:
-    #rhodiff = pycbc.filter.sigma(diff, psd=psd,
-    #        low_frequency_cutoff=flow)
     rhodiff = pycbc.filter.match(diff, diff, psd=psd, low_frequency_cutoff=flow,
             v1_norm=1.0, v2_norm=1.0)[0]
-#
-#    print rhodiff
-#
-#    sys.exit()
 
     return rhodiff
 
