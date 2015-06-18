@@ -15,6 +15,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 """
+pmns_pca.py
+
+Utilities for PCA of post-merger waveforms
 """
 
 from __future__ import division
@@ -27,10 +30,6 @@ from scipy.spatial.distance import euclidean as euclidean_distance
 
 from sklearn.decomposition import PCA 
 from sklearn.decomposition import TruncatedSVD
-
-import matplotlib
-#matplotlib.use("Agg")
-from matplotlib import pyplot as pl
 
 import lal
 import lalsimulation as lalsim
@@ -223,7 +222,7 @@ def build_catalogues(waveform_data, fshift_center, nTsamples=16384,
     for w, wave in enumerate(waveform_data.waves):
 
         print "Building waveform for %s, %s, %s (%d of %d)"%(wave['eos'], wave['mass'],
-                wave['viscosity'], w, waveform_data.nwaves)
+                wave['viscosity'], w+1, waveform_data.nwaves)
 
         #
         # Create waveform instance: pmns_utils
@@ -899,157 +898,6 @@ class pmnsPCA:
 
 
         return tf_reconstruction
-
-
-def image_matches(match_matrix, waveform_data, title=None, mismatch=False):
-
-    if mismatch:
-        match_matrix = 1-match_matrix
-        text_thresh = 0.1
-        clims = (0,0.2)
-        bar_label = 'mismatch'
-    else:
-        text_thresh = 0.85
-        clims = (0.75,1.0)
-        bar_label = 'match'
-
-    #fig, ax = pl.subplots(figsize=(15,8))
-    #fig, ax = pl.subplots(figsize=(8,4))
-    fig, ax = pl.subplots()
-    nwaves = np.shape(match_matrix)[0]
-    npcs = np.shape(match_matrix)[1]
-
-    im = ax.imshow(match_matrix, interpolation='nearest', origin='lower',
-            aspect='auto')
-
-    for x in xrange(nwaves):
-        for y in xrange(npcs):
-            if match_matrix[x,y]<text_thresh:
-                ax.text(y, x, '%.2f'%(match_matrix[x,y]), \
-                    va='center', ha='center', color='w')
-            else:
-                ax.text(y, x, '%.2f'%(match_matrix[x,y]), \
-                    va='center', ha='center', color='k')
-
-    ax.set_xticks(range(0,npcs))
-    ax.set_yticks(range(0,nwaves))
-
-    xlabels=range(1,npcs+1)
-    ax.set_xticklabels(xlabels)
-
-    ylabels=[]
-    for wave in waveform_data.waves:
-        if wave['viscosity']=='lessvisc':
-            ylabels.append("%s, %s"%(wave['eos'], wave['mass']))
-        else:
-            ylabels.append("%s$^{\dagger}$, %s"%(wave['eos'], wave['mass']))
-    ax.set_yticklabels(ylabels)
-
-
-    ax.set_yticklabels(ylabels)
-
-    im.set_clim(clims)
-    im.set_cmap('gnuplot2')
-
-    ax.set_xlabel('Number of PCs')
-    ax.set_ylabel('Waveform type')
-
-    if title is not None:
-        ax.set_title(title)
-
-    #c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
-    #        orientation='horizontal')
-    #c.set_label(bar_label)
-
-    fig.tight_layout()
-
-    return fig, ax
-
-def image_euclidean(euclidean_matrix, waveform_data, title=None, clims=None):
-
-    #clims = (0.0,0.10)
-    if clims is None:
-        clims = (0.0, euclidean_matrix.max())
-    text_thresh = 0.5*max(clims)
-    bar_label = '$||\Phi - \Phi_r||$'
-
-    #fig, ax = pl.subplots(figsize=(15,8))
-    #fig, ax = pl.subplots(figsize=(7,7))
-    fig, ax = pl.subplots()
-    nwaves = np.shape(euclidean_matrix)[0]
-    npcs = np.shape(euclidean_matrix)[1]
-
-    im = ax.imshow(euclidean_matrix, interpolation='nearest', origin='lower',
-            aspect='auto')
-
-    for x in xrange(nwaves):
-        for y in xrange(npcs):
-            if euclidean_matrix[x,y]<text_thresh:
-                ax.text(y, x, '%.2f'%(euclidean_matrix[x,y]), \
-                    va='center', ha='center', color='k')
-            else:
-                ax.text(y, x, '%.2f'%(euclidean_matrix[x,y]), \
-                    va='center', ha='center', color='w')
-
-    ax.set_xticks(range(0,npcs))
-    ax.set_yticks(range(0,nwaves))
-
-    xlabels=range(1,npcs+1)
-    ax.set_xticklabels(xlabels)
-
-    
-    ylabels=[]
-    for wave in waveform_data.waves:
-        if wave['viscosity']=='lessvisc':
-            ylabels.append("%s, %s"%(wave['eos'], wave['mass']))
-        else:
-            ylabels.append("%s$^{\dagger}$, %s"%(wave['eos'], wave['mass']))
-    ax.set_yticklabels(ylabels)
-
-    im.set_clim(clims)
-    im.set_cmap('gnuplot2_r')
-
-    ax.set_xlabel('Number of PCs')
-    ax.set_ylabel('Waveform type')
-
-    if title is not None:
-        ax.set_title(title)
-
-    #c=pl.colorbar(im, ticks=np.arange(clims[0],clims[1]+0.05,0.05),
-    #        orientation='horizontal')
-    #c.set_label(bar_label)
-
-    fig.tight_layout()
-
-    return fig, ax
-
-def bar_matches(matches, waveform_names, npcs):
-    labels=[name.replace('_lessvisc','') for name in waveform_names]
-
-    ind = np.arange(len(waveform_names))
-    width = 0.4 
-    gap   = 0.05
-
-    f, ax = pl.subplots(ncols=1,figsize=(6,8))
-    f.subplots_adjust(bottom=0.1,top=.95,left=0.2)
-    matchbar_exact = ax.barh(ind, matches[:,npcs-1], height=width, color='k',
-            linewidth=0.5)
-
-    ax.set_xlabel('Match')
-    ax.set_ylabel('Waveform')
-    ax.set_yticks(ind+width)
-    ytickNames = pl.setp(ax, yticklabels=labels)
-    #pl.setp(ytickNames, rotation=45)
-    ax.set_xlim(0.5,1)
-    ax.set_ylim(-.5,len(waveform_names))
-    ax.minorticks_on()
-    #ax1.legend(loc='lower right')
-    ax.grid(linestyle='-',color='grey')
-    ax.xaxis.grid(True, linestyle=':', which='minor', color='grey')
-    ax.set_axisbelow(True)
-    f.tight_layout()
-
-    return f, ax
 
 
 

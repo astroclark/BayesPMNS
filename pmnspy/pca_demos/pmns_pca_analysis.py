@@ -68,14 +68,40 @@ nTsamples=16384
 low_frequency_cutoff=1000
 fcenter=2710
 deltaF=1.0
-noise_curve='aLIGO'
+noise_curve="aLIGO"
 target_snr=5
+#loo=True
 loo=False
+
+eos="all"
+mass="all"
+viscosity="all"
+
+#
+# Build filename
+#
+if loo==True:
+    picklename="matches_LOO_%s_targetsnr-%.2f_eos-%s_mass-%s_viscosity-%s.pickle"%(
+            noise_curve, target_snr, eos, mass, viscosity)
+else:
+    picklename="matches_ALL_%s_targetsnr-%.2f_eos-%s_mass-%s_viscosity-%s.pickle"%(
+            noise_curve, target_snr, eos, mass, viscosity)
+
+
+# XXX: should probably fix this at the module level..
+if eos=="all": eos=None
+if mass=="all": mass=None
+if viscosity=="all": viscosity=None
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Initialise
+#
 
 #
 # Create the list of dictionaries which comprises our catalogue
 #
-waveform_data = pdata.WaveData(viscosity='lessvisc', eos='nl3')
+waveform_data = pdata.WaveData(eos=eos,viscosity=viscosity, mass=mass)
 
 #
 # Create PMNS PCA instance for the full catalogue
@@ -103,8 +129,8 @@ delta_R16 = np.zeros(shape=(waveform_data.nwaves,waveform_data.nwaves))
 
 for w, wave in enumerate(waveform_data.waves):
 
-    print "Matching %s, %s (%s) [%d of %d]"%(
-            wave['eos'], wave['mass'], wave['viscosity'], w,
+    print "Matching %s, %s ,%s (%d of %d)"%(
+            wave['eos'], wave['mass'], wave['viscosity'], w+1,
             waveform_data.nwaves)
 
     if loo:
@@ -126,7 +152,6 @@ for w, wave in enumerate(waveform_data.waves):
             viscosity=wave['viscosity'])
     waveform.reproject_waveform()
     waveform.compute_characteristics()
-    Hplus = waveform.hplus.to_frequencyseries()
 
     # Standardise
     waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
@@ -185,24 +210,12 @@ for w, wave in enumerate(waveform_data.waves):
         delta_R16[w,n] = propagate_deltaF(target_fpeak/1e3,
                 delta_fpeak[w,n]/1e3)
 
-
-
-# ***** Plot Results ***** #
-
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Save results for plotting seperately
 #
-# Realistic Matches
-#
-f, ax = ppca.image_euclidean(magnitude_euclidean, waveform_data,
-        title="Magnitudes: Euclidean Distance (exc. test waveform)")
 
-f, ax = ppca.image_euclidean(phase_euclidean, waveform_data,
-        title="Phases: Euclidean Distance (exc. test waveform)")
+pickle.dump([waveform_data, pmpca, magnitude_euclidean, phase_euclidean, matches,
+    delta_fpeak, delta_R16], open(picklename, "wb"))
 
 
-f, ax = ppca.image_matches(matches, waveform_data, mismatch=False,
-        title="Match: training data (exc. test waveform)")
-
-
-
-pl.show()
 

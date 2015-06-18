@@ -24,28 +24,14 @@ spectra
 from __future__ import division
 import os,sys
 import numpy as np
+import cPickle as pickle
 
 from matplotlib import pyplot as pl
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from pmns_utils import pmns_waveform_data as pdata
 from pmns_utils import pmns_pca as ppca
 
-#fig_width_pt = 223.0  # Get this from LaTeX using \showthe\columnwidth
-#inches_per_pt = 1.0/72.27               # Convert pt to inch
-#golden_mean = (np.sqrt(5)-1.0)/2.0         # Aesthetic ratio
-#fig_width = fig_width_pt*inches_per_pt  # width in inches
-#fig_height = fig_width*golden_mean      # height in inches
-#fig_size =  [fig_width,fig_height]
-#   params = {'backend': 'ps',
-#             'axes.labelsize': 10,
-#             'text.fontsize': 10,
-#             'legend.fontsize': 10,
-#             'xtick.labelsize': 8,
-#             'ytick.labelsize': 8,
-#             'text.usetex': True,
-#             'figure.figsize': fig_size}
-#params = {'figure.figsize': fig_size}
-#pl.rcParams.update(params)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Construct the full waveform catalogue and perform PCA
@@ -54,8 +40,14 @@ from pmns_utils import pmns_pca as ppca
 #
 # Create the list of dictionaries which comprises our catalogue
 #
-waveform_data = pdata.WaveData(viscosity='lessvisc')
-#waveform_data = pdata.WaveData()
+#waveform_data = pdata.WaveData(viscosity='lessvisc')
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Load Results
+#
+pickle_file = sys.argv[1]
+waveform_data, pmpca, magnitude_euclidean, phase_euclidean, matches, \
+        delta_fpeak, delta_R16 = pickle.load(open(pickle_file, "rb"))
 
 
 #
@@ -69,9 +61,10 @@ labels=[ eos.upper() for eos in eos_examples ]
 #
 # Create PMNS PCA instance for this catalogue
 #
+# XXX: could just load this...
 
-pmpca = ppca.pmnsPCA(waveform_data, low_frequency_cutoff=1000, fcenter=2710,
-        nTsamples=16384)
+#pmpca = ppca.pmnsPCA(waveform_data, low_frequency_cutoff=1000, fcenter=2710,
+#        nTsamples=16384)
 
 
 #
@@ -150,24 +143,41 @@ f4.tight_layout()
 f5.tight_layout()
 
 
+#
+# Explained variance
+#
 f, ax = pl.subplots()#figsize=(5,4))
-ax.bar(np.arange(1,waveform_data.nwaves+1)-0.5,
-                np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_),
-                        label='Phase spectra', color='k')
-ax.bar(np.arange(1,waveform_data.nwaves+1)-0.5,
+ax.step(np.arange(1,waveform_data.nwaves+1)-0.5,
+                 np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_),
+                 label='Phase spectra', color='k', linestyle='--')
+ax.step(np.arange(1,waveform_data.nwaves+1)-0.5,
                 np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_),
-                        label='Magnitude spectra', color='grey')
+                label='Magnitude spectra', color='grey')
 
 ax.minorticks_on()
 ax.set_xlabel('Number of Principal Components')
 ax.set_ylabel('Cumulative Explained Variance')
 ax.legend(loc='lower right')
+ax.minorticks_on()
 ylims=ax.get_ylim()
-ax.set_ylim(0.0,1)
-ax.set_xlim(0,waveform_data.nwaves+0.5)
-#ax.grid()
-f.tight_layout()
+ax.set_ylim(0.5,1)
+ax.set_xlim(1,0.5*waveform_data.nwaves+1)
+ax.grid()
 
+#   axins = inset_axes(ax, width="50%", height="50%", loc=1) 
+#   axins.step(np.arange(1,waveform_data.nwaves+1)-0.5,
+#                    np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_),
+#                    label='Phase spectra', color='k', linestyle='--')
+#   axins.step(np.arange(1,waveform_data.nwaves+1)-0.5,
+#                   np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_),
+#                   label='Magnitude spectra', color='grey')
+#
+#   axins.minorticks_on()
+#   axins.set_ylim(0.5,1)
+#   axins.set_xlim(1,20)
+#   axins.grid()
+
+f.tight_layout()
 
 
 
