@@ -24,8 +24,10 @@ import numpy as np
 import matplotlib
 #matplotlib.use("Agg")
 from matplotlib import pyplot as pl
+import matplotlib.patches as mpatches
 
-def image_matches(match_matrix, waveform_data, title=None, mismatch=False):
+def image_matches(match_matrix, waveform_data, title=None, mismatch=False,
+        figsize=None):
 
     if mismatch:
         match_matrix = 1-match_matrix
@@ -37,9 +39,11 @@ def image_matches(match_matrix, waveform_data, title=None, mismatch=False):
         clims = (0.75,1.0)
         bar_label = '$\mathcal{M}$'
 
-    #fig, ax = pl.subplots(figsize=(15,8))
-    #fig, ax = pl.subplots(figsize=(8,4))
     fig, ax = pl.subplots()
+
+    if figsize is not None:
+        fig.set_size_inches(figsize)
+
     nwaves = np.shape(match_matrix)[0]
     npcs = np.shape(match_matrix)[1]
 
@@ -89,7 +93,8 @@ def image_matches(match_matrix, waveform_data, title=None, mismatch=False):
 
     return fig, ax
 
-def image_euclidean(euclidean_matrix, waveform_data, title=None, clims=None):
+def image_euclidean(euclidean_matrix, waveform_data, title=None, clims=None,
+        figsize=None):
 
     #clims = (0.0,0.10)
     if clims is None:
@@ -97,9 +102,10 @@ def image_euclidean(euclidean_matrix, waveform_data, title=None, clims=None):
     text_thresh = 0.5*max(clims)
     bar_label = '$||\Phi - \Phi_r||$'
 
-    #fig, ax = pl.subplots(figsize=(15,8))
-    #fig, ax = pl.subplots(figsize=(7,7))
     fig, ax = pl.subplots()
+    if figsize is not None:
+        fig.set_size_inches(figsize)
+
     nwaves = np.shape(euclidean_matrix)[0]
     npcs = np.shape(euclidean_matrix)[1]
 
@@ -147,40 +153,85 @@ def image_euclidean(euclidean_matrix, waveform_data, title=None, clims=None):
     return fig, ax
 
 
-def plot_matches_by_npc(match_matrix, waveform_data, title=None,
-        mismatch=False):
+def plot_fidelity_by_npc(fidelity_matrix, waveform_data, title=None,
+        figsize=None, ylabel = '$\mathcal{M}$', legloc=None):
 
-    if mismatch:
-        match_matrix = 1-match_matrix
-        ylabel = '1-$\mathcal{M}$'
-    else:
-        ylabel = '$\mathcal{M}$'
 
     # Calculations
-    min_matches = match_matrix.min(axis=0)
-    max_matches = match_matrix.max(axis=0)
-    mean_matches = match_matrix.mean(axis=0)
-    median_matches = np.median(match_matrix, axis=0)
-    rms_matches = np.sqrt(np.mean(np.square(match_matrix), axis=0))
+    min_fidelity = fidelity_matrix.min(axis=0)
+    max_fidelity = fidelity_matrix.max(axis=0)
+    mean_fidelity = fidelity_matrix.mean(axis=0)
+    median_fidelity = np.median(fidelity_matrix, axis=0)
+    rms_fidelity = np.sqrt(np.mean(np.square(fidelity_matrix), axis=0))
 
-    low, upp = np.percentile(match_matrix, [10, 90], axis=0)  
+    low, upp = np.percentile(fidelity_matrix, [10, 90], axis=0)  
 
     fig, ax = pl.subplots()
+    if figsize is not None:
+        fig.set_size_inches(figsize)
 
-    ax.plot(range(1,len(min_matches)+1), mean_matches, color='k', label='mean')
-    #ax.plot(range(1,len(min_matches)+1), median_matches, color='g', label='median')
-    #ax.plot(range(1,len(min_matches)+1), rms_matches, color='r', label='rms')
-    
-    ax.fill_between(x=range(1,len(min_matches)+1), y1=low,
-            y2=upp, color='lightgrey', label='min/max')
+    center = ax.step(range(1,len(min_fidelity)+1), mean_fidelity, color='r',
+            label='mean')
 
-    ax.plot(range(1,len(min_matches)+1), min_matches, color='k', linestyle='--',
+    ax.bar(range(1,len(min_fidelity)+1), bottom=low, height=upp-low,
+            color='lightgrey', label='10th, 90th percentile',
+            edgecolor='lightgrey', width=1)
+
+    lims=ax.step(range(1,len(min_fidelity)+1), min_fidelity, color='k', linestyle='--',
             label='min/max')
-    ax.plot(range(1,len(min_matches)+1), max_matches, color='k', linestyle='--')
+
+    ax.step(range(1,len(min_fidelity)+1), max_fidelity, color='k', linestyle='--')
+
+    ax.minorticks_on()
+    ax.set_xlabel('Number of PCs')
+    ax.set_ylabel(ylabel)
+
+    ax.set_xlim(1,len(fidelity_matrix))
+
+    leg = ax.legend(loc=legloc)
 
 
     return fig, ax
 
+def plot_delta_by_npc(delta_matrix, waveform_data, ylabel="$\delta$",
+        title=None, figsize=None, legloc=None):
+
+    # Calculations
+    min_delta = delta_matrix.min(axis=0)
+    max_delta = delta_matrix.max(axis=0)
+    mean_delta = delta_matrix.mean(axis=0)
+    median_delta = np.median(delta_matrix, axis=0)
+    rms_delta = np.sqrt(np.mean(np.square(delta_matrix), axis=0))
+
+    low, upp = np.percentile(delta_matrix, [10, 90], axis=0)  
+
+    fig, ax = pl.subplots()
+    if figsize is not None:
+        fig.set_size_inches(figsize)
+
+    center = ax.step(range(1,len(min_delta)+1), mean_delta, color='r', label='mean')
+
+    ax.bar(range(1,len(min_delta)+1), bottom=low, height=upp-low,
+            color='lightgrey', label='10th, 90th percentile',
+            edgecolor='lightgrey', width=1)
+
+    lims=ax.step(range(1,len(min_delta)+1), min_delta, color='k', linestyle='--',
+            label='min/max')
+
+    ax.step(range(1,len(min_delta)+1), max_delta, color='k', linestyle='--')
+
+
+    ax.minorticks_on()
+
+    ax.set_xlabel('Number of PCs')
+    ax.set_ylabel(ylabel)
+
+    ax.set_xlim(1,len(delta_matrix))
+
+    leg=ax.legend(loc=legloc)
+
+
+    return fig, ax
 
 def main():
 

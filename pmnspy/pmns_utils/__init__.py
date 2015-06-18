@@ -17,4 +17,4 @@
 """
 """
 
-__all__=['cwt', 'waveform', 'waveform_data', 'pca']
+__all__=['cwt', 'pmns_waveform', 'pmns_waveform_data', 'pmns_pca']

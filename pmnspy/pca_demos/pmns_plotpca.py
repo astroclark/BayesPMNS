@@ -46,5 +46,21 @@ f, ax = pplots.image_euclidean(magnitude_euclidean, waveform_data)
 f, ax = pplots.image_euclidean(phase_euclidean, waveform_data)
 f, ax = pplots.image_matches(matches, waveform_data, mismatch=False)
 
+#
+# Line plots
+#
+
+# Reconstruction quality
+f, ax = pplots.plot_fidelity_by_npc(magnitude_euclidean, waveform_data,
+        ylabel=r'$||A - A_r||$', legloc=None)
+f, ax = pplots.plot_fidelity_by_npc(phase_euclidean, waveform_data,
+        ylabel=r'$||\phi - \phi_r||$', legloc=None)
+f, ax = pplots.plot_fidelity_by_npc(matches, waveform_data, legloc=None)
+
+f, ax = pplots.plot_delta_by_npc(delta_fpeak, waveform_data, 
+        ylabel=r"$\delta f_{\rm peak}$ [Hz]", legloc=None)
+f, ax = pplots.plot_delta_by_npc(delta_R16, waveform_data,
+        ylabel=r"$\delta R_{1.6}$ [km]", legloc=None)
+
 
 pl.show()
