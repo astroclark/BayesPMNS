@@ -70,12 +70,12 @@ fcenter=2710
 deltaF=1.0
 noise_curve="aLIGO"
 target_snr=5
-#loo=True
-loo=False
+loo=True
+#loo=False
 
 eos="all"
 mass="all"
-viscosity="all"
+viscosity="oldvisc"
 
 #
 # Build filename

@@ -170,25 +170,25 @@ def plot_fidelity_by_npc(fidelity_matrix, waveform_data, title=None,
     if figsize is not None:
         fig.set_size_inches(figsize)
 
-    center = ax.step(np.arange(1,len(min_fidelity)+1), mean_fidelity, color='r',
-            label='mean', where='mid')
+    center = ax.step(np.arange(1,len(min_fidelity)+1)-0.5, mean_fidelity, color='r',
+            label='mean', where='post')
 
     ax.bar(np.arange(1,len(min_fidelity)+1)-0.5, bottom=low, height=upp-low,
-            color='lightgrey', label='10th, 90th percentile',
+            color='lightgrey', label='10th/90th percentile',
             edgecolor='lightgrey', width=1)
 
-    lims=ax.step(np.arange(1,len(min_fidelity)+1), min_fidelity, color='k', linestyle='--',
-            label='min/max', where='mid')
+    lims=ax.step(np.arange(1,len(min_fidelity)+1)-0.5, min_fidelity, color='k', linestyle='--',
+            label='min/max', where='post')
 
-    ax.step(range(1,len(min_fidelity)+1), max_fidelity, color='k',
-            linestyle='--', where='mid')
+    ax.step(np.arange(1,len(min_fidelity)+1)-0.5, max_fidelity, color='k',
+            linestyle='--', where='post')
 
     ax.minorticks_on()
     ax.set_xlabel('Number of PCs')
     ax.set_ylabel(ylabel)
 
-    #ax.set_xlim(1,np.shape(fidelity_matrix)[1]+1)
-    ax.set_xlim(0,10)
+    ax.set_xlim(1,np.shape(fidelity_matrix)[1]+1)
+    ax.grid()
 
     leg = ax.legend(loc=legloc)
 
@@ -211,23 +211,24 @@ def plot_delta_by_npc(delta_matrix, waveform_data, ylabel="$\delta$",
     if figsize is not None:
         fig.set_size_inches(figsize)
 
-    center = ax.step(range(1,len(min_delta)+1), mean_delta, color='r',
+    center = ax.step(np.arange(1,len(min_delta)+1)-0.5, mean_delta, color='r',
             label='mean', where='post')
 
     ax.bar(np.arange(1,len(min_delta)+1)-0.5, bottom=low, height=upp-low,
-            color='lightgrey', label='10th, 90th percentile',
+            color='lightgrey', label='10th/90th percentile',
             edgecolor='lightgrey', width=1)
 
-    lims=ax.step(range(1,len(min_delta)+1), min_delta, color='k', linestyle='--',
+    lims=ax.step(np.arange(1,len(min_delta)+1)-0.5, min_delta, color='k', linestyle='--',
             label='min/max', where='post')
 
-    ax.step(range(1,len(min_delta)+1), max_delta, color='k', linestyle='--', where='post')
+    ax.step(np.arange(1,len(min_delta)+1)-0.5, max_delta, color='k', linestyle='--', where='post')
 
 
     ax.minorticks_on()
 
     ax.set_xlabel('Number of PCs')
     ax.set_ylabel(ylabel)
+    ax.grid()
 
     ax.set_xlim(1,np.shape(delta_matrix)[1]+1)
 
