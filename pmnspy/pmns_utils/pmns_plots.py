@@ -170,23 +170,25 @@ def plot_fidelity_by_npc(fidelity_matrix, waveform_data, title=None,
     if figsize is not None:
         fig.set_size_inches(figsize)
 
-    center = ax.step(range(1,len(min_fidelity)+1), mean_fidelity, color='r',
-            label='mean')
+    center = ax.step(np.arange(1,len(min_fidelity)+1), mean_fidelity, color='r',
+            label='mean', where='mid')
 
-    ax.bar(range(1,len(min_fidelity)+1), bottom=low, height=upp-low,
+    ax.bar(np.arange(1,len(min_fidelity)+1)-0.5, bottom=low, height=upp-low,
             color='lightgrey', label='10th, 90th percentile',
             edgecolor='lightgrey', width=1)
 
-    lims=ax.step(range(1,len(min_fidelity)+1), min_fidelity, color='k', linestyle='--',
-            label='min/max')
+    lims=ax.step(np.arange(1,len(min_fidelity)+1), min_fidelity, color='k', linestyle='--',
+            label='min/max', where='mid')
 
-    ax.step(range(1,len(min_fidelity)+1), max_fidelity, color='k', linestyle='--')
+    ax.step(range(1,len(min_fidelity)+1), max_fidelity, color='k',
+            linestyle='--', where='mid')
 
     ax.minorticks_on()
     ax.set_xlabel('Number of PCs')
     ax.set_ylabel(ylabel)
 
-    ax.set_xlim(1,len(fidelity_matrix))
+    #ax.set_xlim(1,np.shape(fidelity_matrix)[1]+1)
+    ax.set_xlim(0,10)
 
     leg = ax.legend(loc=legloc)
 
@@ -209,16 +211,17 @@ def plot_delta_by_npc(delta_matrix, waveform_data, ylabel="$\delta$",
     if figsize is not None:
         fig.set_size_inches(figsize)
 
-    center = ax.step(range(1,len(min_delta)+1), mean_delta, color='r', label='mean')
+    center = ax.step(range(1,len(min_delta)+1), mean_delta, color='r',
+            label='mean', where='post')
 
-    ax.bar(range(1,len(min_delta)+1), bottom=low, height=upp-low,
+    ax.bar(np.arange(1,len(min_delta)+1)-0.5, bottom=low, height=upp-low,
             color='lightgrey', label='10th, 90th percentile',
             edgecolor='lightgrey', width=1)
 
     lims=ax.step(range(1,len(min_delta)+1), min_delta, color='k', linestyle='--',
-            label='min/max')
+            label='min/max', where='post')
 
-    ax.step(range(1,len(min_delta)+1), max_delta, color='k', linestyle='--')
+    ax.step(range(1,len(min_delta)+1), max_delta, color='k', linestyle='--', where='post')
 
 
     ax.minorticks_on()
@@ -226,7 +229,7 @@ def plot_delta_by_npc(delta_matrix, waveform_data, ylabel="$\delta$",
     ax.set_xlabel('Number of PCs')
     ax.set_ylabel(ylabel)
 
-    ax.set_xlim(1,len(delta_matrix))
+    ax.set_xlim(1,np.shape(delta_matrix)[1]+1)
 
     leg=ax.legend(loc=legloc)
 
