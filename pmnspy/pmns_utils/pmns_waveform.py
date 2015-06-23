@@ -27,6 +27,7 @@ import pycbc.types
 import pycbc.filter
 
 from scipy import optimize,stats,signal
+import scipy.io as sio
 
 from pmns_utils import pmns_waveform_data 
 
@@ -76,29 +77,29 @@ class Waveform:
         optimally oriented signal.
         """
         # XXX: re-do this with zero padding
-
-
+  
+  
         # Generate optimally oriented signal
         hplustmp, hcrosstmp = project_waveform(self.Hlm, theta=0.0, phi=0.0,
                 distance=self.distance)
-
+  
         # Create zero-padded time series for better accuracy
         nsamp = 16384
         hplus = pycbc.types.TimeSeries(initial_array=np.zeros(nsamp),
             delta_t = 1./nsamp)
         hcross = pycbc.types.TimeSeries(initial_array=np.zeros(nsamp),
             delta_t = 1./nsamp)
-
+  
         hplus.data[0.5*nsamp-0.5*len(hplustmp):0.5*nsamp+0.5*len(hplustmp)] = \
                 hplustmp.data
         hcross.data[0.5*nsamp-0.5*len(hcrosstmp):0.5*nsamp+0.5*len(hcrosstmp)] = \
                 hcrosstmp.data
-
+  
         # Generate noise curve
         Hplus    = hplus.to_frequencyseries()
         Hcross   = hcross.to_frequencyseries()
-        self.psd = create_noise_curve(self.noise_curve, flen=len(Hplus), delta_f=Hplus.delta_f)
-
+        self.psd = make_noise_curve(fmax=Hplus.sample_frequencies.max(), delta_f=Hplus.delta_f)
+  
         #
         # Compute loudness  measures
         #
@@ -106,30 +107,30 @@ class Waveform:
                 low_frequency_cutoff=flow, high_frequency_cutoff=fupp)
         self.snr_cross = pycbc.filter.sigma(Hcross, psd=self.psd,
                 low_frequency_cutoff=flow, high_frequency_cutoff=fupp)
-
+  
         self.hrss_plus = pycbc.filter.sigma(Hplus)
         self.hrss_cross = pycbc.filter.sigma(Hcross)
         self.hrss = np.sqrt(self.hrss_plus**2 + self.hrss_cross**2)
-
+  
         # Angle-averaged SNR:
         self.angle_av_snr = self.compute_angle_averaged_snr(flow=flow,
                 fupp=fupp, psddata=self.psd.data)
-
+  
         #
         # Other characteristics
         #
         idx = (Hplus.sample_frequencies.data > flow) * \
                 (Hplus.sample_frequencies.data < fupp)
-
+  
         freq = Hplus.sample_frequencies.data[idx]
         rho2f = abs(Hplus.data[idx])**2 / self.psd.data[idx]
-
+  
         self.fchar = float(np.trapz(freq*rho2f,x=freq)/np.trapz(rho2f,x=freq))
-
+  
         # Find peak frequency
         idx_peak = (Hplus.sample_frequencies.data > 2000) * \
                 (Hplus.sample_frequencies.data < fupp)
-
+  
         freq = Hplus.sample_frequencies.data[idx_peak]
         self.fpeak = freq[np.argmax(abs(Hplus.data[idx_peak]**2))]
 
@@ -231,126 +232,6 @@ class Waveform:
 # general use functions
 #
 
-def create_noise_curve(noise_curve, flen, f_low=10.0, delta_f=0.5, pmnspy_path=None):
-    """
-    Create a pycbc noise curve.
-
-    Valid curves: aLIGO, adVirgo, 
-
-    ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
-            'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
-            'lowNN', 'lowSPOT', 'lowST', 'lowSei']
-    """
-
-    ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
-            'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
-            'lowNN', 'lowSPOT', 'lowST', 'lowSei']
-
-#    flen = int( (f_upp-f_low) / delta_f ) + 1
-
-    if noise_curve=='aLIGO': 
-        from pycbc.psd import aLIGOZeroDetHighPower
-        psd = aLIGOZeroDetHighPower(flen, delta_f, f_low) 
-    elif noise_curve=='adVirgo':
-        from pycbc.psd import AdvVirgo
-        psd = AdvVirgo(flen, delta_f, f_low) 
-    elif noise_curve=='Green' or noise_curve=='Red':
-
-        # Load from ascii
-        #pmnspy_path=os.getenv('PMNSPY_PREFIX')
-
-        psd_path=pmnspy_path+'/ligo3/PSD/%sPSD.txt'%noise_curve
-
-        psd_data=np.loadtxt(psd_path)
-
-        target_freqs = np.arange(0.0, flen*delta_f,
-                delta_f)
-
-        target_psd = np.zeros(len(target_freqs))
-
-        # Interpolate existing psd data to target frequencies
-        existing = \
-                np.concatenate(np.argwhere(
-                    (target_freqs<=psd_data[-1,0]) *
-                    (target_freqs>=psd_data[0,0])
-                    ))
-
-        target_psd[existing] = \
-                np.interp(target_freqs[existing], psd_data[:,0],
-                        psd_data[:,1])
-
-        # Extrapolate to higher frequencies assuming f^2 for QN
-        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
-                (psd_data[:,0]<=psd_data[-1,0])))
-
-        p = np.polyfit(x=psd_data[fit_idx,0], \
-                y=psd_data[fit_idx,1], deg=2)
-
-        target_psd[existing[-1]+1:] = \
-                p[0]*target_freqs[existing[-1]+1:]**2 +  \
-                p[1]*target_freqs[existing[-1]+1:] + \
-                p[2]
-
-        # After all that, reset everything below f_low to zero (this saves
-        # significant time in noise generation if we only care about high
-        # frequencies)
-        target_psd[target_freqs<f_low] = 0.0
-
-        # Create psd as standard frequency series object
-        psd = pycbc.types.FrequencySeries(
-                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
-
-    elif noise_curve in ligo3_curves:
-
-        # Load from ascii
-        pmnspy_path=os.getenv('PMNSPY_PREFIX')
-
-        psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_%s-PSD_20140904.txt'%noise_curve
-
-        psd_data=np.loadtxt(psd_path)
-
-        target_freqs = np.arange(0.0, flen*delta_f,
-                delta_f)
-        target_psd = np.zeros(len(target_freqs))
-
-        # Interpolate existing psd data to target frequencies
-        existing = \
-                np.concatenate(np.argwhere(
-                    (target_freqs<=psd_data[-1,0]) *
-                    (target_freqs>=psd_data[0,0])
-                    ))
-
-        target_psd[existing] = \
-                np.interp(target_freqs[existing], psd_data[:,0],
-                        psd_data[:,1])
-
-        # Extrapolate to higher frequencies assuming f^2 for QN
-        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
-                (psd_data[:,0]<=psd_data[-1,0])))
-
-        p = np.polyfit(x=psd_data[fit_idx,0], \
-                y=psd_data[fit_idx,1], deg=2)
-
-        target_psd[existing[-1]+1:] = \
-                p[0]*target_freqs[existing[-1]+1:]**2 +  \
-                p[1]*target_freqs[existing[-1]+1:] + \
-                p[2]
-
-        # After all that, reset everything below f_low to zero (this saves
-        # significant time in noise generation if we only care about high
-        # frequencies)
-        target_psd[target_freqs<f_low] = 0.0
-
-        # Create psd as standard frequency series object
-        psd = pycbc.types.FrequencySeries(
-                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
-
-    else:
-        print >> sys.stderr, "error: noise curve (%s) not"\
-            " supported"%noise_curve
-        sys.exit(-1)
-
-    return psd
 
 def get_quadrupole_data(waveform_path):
     """
@@ -751,128 +632,53 @@ def taper_start(input_data):
     return timeseries.data.data
 
 
-def make_noise_curve(f_low=10, flen=2048, delta_f=0.5, noise_curve='aLIGO'):
+def make_noise_curve(fmax=8192, delta_f=0.5, noise_curve='aLIGO'):
+    """
+    Build a frequency series pycbc object with any one of the following curves:
+    ['Voyager',
+     'Vrt',
+     'A+',
+     'aLIGO',
+     'A++',
+     'CE2 narrow',
+     'ET-B',
+     'CE2 wide',
+     'ET-D',
+     'CE1']
+    """
 
-    ligo3_curves=['base', 'highNN', 'highSPOT', 'highST',
-            'highSei', 'highloss', 'highmass', 'highpow', 'highsqz',
-            'lowNN', 'lowSPOT', 'lowST', 'lowSei']
+    try:
+        noisedata_path = os.environ['PMNSPY_PREFIX'] + "/noise_curves/curves.mat"
+    except KeyError:
+        print >> sys.stderr, "PMNSPY_PREFIX environment variable not" \
+                " set, please check env"
 
-    if noise_curve=='aLIGO': 
-        from pycbc.psd import aLIGOZeroDetHighPower
-        psd = aLIGOZeroDetHighPower(flen, delta_f, f_low) 
-    elif noise_curve=='aLIGO2':
-        # XXX  this this the upgraded curve from
-        # http://arxiv.org/pdf/1410.5882v2.pdf; basically just a factor of 2
-        # better at Quantum noise
-        from pycbc.psd import aLIGOZeroDetHighPower
-        psd = aLIGOZeroDetHighPower(flen, delta_f, f_low) 
-        psd.data *= 0.5
-    elif noise_curve=='adVirgo':
-        from pycbc.psd import AdvVirgo
-        psd = AdvVirgo(flen, delta_f, f_low) 
-    elif noise_curve=='GEOHF':
-        from pycbc.psd import GEOHF
-        psd = GEOHF(flen, delta_f, f_low) 
-    elif noise_curve=='KAGRA':
-        from pycbc.psd import KAGRA
-        psd = KAGRA(flen, delta_f, f_low) 
+    # Load PSD data from mat file at LIGO-T1500293
+    mat_data = sio.loadmat(noisedata_path)
 
-    elif noise_curve=='Green' or noise_curve=='Red':
+    ncurves = len(mat_data['lgnd'][0])
+    # Turn the data into a more useful dictionary
+    noise_data=dict()
+    for i in xrange(ncurves):
+        noise_data[str(mat_data['lgnd'][0][i][0])] = mat_data['h'][i,:] 
+    sample_frequencies = mat_data['f'][0]
 
-        # Load from ascii
-        pmnspy_path=os.getenv('PMNSPY_PREFIX')
+    if noise_curve not in noise_data.keys():
+        print >> sys.stderr, "%s not supported, available noise curves are:"%noise_curve
+        print >> sys.stderr, noise_data.keys()
+        sys.exit()
 
-        psd_path=pmnspy_path+'/ligo3/PSD/%sPSD.txt'%noise_curve
+    # Select out noise curve
+    noise_asd = noise_data[noise_curve]
 
-        psd_data=np.loadtxt(psd_path)
+    # Interpolate to desired target frequencies
+    target_frequencies = np.arange(0.0, 8192.0+delta_f, delta_f)
 
-        target_freqs = np.arange(0.0, flen*delta_f,
-                delta_f)
-        target_psd = np.zeros(len(target_freqs))
+    noise_asd_interp = np.interp(target_frequencies, sample_frequencies,
+            noise_asd)
 
-        # Interpolate existing psd data to target frequencies
-        existing = \
-                np.concatenate(np.argwhere(
-                    (target_freqs<=psd_data[-1,0]) *
-                    (target_freqs>=psd_data[0,0])
-                    ))
-
-        target_psd[existing] = \
-                np.interp(target_freqs[existing], psd_data[:,0],
-                        psd_data[:,1])
-
-        # Extrapolate to higher frequencies assuming f^2 for QN
-        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
-                (psd_data[:,0]<=psd_data[-1,0])))
-
-        p = np.polyfit(x=psd_data[fit_idx,0], \
-                y=psd_data[fit_idx,1], deg=2)
-
-        target_psd[existing[-1]+1:] = \
-                p[0]*target_freqs[existing[-1]+1:]**2 +  \
-                p[1]*target_freqs[existing[-1]+1:] + \
-                p[2]
-
-        # After all that, reset everything below f_low to zero (this saves
-        # significant time in noise generation if we only care about high
-        # frequencies)
-        target_psd[target_freqs<f_low] = 0.0
-
-        # Create psd as standard frequency series object
-        psd = pycbc.types.FrequencySeries(
-                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
-
-    elif noise_curve in ligo3_curves:
-
-        # Load from ascii
-        pmnspy_path=os.getenv('PMNSPY_PREFIX')
-
-        psd_path=pmnspy_path+'/ligo3/PSD/BlueBird_%s-PSD_20140904.txt'%noise_curve
-
-        psd_data=np.loadtxt(psd_path)
-
-        target_freqs = np.arange(0.0, flen*delta_f,
-                delta_f)
-        target_psd = np.zeros(len(target_freqs))
-
-        # Interpolate existing psd data to target frequencies
-        existing = \
-                np.concatenate(np.argwhere(
-                    (target_freqs<=psd_data[-1,0]) *
-                    (target_freqs>=psd_data[0,0])
-                    ))
-
-        target_psd[existing] = \
-                np.interp(target_freqs[existing], psd_data[:,0],
-                        psd_data[:,1])
-
-        # Extrapolate to higher frequencies assuming f^2 for QN
-        fit_idx = np.concatenate(np.argwhere((psd_data[:,0]>2000)*\
-                (psd_data[:,0]<=psd_data[-1,0])))
-
-        p = np.polyfit(x=psd_data[fit_idx,0], \
-                y=psd_data[fit_idx,1], deg=2)
-
-        target_psd[existing[-1]+1:] = \
-                p[0]*target_freqs[existing[-1]+1:]**2 +  \
-                p[1]*target_freqs[existing[-1]+1:] + \
-                p[2]
-
-        # After all that, reset everything below f_low to zero (this saves
-        # significant time in noise generation if we only care about high
-        # frequencies)
-        target_psd[target_freqs<f_low] = 0.0
-
-        # Create psd as standard frequency series object
-        psd = pycbc.types.FrequencySeries(
-                initial_array=target_psd, delta_f=np.diff(target_freqs)[0])
-
-    else:
-        print >> sys.stderr, "error: noise curve (%s) not"\
-            " supported"%noise_curve
-        sys.exit(-1)
-
-    return psd
+    # Return a pycbc.types.frequencyseries() with this data
+    return pycbc.types.FrequencySeries(noise_asd_interp**2, delta_f=delta_f)
 
 def main():
 

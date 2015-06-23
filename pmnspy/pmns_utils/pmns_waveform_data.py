@@ -46,7 +46,7 @@ class WaveData:
         #
 
         try:
-            wavedata_path = os.environ['PMNSPATH']
+            wavedata_path = os.environ['PMNSPY_PREFIX'] + "/waveform_data"
         except KeyError:
             print >> sys.stderr, "PMNSPATH environment variable not" \
                     " set, please check env"

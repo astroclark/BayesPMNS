@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-# Copyright (C) 2015-2016 James Clark <clark@physics.umass.edu>
+# Copyright (C) 2015-2016 James Clark <james.clark@ligo.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -70,12 +70,12 @@ fcenter=2710
 deltaF=1.0
 noise_curve="aLIGO"
 target_snr=5
-loo=True
-#loo=False
+#loo=True
+loo=False
 
 eos="all"
-mass="all"
-viscosity="oldvisc"
+mass="135135"
+viscosity="lessvisc"
 
 #
 # Build filename
@@ -164,7 +164,7 @@ for w, wave in enumerate(waveform_data.waves):
     #
     # Construct PSD
     #
-    psd = pwave.make_noise_curve(f_low=10, flen=len(waveform_FD),
+    psd = pwave.make_noise_curve(fmax=waveform_FD.sample_frequencies.max(),
             delta_f=waveform_FD.delta_f, noise_curve=noise_curve)
 
     # Fisher matrix: expand likelihood about target_fpeak +/- 0.5*deltaF

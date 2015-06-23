@@ -32,20 +32,23 @@ import pycbc.types
 import pycbc.filter
 import pycbc.psd 
 
-import pmns_utils as pu
+from pmns_utils import pmns_waveform as pwave
+from pmns_utils import pmns_waveform_data as pdata
+
+# ________________ - Local Defs - ________________ #
 
 def compute_rate(sensemon_range, bns_rate_perL10perMyr=(0.6,60,600)):
 
     bns_rateperL10_perYr = np.array(bns_rate_perL10perMyr)/1e6
 
-    cumlum_data = pu.CL_vs_PhysDist()
+    cumlum_data = pwave.CL_vs_PhysDist()
     if sensemon_range>cumlum_data[-2,0]:
         Ng = (4./3)*np.pi*(sensemon_range**3)*0.0116
         cumlum_in_range = Ng/1.7
     else:
 
         # Get cumulative blue-light luminosity in L10 data:
-        cumlum_data = pu.CL_vs_PhysDist()
+        cumlum_data = pwave.CL_vs_PhysDist()
 
         # Interpolate to this range
         cumlum_in_range = np.interp(sensemon_range, cumlum_data[:,0],
@@ -53,43 +56,45 @@ def compute_rate(sensemon_range, bns_rate_perL10perMyr=(0.6,60,600)):
 
     rates = [cumlum_in_range * rate for rate in bns_rateperL10_perYr]
 
-#   pl.figure()
-#   pl.loglog(cumlum_data[:,0], cumlum_data[:,1])
-#   pl.axvline(sensemon_range,color='r')
-#   pl.show()
-#   sys.exit()
-
     return rates
 
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Loop over waveforms and PSDs, compute SNRs
+# Initialise
 #
 
-print "Setting up exact match analysis"
-
-waveform_names=['apr_135135_lessvisc',
-                'shen_135135_lessvisc',
-                'dd2_135135_lessvisc' ,
-                'dd2_165165_lessvisc' ,
-                'nl3_135135_lessvisc' ,
-                'nl3_1919_lessvisc'   ,
-                'tm1_135135_lessvisc' ,
-                'tma_135135_lessvisc' ,
-                'sfhx_135135_lessvisc',
-                'sfho_135135_lessvisc']#,
-
-
-catlen = len(waveform_names)
-
-#
-# Create Waveform
-#
-
+noise_curve=sys.argv[1]
 horizon_snr=5
 reference_distance=50
 ndet=1
 
-f = open('%s_snrs.dat'%sys.argv[1],'w')
+eos="all"
+mass="135135"
+viscosity="lessvisc"
+
+#
+# Build filename
+#
+filename="snrs_%s_horizonsnr-%.2f_eos-%s_mass-%s_viscosity-%s.txt"%(
+        noise_curve, horizon_snr, eos, mass, viscosity)
+
+
+# XXX: should probably fix this at the module level..
+if eos=="all": eos=None
+if mass=="all": mass=None
+if viscosity=="all": viscosity=None
+
+#
+# Create the list of dictionaries which comprises our catalogue
+#
+waveform_data = pdata.WaveData(eos=eos,viscosity=viscosity, mass=mass)
+
+#
+# Create Waveforms and compute SNRs
+#
+
+f = open(filename, "w")
 
 f.writelines("# rho Dhor Dsens Rate\n")
 
@@ -97,53 +102,65 @@ rho_min=100
 rho_max=0
 
 
-for w, wave_name in enumerate(waveform_names):
+for w, wave in enumerate(waveform_data.waves):
 
-    print "Analysing %s"%wave_name
+    print "SNR for %s, %s ,%s (%d of %d)"%(
+            wave['eos'], wave['mass'], wave['viscosity'], w+1,
+            waveform_data.nwaves)
 
     #
     # Create test waveform
     #
-    waveform = pu.Waveform(wave_name, distance=reference_distance)
+    waveform = pwave.Waveform(eos=wave['eos'], mass=wave['mass'],
+            viscosity=wave['viscosity'])
     waveform.reproject_waveform()
-    Hplus = waveform.hplus.to_frequencyseries()
+
+    hplus_padded = pycbc.types.TimeSeries(np.zeros(16384),
+            delta_t=waveform.hplus.delta_t)
+    hplus_padded.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+    Hplus = hplus_padded.to_frequencyseries()
 
     #
     # Construct PSD
     #
-    psd = pu.make_noise_curve(f_low=10, flen=len(Hplus), delta_f=Hplus.delta_f,
-            noise_curve=sys.argv[1])
-    #
-    # Compute SNR
-    #
-    this_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=1000)
+    psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
+            delta_f=Hplus.delta_f, noise_curve=noise_curve)
 
-    horizon_distance = np.sqrt(ndet)*reference_distance * this_snr / horizon_snr
+    #
+    # Compute Full SNR
+    #
+    full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=1000)
+
+    #
+    # Compute post-merger only SNR Signal windowed at maximum
+    #
+    hplus_post = \
+            pycbc.types.TimeSeries(pwave.window_inspiral(hplus_padded.data),
+                    delta_t=hplus_padded.delta_t)
+    Hplus_post = hplus_post.to_frequencyseries()
+    
+    post_snr = pycbc.filter.sigma(Hplus_post, psd=psd, low_frequency_cutoff=1000)
+
+    horizon_distance = np.sqrt(ndet)*reference_distance * full_snr / horizon_snr
     sensemon_range   = horizon_distance / 2.26
-
     rates = compute_rate(sensemon_range)
 
-    print "%.2f %.2f %.2f %.2f"%(this_snr, horizon_distance,
+    wave_name = "%s-%s-%s"%(wave['eos'], wave['mass'], wave['viscosity'])
+    print "%.2f %.2f %.2f %.2f %.2f"%(full_snr, post_snr, horizon_distance,
             sensemon_range, rates[1])
-    f.writelines("%s %.2f %.2f %.2f %.2f\n"%(wave_name, this_snr, horizon_distance,
-        sensemon_range, rates[1]))
+    f.writelines("%s %.2f %.2f %.2f %.2f %.2f\n"%(wave_name, full_snr, post_snr,
+        horizon_distance, sensemon_range, rates[1]))
 
     # Record min/max waveforms & foms
-    if this_snr<rho_min:
+    if full_snr<rho_min:
         min_wave = wave_name
-        min_foms = (this_snr, horizon_distance, rates[1])
-        rho_min = this_snr
-    if this_snr>rho_max:
+        min_foms = (wave_name, full_snr, horizon_distance, rates[1])
+        rho_min = full_snr
+    if full_snr>rho_max:
         max_wave = wave_name
-        max_foms = (this_snr, horizon_distance, rates[1])
-        rho_max = this_snr
+        max_foms = (wave_name, full_snr, horizon_distance, rates[1])
+        rho_max = full_snr
 
-#   f, ax = pl.subplots()
-#   ax.semilogy(psd.sample_frequencies, np.sqrt(psd), label=sys.argv[1])
-#   ax.semilogy(Hplus.sample_frequencies, 2*np.sqrt(Hplus.sample_frequencies.data)
-#       * abs(Hplus.data))
-#   ax.set_xlim(800, 4096)
-#   pl.show()
 
 
 print '---------------'
