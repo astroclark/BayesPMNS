@@ -96,7 +96,7 @@ waveform_data = pdata.WaveData(eos=eos,viscosity=viscosity, mass=mass)
 
 f = open(filename, "w")
 
-f.writelines("# rho Dhor Dsens Rate\n")
+f.writelines("# rho_full rho_post Dhor Dsens Rate\n")
 
 rho_min=100
 rho_max=0
