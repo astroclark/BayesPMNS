@@ -68,13 +68,13 @@ nTsamples=16384
 low_frequency_cutoff=1000
 fcenter=2710
 deltaF=1.0
-noise_curve="aLIGO"
+noise_curve="ET-D"
 target_snr=5
-#loo=True
-loo=False
+loo=True
+#loo=False
 
 eos="all"
-mass="135135"
+mass="all"
 viscosity="lessvisc"
 
 #

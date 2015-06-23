@@ -70,7 +70,7 @@ reference_distance=50
 ndet=1
 
 eos="all"
-mass="135135"
+mass="all"
 viscosity="lessvisc"
 
 #
