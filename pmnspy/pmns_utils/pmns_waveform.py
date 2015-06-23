@@ -640,9 +640,9 @@ def make_noise_curve(fmax=8192, delta_f=0.5, noise_curve='aLIGO'):
      'A+',
      'aLIGO',
      'A++',
-     'CE2 narrow',
+     'CE2_narrow',
      'ET-B',
-     'CE2 wide',
+     'CE2_wide',
      'ET-D',
      'CE1']
     """
@@ -660,7 +660,8 @@ def make_noise_curve(fmax=8192, delta_f=0.5, noise_curve='aLIGO'):
     # Turn the data into a more useful dictionary
     noise_data=dict()
     for i in xrange(ncurves):
-        noise_data[str(mat_data['lgnd'][0][i][0])] = mat_data['h'][i,:] 
+        key = str(mat_data['lgnd'][0][i][0]).replace(" ", "_")
+        noise_data[key] = mat_data['h'][i,:] 
     sample_frequencies = mat_data['f'][0]
 
     if noise_curve not in noise_data.keys():
