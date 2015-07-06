@@ -112,7 +112,7 @@ for w, wave in enumerate(waveform_data.waves):
     # Create test waveform
     #
     waveform = pwave.Waveform(eos=wave['eos'], mass=wave['mass'],
-            viscosity=wave['viscosity'])
+            viscosity=wave['viscosity'], distance=reference_distance)
     waveform.reproject_waveform()
 
     hplus_padded = pycbc.types.TimeSeries(np.zeros(16384),

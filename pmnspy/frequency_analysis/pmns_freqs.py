@@ -29,9 +29,10 @@ import matplotlib.cm as cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import pycbc.types
-import lal
-import pmns_utils as pu
-import pmns_pca_utils as ppca
+
+from pmns_utils import pmns_waveform as pwave
+from pmns_utils import pmns_waveform_data as pdata
+from pmns_utils import pmns_pca as ppca
 
 
 def tripleplot(cwt_result):
@@ -136,40 +137,34 @@ def tripleplot(cwt_result):
 #   pl.ylim(min(frequencies),
 #           2*frequencies[abs(scales-0.5*max(scales)).argmin()])
 #
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Construct the full waveform catalogue and perform PCA
-#
-# Produces: 1) Explained variance calculation
-#           2) Matches for waveforms reconstructed from their own PCs
-
-waveform_names=['apr_135135_lessvisc',
-                'shen_135135_lessvisc',
-                'dd2_135135_lessvisc' ,
-                'dd2av16_135135_lessvisc' ,
-                'dd2_165165_lessvisc' ,
-                'nl3_135135_lessvisc' ,
-                'nl3_1919_lessvisc'   ,
-                'tm1_135135_lessvisc' ,
-                'tma_135135_lessvisc' ,
-                'sfhx_135135_lessvisc',
-                'sfho_135135_lessvisc']#,
-
-w = waveform_names.index(sys.argv[1]+'_lessvisc')
-
-#
-# Create PMNS PCA instance for this catalogue
+# Waveform Generation
 #
 
-nTsamples=16384
+eos="shen"
+mass="135135"
 
-waveform = pu.Waveform(waveform_names[w], distance=50)
+
+#
+# Create the list of dictionaries which comprises our catalogue
+#
+#waveform_data = pdata.WaveData(eos=eos, mass=mass, viscosity='lessvisc')
+
+waveform = pwave.Waveform(eos=eos, mass=mass, viscosity="lessvisc")
+
 waveform.reproject_waveform()
-waveform.compute_characteristics()
-
 
 Hplus = waveform.hplus.to_frequencyseries()
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Wavelet analysis
+#
 cwt_result = ppca.build_cwt(waveform.hplus, mother_freq=3, fmin=500)
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Plotting
+#
 
 fig, ax_cont, ax_ts, ax_fs = tripleplot(cwt_result)
 
@@ -193,29 +188,21 @@ for line in peakind:
         ax_cont.legend()
         p+=1
 
-pl.show()
-sys.exit()
-
-# XXX: Get instantaneous freq. of max power
-#maxfreqs = np.zeros(len(cwt_result['times']))
-#for m in xrange(len(maxfreqs)):
-#    maxfreqs[m] = cwt_result['frequencies'][np.argmax(cwt_result['map'])[:,m]]
-
 
 # XXX: Specgram
-pl.figure()
-(Pxx, freqs, bins, im) = pl.specgram( waveform.hplus.data,
-        Fs=waveform.hplus.sample_rate, window=None, noverlap=32, NFFT=64)
-pl.close()
-maxcol = 0.5*Pxx.max()
-vmin, vmax = 0, maxcol
-collevs=np.linspace(vmin, vmax, 100)
-
-f, ax = pl.subplots()
-ax.imshow(np.log10(Pxx), extent=[min(bins), max(bins),
-    min(freqs), max(freqs)], aspect='auto', interpolation='lanczos',
-    origin='lower')
-ax.invert_yaxis()
-
-pl.show()
+#   pl.figure()
+#   (Pxx, freqs, bins, im) = pl.specgram( waveform.hplus.data,
+#           Fs=waveform.hplus.sample_rate, window=None, noverlap=32, NFFT=64)
+#   pl.close()
+#   maxcol = 0.5*Pxx.max()
+#   vmin, vmax = 0, maxcol
+#   collevs=np.linspace(vmin, vmax, 100)
+#
+#   f, ax = pl.subplots()
+#   ax.imshow(np.log10(Pxx), extent=[min(bins), max(bins),
+#       min(freqs), max(freqs)], aspect='auto', interpolation='lanczos',
+#       origin='lower')
+#   ax.invert_yaxis()
+#
+#   pl.show()
 

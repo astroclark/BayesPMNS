@@ -54,6 +54,11 @@ class Waveform:
         if len(this_waveform)>1:
             print >> sys.stderr, "ERROR, too many files match the requested eos/mass/viscosity combination"
             sys.exit(-1)
+
+        if len(this_waveform)==0:
+            print >> sys.stderr, "ERROR, no waveform with selected EOS, mass and viscosity found"
+            sys.exit(-1)
+
         self.eos = eos
         self.mass = mass
         self.data = this_waveform[0]['data']
