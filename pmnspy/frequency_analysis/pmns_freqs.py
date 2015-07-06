@@ -204,5 +204,5 @@ for line in peakind:
 #       origin='lower')
 #   ax.invert_yaxis()
 #
-#   pl.show()
+pl.show()
 
