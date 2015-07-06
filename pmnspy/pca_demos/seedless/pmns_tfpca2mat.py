@@ -74,7 +74,44 @@ waveform_data = pdata.WaveData(eos=eos,viscosity=viscosity, mass=mass)
 pmpca = ppca.pmnsPCA(waveform_data, low_frequency_cutoff=low_frequency_cutoff,
         fcenter=fcenter, nTsamples=nTsamples)
 
-sys.exit()
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Compute the projection coefficients for each waveform
+#
+magnitude_betas = np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
+
+for w, wave in enumerate(waveform_data.waves):
+
+    print "Projecting %s, %s ,%s (%d of %d)"%(
+            wave['eos'], wave['mass'], wave['viscosity'], w+1,
+            waveform_data.nwaves)
+
+    # --- Fourier Domain Analysis --- #
+    # Get complex spectrum of this waveform
+    waveform = pwave.Waveform(eos=wave['eos'], mass=wave['mass'],
+            viscosity=wave['viscosity'])
+    waveform.reproject_waveform()
+
+    # Standardise
+    waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
+            waveform.hplus.data, nsamples=nTsamples)
+
+    # Normalise
+    waveform_FD = ppca.unit_hrss(waveform_FD.data,
+            delta=waveform_FD.delta_f, domain='frequency')
+
+    # Take projection
+    projection = pmpca.project_freqseries(waveform_FD)
+    magnitude_betas[w, :]  = np.copy(projection['magnitude_betas'])
+
+    # --- Wavelet Domain Analysis --- #
+    # Make CWT TF map
+    waveform_tfmap = ppca.build_cwt(waveform.hplus)
+
+    # Project
+    tf_projection = pmpca.project_tfmap(waveform_tfmap,
+            this_fpeak=pmpca.fpeaks[w])
+
+    sys.exit()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Dump to mat file
@@ -84,17 +121,20 @@ sys.exit()
 # Extract relevant data
 #
 
-
-outputdata = {'sample_frequencies':pmpca.sample_frequencies,
+outputdata = {'fourier_frequencies':pmpca.sample_frequencies,
         'time_domain_waveforms':pmpca.cat_timedomain,
         'fcenter':2710.0,
         'fpeaks':pmpca.fpeaks,
-        'frequency_domain_waveforms':pmpca.cat_orig,
-        'freqency_domain_waveforms_aligned':pmpca.cat_align,
-        'magnitude_spectrum_global_mean':pmpca.pca['magnitude_mean'],
+        'fourier_magnitudes':pmpca.magnitude,
+        'aligned_fourier_magnitudes':pmpca.magnitude_align,
+        'magnitude_spectrum_mean':pmpca.pca['magnitude_mean'],
         'magnitude_principal_components':pmpca.pca['magnitude_pca'].components_,
         'magnitude_coeffficients':magnitude_betas,
-        'timefreq_global_mean':pmpca.pca['timefreq_mean'],
+        'timefreq_mean':pmpca.pca['timefreq_mean'],
         'timefreq_principal_components':pmpca.pca['timefreq_pca'].components_}
 
 sio.savemat('postmergerpca.mat', outputdata)
+
+
+
+

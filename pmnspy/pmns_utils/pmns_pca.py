@@ -555,12 +555,12 @@ class pmnsPCA:
         train_time = (time.time() - t0)
         print("...done in %0.3fs" % train_time)
 
-        #print "Performing Time-Frequency PCA"
-        #t0 = time.time()
-        #self.pca['timefreq_pca'], self.pca['timefreq_mean'] = \
-        #        perform_TFpca(self.align_image_cat)
-        #train_time = (time.time() - t0)
-        #print("...done in %0.3fs" % train_time)
+        print "Performing Time-Frequency PCA"
+        t0 = time.time()
+        self.pca['timefreq_pca'], self.pca['timefreq_mean'] = \
+                perform_TFpca(self.align_image_cat)
+        train_time = (time.time() - t0)
+        print("...done in %0.3fs" % train_time)
 
 
     def project_freqseries(self, freqseries, this_fpeak=None):
@@ -585,7 +585,8 @@ class pmnsPCA:
             # avoids any low frequency stuff.
             high_idx = self.sample_frequencies>=2000 
             high_freq = self.sample_frequencies[high_idx] 
-            this_fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
+            high_spec = freqseries[high_idx] 
+            this_fpeak = high_freq[np.argmax(abs(high_spec))]
 
         # Dictionary to hold input and results of projection
         projection = dict()
@@ -655,7 +656,8 @@ class pmnsPCA:
             # avoids any low frequency stuff.
             high_idx = self.sample_frequencies>=2000 
             high_freq = self.sample_frequencies[high_idx] 
-            this_fpeak = high_freq[np.argmax(abs(freqseries[high_idx]))]
+            high_spec = freqseries[high_idx] 
+            this_fpeak = high_freq[np.argmax(abs(high_spec))]
 
         # Get projection:
         fd_projection = self.project_freqseries(freqseries)
