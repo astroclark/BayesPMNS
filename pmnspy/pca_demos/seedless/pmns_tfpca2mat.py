@@ -33,6 +33,7 @@ from pmns_utils import pmns_waveform as pwave
 from pmns_utils import pmns_waveform_data as pdata
 from pmns_utils import pmns_pca as ppca
 
+from scipy import io as sio
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,7 +50,7 @@ target_snr=5
 loo=False
 
 eos="all"
-mass="135135"
+mass="all"
 viscosity="lessvisc"
 
 
@@ -78,6 +79,13 @@ pmpca = ppca.pmnsPCA(waveform_data, low_frequency_cutoff=low_frequency_cutoff,
 # Compute the projection coefficients for each waveform
 #
 magnitude_betas = np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
+timefreq_betas = np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
+
+nmaprows=256
+nmapcols=2048
+timefreq_principal_components = np.zeros(shape=(waveform_data.nwaves, nmaprows,
+    nmapcols))
+
 
 for w, wave in enumerate(waveform_data.waves):
 
@@ -104,14 +112,24 @@ for w, wave in enumerate(waveform_data.waves):
     magnitude_betas[w, :]  = np.copy(projection['magnitude_betas'])
 
     # --- Wavelet Domain Analysis --- #
+
     # Make CWT TF map
     waveform_tfmap = ppca.build_cwt(waveform.hplus)
+    height, width = waveform_tfmap['map'].shape
 
     # Project
     tf_projection = pmpca.project_tfmap(waveform_tfmap,
             this_fpeak=pmpca.fpeaks[w])
 
-    sys.exit()
+    timefreq_betas[w,:] = np.copy(tf_projection['timefreq_betas'])
+
+    # Reshape to original dims
+    for p in xrange(waveform_data.nwaves):
+        timefreq_principal_components[p, :, :] = \
+                pmpca.pca['timefreq_pca'].components_[p, :].reshape(height,
+                        width)
+
+timefreq_mean = pmpca.pca['timefreq_mean'].reshape(height, width)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Dump to mat file
@@ -130,8 +148,11 @@ outputdata = {'fourier_frequencies':pmpca.sample_frequencies,
         'magnitude_spectrum_mean':pmpca.pca['magnitude_mean'],
         'magnitude_principal_components':pmpca.pca['magnitude_pca'].components_,
         'magnitude_coeffficients':magnitude_betas,
-        'timefreq_mean':pmpca.pca['timefreq_mean'],
-        'timefreq_principal_components':pmpca.pca['timefreq_pca'].components_}
+        'timefreq_mean':timefreq_mean,
+        'timefreq_principal_components':timefreq_principal_components,
+        'timefreq_frequencies':pmpca.map_frequencies,
+        'timefreq_times':pmpca.map_times}
+
 
 sio.savemat('postmergerpca.mat', outputdata)
 
