@@ -50,7 +50,7 @@ target_snr=5
 loo=False
 
 eos="all"
-mass="all"
+mass="135135"
 viscosity="lessvisc"
 
 
