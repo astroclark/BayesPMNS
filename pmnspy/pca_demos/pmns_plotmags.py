@@ -70,11 +70,11 @@ labels=[ eos.upper() for eos in eos_examples ]
 #
 # Plotting
 #
-f1, ax1 = pl.subplots(figsize=(8,3))
-f2, ax2 = pl.subplots(figsize=(8,3))
-f3, ax3 = pl.subplots(figsize=(8,3))
-f4, ax4 = pl.subplots(figsize=(8,3))
-f5, ax5 = pl.subplots(figsize=(8,3))
+f1, ax1 = pl.subplots()#igsize=(8,3))
+f2, ax2 = pl.subplots()#igsize=(8,3))
+f3, ax3 = pl.subplots()#igsize=(8,3))
+f4, ax4 = pl.subplots()#igsize=(8,3))
+f5, ax5 = pl.subplots()#igsize=(8,3))
 
 for i in xrange(3):
 
