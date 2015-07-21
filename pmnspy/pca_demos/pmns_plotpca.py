@@ -36,27 +36,6 @@ pickle_file = sys.argv[1]
 waveform_data, _, _, matches, delta_fpeak, delta_R16 = \
         pickle.load(open(pickle_file, "rb"))
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Reduce matches, deltas to lessvisc waveforms
-#
-
-#   # Count the number of lessvisc signals and record their indices
-#   nlessvisc=0
-#   lessviscidx=[]
-#   for w,wave in enumerate(waveform_data.waves):
-#       if wave['viscosity'] == 'lessvisc': 
-#           nlessvisc+=1
-#           lessviscidx.append(w)
-#
-#   matches     = np.zeros(shape=(nlessvisc, waveform_data.nwaves))
-#   delta_fpeak = np.zeros(shape=(nlessvisc, waveform_data.nwaves))
-#   delta_R16   = np.zeros(shape=(nlessvisc, waveform_data.nwaves))
-#   for w in xrange(nlessvisc):
-#
-#       matches[w, :]     = all_matches[lessviscidx[w],:]
-#       delta_fpeak[w, :] = all_delta_fpeak[lessviscidx[w],:]
-#       delta_R16[w, :]   = all_delta_R16[lessviscidx[w],:]
-#
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Plot Results 
