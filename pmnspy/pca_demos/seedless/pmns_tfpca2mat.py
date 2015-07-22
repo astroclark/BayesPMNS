@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-# Copyright (C) 2015-2016 James Clark <clark@physics.umass.edu>
+# Copyright (C) 2015-2016 James Clark <james.clark@ligo.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,9 +43,6 @@ from scipy import io as sio
 nTsamples=16384
 low_frequency_cutoff=1000
 fcenter=2710
-deltaF=1.0
-noise_curve="aLIGO"
-target_snr=5
 #loo=True
 loo=False
 
@@ -148,7 +145,11 @@ outputdata = {'fourier_frequencies':pmpca.sample_frequencies,
         'magnitude_spectrum_mean':pmpca.pca['magnitude_mean'],
         'magnitude_principal_components':pmpca.pca['magnitude_pca'].components_,
         'magnitude_coeffficients':magnitude_betas,
+        'timefreq_maps': pmpca.original_image_cat,
+        'timefreq_scales': pmpca.map_scales,
+        'aligned_timefreq_maps': pmpca.align_image_cat,
         'timefreq_mean':timefreq_mean,
+        'timefreq_betas':timefreq_betas,
         'timefreq_principal_components':timefreq_principal_components,
         'timefreq_frequencies':pmpca.map_frequencies,
         'timefreq_times':pmpca.map_times}
