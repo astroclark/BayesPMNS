@@ -84,9 +84,11 @@ def multi_ring_template(t0, Apeak, Aspiral, A20, fpeak, taupeak, tauspiral,
     peak = Apeak * np.exp(-(t-t0)/taupeak) * \
             np.cos(2*np.pi*fpeak*(t-t0) + phipeak)
     peak[t<t0]=0.0
+
     spiral = Aspiral * np.exp(-(t-t0)/tauspiral) * \
             np.cos(2*np.pi*fspiral*(t-t0) + phispiral)
     spiral[t<t0]=0.0
+
     axi = A20 * np.exp(-(t-t0)/tau20) * \
             np.cos(2*np.pi*f20*(t-t0) + phi20)
     axi[t<t0]=0.0
@@ -141,8 +143,9 @@ def min_overlap(x):
     """
 
 
-    x = code(x,'decode')
-    t0, Apeak, Aspiral, A20, fpeak, taupeak, tauspiral, tau20, phipeak, phispiral, phi20 = x
+    xreal = code(x,'decode')
+    t0, Apeak, Aspiral, A20, fpeak, taupeak, tauspiral, tau20, phipeak, \
+            phispiral, phi20 = xreal
 
 #
 #   if (Apeak>0) * (Aspiral>0) * (A20>0) * (fpeak>1000) * (fpeak<4000) \
@@ -165,15 +168,16 @@ def min_overlap(x):
 #   else:
 #       cost=np.NaN
 
-    template = multi_ring_template(*x)
-#    template_ts = pycbc.types.TimeSeries(template, delta_t=1./16384)
+    template = multi_ring_template(*xreal)
+
+    template_ts = pycbc.types.TimeSeries(template, delta_t=1./16384)
  
 #   overlap = pycbc.filter.overlap(hplus, template_ts, psd=psd,
 #           low_frequency_cutoff=1000, high_frequency_cutoff=4096,
 #           normalized=True)
-#   return -1*float(overlap)
+#    cost = 1-float(overlap)
 
-    cost = sum((template-hplus)**2)
+    cost = sum((template-hplus.data)**2)
 
     return cost
     
@@ -227,9 +231,9 @@ horizon_snr=5
 reference_distance=50
 ndet=1
 
-eos="dd2"
+eos="dd2v2"
 mass="135135"
-viscosity="oldvisc"
+viscosity="lessvisc"
 
 
 # XXX: should probably fix this at the module level..
@@ -245,7 +249,7 @@ waveform_data = pdata.WaveData(eos=eos,viscosity=viscosity, mass=mass)
 #
 # Initialise standard devs
 #
-sigma0 = 0.05
+sigma0 = 1e-3
 
 #
 # Create Waveforms and compute params
@@ -267,11 +271,13 @@ for w, wave in enumerate(waveform_data.waves):
             delta_t=waveform.hplus.delta_t)
     hplus.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
 
+    #hplus.data[:np.argmax(abs(hplus.data))] = 0.0
+
     hplus.data /= np.linalg.norm(hplus.data)
 
     Hplus = hplus.to_frequencyseries()
 
-    sys.exit()
+    #sys.exit()
     #
     # Construct PSD
     #
@@ -286,6 +292,11 @@ for w, wave in enumerate(waveform_data.waves):
     x = cma.fmin(min_overlap, x0, sigma0=sigma0)
 
     result = code(x[0], 'decode')
+    result_wave = multi_ring_template(*result)
+    result_wave_ts = pycbc.types.TimeSeries(result_wave, delta_t=1./16384)
+
+    match = pycbc.filter.match(hplus, result_wave_ts, low_frequency_cutoff=1000)
+
 
 
 

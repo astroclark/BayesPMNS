@@ -86,6 +86,7 @@ waveform_data, _, _, _, _, _ = pickle.load(open(pickle_files[0], "rb"))
 instrument_labels=[]
 all_delta_fpeaks=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
 all_delta_R16=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
+all_delta_R16_total=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
 all_matches=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
 
 for p, pickle_file in enumerate(pickle_files):
@@ -97,7 +98,10 @@ for p, pickle_file in enumerate(pickle_files):
     # matches is (nwaveforms, npcs); use 1st PC only
     all_matches[p, :] = matches[:,0]
     all_delta_fpeaks[p, :] = delta_fpeak[:,0]
-    all_delta_R16[p, :] = delta_R16[:,0]
+    all_delta_R16[p, :] = 1000*delta_R16[:,0]
+
+    for r in xrange(len(all_delta_R16[p, :])):
+        all_delta_R16_total[p, r] = np.sqrt(all_delta_R16[p,r]**2 + 175**2)
 
     
 
@@ -114,9 +118,14 @@ f, ax = bar_summary(all_delta_fpeaks, instrument_labels, ylims=None,
         ylabel=r'Frequency Error [Hz]')
 f.savefig('multidet_deltaFpeak_summary.eps')
 
-# Delta R16
+# Delta R16 statistical
 f, ax = bar_summary(all_delta_R16, instrument_labels, ylims=None,
-        ylabel=r'Radius Error [km]')
+        ylabel=r'Radius Error [m]')
+f.savefig('multidet_deltaR16statistical_summary.eps')
+
+# Delta R16
+f, ax = bar_summary(all_delta_R16_total, instrument_labels, ylims=None,
+        ylabel=r'Radius Error [m]')
 f.savefig('multidet_deltaR16_summary.eps')
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -137,12 +146,18 @@ for d, det in enumerate(instrument_labels):
     print "%s: %.1f %.1f %.1f"%(det, low_val[d], height[d], upp_val[d])
 
 print "------------------------"
-print "delta R16"
+print "delta R16 Statistical"
 print "10, 50, 90 percentiles:"
 for d, det in enumerate(instrument_labels):
     low_val, height, upp_val = np.percentile(all_delta_R16, [10, 50, 90], axis=1)
-    print "%s: %.1f %.1f %.1f"%(det, 1000*low_val[d], 1000*height[d], 1000*upp_val[d])
+    print "%s: %.1f %.1f %.1f"%(det, low_val[d], height[d], upp_val[d])
 
+print "------------------------"
+print "delta R16"
+print "10, 50, 90 percentiles:"
+for d, det in enumerate(instrument_labels):
+    low_val, height, upp_val = np.percentile(all_delta_R16_total, [10, 50, 90], axis=1)
+    print "%s: %.1f %.1f %.1f"%(det, low_val[d], height[d], upp_val[d])
 
 
 

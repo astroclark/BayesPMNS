@@ -47,8 +47,8 @@ def tripleplot(cwt_result):
     # Open the figure
     fig, ax_cont = pl.subplots(figsize=(10,5))
 
-    maxcol = 0.45*Z.max()
-    #maxcol = 0.8*Z.max()
+    #maxcol = 0.45*Z.max()
+    maxcol = 0.8*Z.max()
     vmin, vmax = 0, maxcol
     collevs=np.linspace(vmin, vmax, 100)
 
@@ -69,15 +69,24 @@ def tripleplot(cwt_result):
     divider = make_axes_locatable(ax_cont)
 
     # --- Time-series
-    ax_ts = divider.append_axes("top", 1.5, sharex=ax_cont)
+    ax_ts = divider.append_axes("top", 0.8, sharex=ax_cont)
     ax_ts.plot(signal.sample_times-tmax, signal.data, color='k')
 
     # --- Fourier spectrum
     signal_frequency_spectrum = signal.to_frequencyseries()
-    ax_fs = divider.append_axes("right", 1.5, sharey=ax_cont)
+    ax_fs = divider.append_axes("right", 3.0, sharey=ax_cont)
     x = 2*abs(signal_frequency_spectrum.data[1:])*np.sqrt(signal_frequency_spectrum.sample_frequencies.data[1:])
     y = signal_frequency_spectrum.sample_frequencies[1:]
     ax_fs.semilogx(x, y, color='k')
+
+    #
+    # Construct PSD
+    #
+    psd = pwave.make_noise_curve(fmax=signal_frequency_spectrum.sample_frequencies.max(),
+            delta_f=signal_frequency_spectrum.delta_f, noise_curve='aLIGO')
+    ax_fs.semilogx(np.sqrt(psd.data), psd.sample_frequencies, color='k',
+            linestyle='--', label='aLIGO')
+    ax_fs.legend()
 
 #   pl.figure()
 #   pl.plot(y, x)
@@ -128,6 +137,11 @@ def tripleplot(cwt_result):
     #ax_fs.tick_params(axis='both', which='major', labelsize=8)
     #ax_fs.tick_params(axis='x', which='major', labelsize=8)
 
+    panel_times = [-0.1218e-3, 0.3593e-3, 1.559e-3, 4.606e-3]
+    for pt in panel_times:
+        ax_ts.axvline(pt, color='r')
+        ax_cont.axvline(pt, color='r')
+
     fig.tight_layout()
 
     return fig, ax_cont, ax_ts, ax_fs
@@ -142,7 +156,7 @@ def tripleplot(cwt_result):
 # Waveform Generation
 #
 
-eos="shen"
+eos="tm1"
 mass="135135"
 
 
@@ -180,12 +194,12 @@ for line in peakind:
         continue
     else:
         ax_cont.axhline(Hplus.sample_frequencies[line], color='r',
-                linestyle=linestyles[p], linewidth=2,
+                linestyle='-', linewidth=2,
                 label='%.2f'%Hplus.sample_frequencies[line])
         ax_fs.axhline(Hplus.sample_frequencies[line], color='r', linewidth=2,
-                linestyle=linestyles[p],
+                linestyle='-',
                 label='%.2f'%Hplus.sample_frequencies[line])
-        ax_cont.legend()
+        #ax_cont.legend()
         p+=1
 
 
