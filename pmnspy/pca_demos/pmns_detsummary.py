@@ -42,9 +42,9 @@ def detector_names(picklefile):
     labels['aLIGO'] = 'aLIGO'
     labels['A+'] = 'A+'
     labels['A++'] = 'A++'
-    labels['CE1'] = 'LIGO CE'
-    labels['ET-D'] = 'ET'
-    labels['Voyager'] = 'LIGO Voyager'
+    labels['CE1'] = 'CE'
+    labels['ET-D'] = 'ET-D'
+    labels['Voyager'] = 'LV'
 
     return labels[IFO]
 

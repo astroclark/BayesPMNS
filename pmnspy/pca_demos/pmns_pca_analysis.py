@@ -68,10 +68,10 @@ nTsamples=16384
 low_frequency_cutoff=1000
 fcenter=2710
 deltaF=1.0
-noise_curve="CE1"
+noise_curve="CE2_narrow"
 target_snr=5
-loo=True
-#loo=False
+#loo=True
+loo=False
 
 eos="all"
 mass="all"

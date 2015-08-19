@@ -42,10 +42,10 @@ def detector_names(instrument):
     labels['aLIGO'] = 'aLIGO'
     labels['A+'] = 'A+'
     labels['A++'] = 'A++'
-    labels['CE1'] = 'LIGO CE'
+    labels['CE1'] = 'CE'
     labels['CE2_narrow'] = 'LIGO CE2'
-    labels['ET-D'] = 'ET'
-    labels['Voyager'] = 'LIGO Voyager'
+    labels['ET-D'] = 'ET-D'
+    labels['Voyager'] = 'LV'
 
     return labels[instrument]
 
@@ -53,7 +53,7 @@ def detector_names(instrument):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Set noise curves and example waveform
 
-instruments=['aLIGO', 'A+', 'Voyager', 'CE1', 'CE2_narrow', 'ET-D']
+instruments=['aLIGO', 'A+', 'Voyager', 'CE1', 'ET-D']
 fmax=4096
 fmin=10
 delta_f=0.5
@@ -76,7 +76,7 @@ f, ax = pl.subplots()
 
 ax.semilogy(Hplus.sample_frequencies,
         2*np.sqrt(Hplus.sample_frequencies)*abs(Hplus.data), 
-        label='TM1 1.35+1.35 @ 50 Mpc', color='k')
+        label='BNS @ 50 Mpc', color='k')
 
 lines = ["-","--","-.",":"]
 linecycler = cycle(lines)
