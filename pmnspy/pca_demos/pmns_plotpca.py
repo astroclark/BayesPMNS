@@ -29,6 +29,11 @@ from matplotlib import pyplot as pl
 
 from pmns_utils import pmns_plots as pplots
 
+pl.rcParams.update({'axes.labelsize': 18})
+pl.rcParams.update({'xtick.labelsize':18})
+pl.rcParams.update({'ytick.labelsize':18})
+pl.rcParams.update({'legend.fontsize':18})
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Results
 #
@@ -57,11 +62,16 @@ waveform_data, _, _, matches, delta_fpeak, delta_R16 = \
 #f, ax = pplots.plot_fidelity_by_npc(phase_euclidean, waveform_data,
 #        ylabel=r'$||\phi - \phi_r||$', legloc=None)
 f, ax = pplots.plot_fidelity_by_npc(matches, waveform_data, legloc='lower right')
+ax.set_ylim(0.7,1)
 
 #f, ax = pplots.plot_delta_by_npc(delta_fpeak, waveform_data, 
 #        ylabel=r"$\delta f_{\rm peak}$ [Hz]", legloc=None)
 #f, ax = pplots.plot_delta_by_npc(delta_R16, waveform_data,
 #        ylabel=r"$\delta R_{1.6}$ [km]", legloc=None)
 
+f.tight_layout()
 
 pl.show()
+
+f.savefig(pickle_file.split('/')[-1].replace('.pickle', '.eps'))
+

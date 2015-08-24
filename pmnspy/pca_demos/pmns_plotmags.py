@@ -32,6 +32,10 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from pmns_utils import pmns_waveform_data as pdata
 from pmns_utils import pmns_pca as ppca
 
+pl.rcParams.update({'axes.labelsize': 18})
+pl.rcParams.update({'xtick.labelsize':18})
+pl.rcParams.update({'ytick.labelsize':18})
+pl.rcParams.update({'legend.fontsize':18})
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Construct the full waveform catalogue and perform PCA
@@ -142,6 +146,13 @@ f3.tight_layout()
 f4.tight_layout()
 f5.tight_layout()
 
+pl.show()
+
+f1.savefig('three_spectra.eps')
+f2.savefig('three_spectra_align.eps')
+f3.savefig('three_spectra_cent.eps')
+f4.savefig('mean_spectrum_alleos_allmass_lessvisc.eps')
+f5.savefig('first_magnitude_pc_alleos_allmass_lessvisc.eps')
 
 #
 # Explained variance
@@ -179,9 +190,8 @@ ax.grid()
 
 f.tight_layout()
 
-
+f.savefig('explained_variance_alleos_allmass_lessvisc.eps')
 
 pl.show()
-
 
 

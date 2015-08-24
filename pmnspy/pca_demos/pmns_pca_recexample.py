@@ -33,6 +33,11 @@ import pycbc.filter
 from pmns_utils import pmns_waveform as pwave
 from pmns_utils import pmns_pca as ppca
 
+pl.rcParams.update({'axes.labelsize': 18})
+pl.rcParams.update({'xtick.labelsize':18})
+pl.rcParams.update({'ytick.labelsize':18})
+pl.rcParams.update({'legend.fontsize':18})
+
 nTsamples=16384
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Results
@@ -53,8 +58,10 @@ label = eos_example.upper()
 
 if "LOO" in pickle_file:
     npcs=1
+    savename='tm1_rec_example_onepc.eps'
 else:
     npcs=waveform_data.nwaves
+    savename='tm1_rec_example_allpcs.eps'
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Test Waveform
@@ -104,8 +111,8 @@ td_target = waveform_FD.to_timeseries()
 #
 td_target.data *= targetAmp / td_target.max()
 
-psd = pwave.make_noise_curve(f_low=10, flen=len(fd_reconstruction),
-        delta_f=fd_reconstruction.delta_f, noise_curve='aLIGO')
+psd = pwave.make_noise_curve(delta_f=fd_reconstruction.delta_f,
+        noise_curve='aLIGO')
 
 target_snr = pycbc.filter.sigma(td_target, psd=psd, low_frequency_cutoff=1000)
 rec_snr = pycbc.filter.sigma(fd_reconstruction, psd=psd, low_frequency_cutoff=1000)
@@ -160,7 +167,7 @@ ax[0].plot(rec_times, -1*td_reconstruction, color='k', linestyle='-', linewidth=
         label='Reconstruction $\mathcal{M}$=%.2f'%match)
 
 ax[0].set_xlim(-2.5e-3,1.5e-2)
-ax[0].set_ylim(-5e-22,5e-22)
+ax[0].set_ylim(-5e-22,1e-21)
 ax[0].minorticks_on()
 ax[0].set_xlabel('Time [s]')
 ax[0].set_ylabel('h$_+$(t) @ 50 Mpc')
@@ -187,3 +194,4 @@ f.tight_layout()
 pl.show()
 
 
+f.savefig(savename)

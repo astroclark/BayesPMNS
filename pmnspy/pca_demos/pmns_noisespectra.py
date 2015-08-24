@@ -31,6 +31,10 @@ from itertools import cycle
 
 from pmns_utils import pmns_waveform as pwave
 
+pl.rcParams.update({'axes.labelsize': 18})
+pl.rcParams.update({'xtick.labelsize':18})
+pl.rcParams.update({'ytick.labelsize':18})
+pl.rcParams.update({'legend.fontsize':18})
 
 def detector_names(instrument):
     """
@@ -100,6 +104,8 @@ ax.set_xlim(999,4096)
 ax.set_ylim(1e-25, 1e-20)
 ax.set_xlabel('Frequency [Hz]')
 ax.set_ylabel('2|H$_+$($f$)|$\sqrt{f}$ & $\sqrt{S(f)}$')
+f.tight_layout()
 pl.show()
+pl.savefig('noise_spectra.eps')
 
 

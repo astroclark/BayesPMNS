@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-# Copyright (C) 2015-2016 James Clark <clark@physics.umass.edu>
+# Copyright (C) 2015-2016 James Clark <james.clark@ligo.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,6 +29,11 @@ import numpy as np
 from matplotlib import pyplot as pl
 
 from pmns_utils import pmns_plots as pplots
+
+pl.rcParams.update({'axes.labelsize': 18})
+pl.rcParams.update({'xtick.labelsize':18})
+pl.rcParams.update({'ytick.labelsize':18})
+pl.rcParams.update({'legend.fontsize':18})
 
 def detector_names(picklefile):
     """
