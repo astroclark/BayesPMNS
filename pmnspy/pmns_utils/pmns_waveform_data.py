@@ -207,7 +207,80 @@ class WaveData:
         return WaveData(eos=self.eos, mass=self.mass, viscosity=self.viscosity)
 
 
+def plot_waves(WaveData):
+    """
+    Make a catalogue plot showing all the EOS and mass configurations
+    """
+    import numpy as np
+    from matplotlib import pyplot as pl
 
+    all_eos=[ wave['eos'] for wave in WaveData.waves ]
+    all_mass=[ wave['mass'] for wave in WaveData.waves ]
+
+    mass_configs = list(np.unique(all_mass))
+    eos_types = list(np.unique(all_eos))
+
+    f, ax = pl.subplots(figsize=(10,5))
+    #f, ax = pl.subplots()
+    for mass, eos in zip(all_mass, all_eos):
+
+        x = mass_configs.index(mass)
+        y = eos_types.index(eos)
+
+        ax.plot(x, y, 'o', color='r')
+
+    mass_labels = ['%s-%s'%(mass[:len(mass)/2].replace('1','1.'),
+        mass[len(mass)/2:].replace('1','1.')) for mass in mass_configs]
+
+    eos_labels = [eos_label(eos) for eos in eos_types ]
+
+    xticks = np.arange(0,len(mass_configs))
+    yticks = np.arange(0,len(eos_types))
+
+    ax.set_xlim(min(xticks)-0.5,max(xticks)+0.5)
+    ax.set_ylim(min(yticks)-0.5,max(yticks)+0.5)
+
+    ax.set_xticks(xticks)
+    ax.set_yticks(yticks)
+
+    #ax.set_xticklabels(mass_labels, rotation=45)
+    ax.set_xticklabels(mass_labels, rotation=0)
+    ax.set_yticklabels(eos_labels)
+
+    ax.grid()
+
+    ax.set_xlabel('Binary Mass Configuration [M$_{\odot}$]')
+    ax.set_ylabel('Equation of State')
+
+    f.tight_layout()
+
+    pl.show()
+
+    return f, ax
+
+def eos_label(name):
+    """
+    Dictionary of EOS labels, given names from file
+    """
+
+    eos_labels={'tma':"TMA",
+            'tm1':"TM1",
+            'shen':"Shen",
+            'sfhx':"SFHX",
+            'sfho':"SFHO",
+            'nl3':"NL3",
+            'newheb6_gth167':"Heb6",
+            'newheb5_gth167':"Heb5",
+            'newheb4_gth167':"Heb4",
+            'newheb3_gth167':"Heb3",
+            'ls375':"LS375",
+            'ls220':"LS220",
+            'gs2':"GS2",
+            'dd2':"DD2",
+            'bhblp':"BHBLP",
+            'apr':"APR"}
+
+    return eos_labels[name]
 
 
 
