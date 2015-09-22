@@ -160,7 +160,20 @@ f5.savefig('first_magnitude_pc_alleos_allmass_lessvisc.eps')
 f, ax = pl.subplots()#figsize=(5,4))
 ax.step(np.arange(1,waveform_data.nwaves+1)-0.5,
                  np.cumsum(pmpca.pca['phase_pca'].explained_variance_ratio_),
-                 label='Phase spectra', color='k', linestyle='--')
+                 label='Phase spectra', color='k', linestyle='-')
+ax.minorticks_on()
+ax.set_xlabel('Number of Principal Components')
+ax.set_ylabel('Cumulative Explained Variance')
+ax.legend(loc='lower right')
+ax.minorticks_on()
+ylims=ax.get_ylim()
+ax.set_ylim(0.98,1)
+ax.set_xlim(1,10)#0.5*waveform_data.nwaves+1)
+ax.grid()
+f.tight_layout()
+
+
+f, ax = pl.subplots()#figsize=(5,4))
 ax.step(np.arange(1,waveform_data.nwaves+1)-0.5,
                 np.cumsum(pmpca.pca['magnitude_pca'].explained_variance_ratio_),
                 label='Magnitude spectra', color='grey')
@@ -171,9 +184,10 @@ ax.set_ylabel('Cumulative Explained Variance')
 ax.legend(loc='lower right')
 ax.minorticks_on()
 ylims=ax.get_ylim()
-ax.set_ylim(0.5,1)
+#ax.set_ylim(0.5,1)
 ax.set_xlim(1,0.5*waveform_data.nwaves+1)
 ax.grid()
+f.tight_layout()
 
 #   axins = inset_axes(ax, width="50%", height="50%", loc=1) 
 #   axins.step(np.arange(1,waveform_data.nwaves+1)-0.5,
