@@ -198,6 +198,7 @@ class WaveData:
         Remove the item wave from the list of waves
         """
         self.waves.remove(wave)
+        self.nwaves = len(self.waves)
 
     def copy(self):
         """

@@ -70,11 +70,11 @@ fcenter=2710
 deltaF=1.0
 noise_curve="CE2_narrow"
 target_snr=5
-#loo=True
-loo=False
+loo=True
+#loo=False
 
 eos="all"
-mass="all"
+mass="135135"
 viscosity="lessvisc"
 
 #
@@ -134,6 +134,9 @@ for w, wave in enumerate(waveform_data.waves):
             waveform_data.nwaves)
 
     if loo:
+        print ""
+        print "Building Reduced Catalogue"
+        print ""
         # Remove testwave_name from the catalogue:
         reduced_waveform_data = waveform_data.copy() # make a copy
         reduced_waveform_data.remove_wave(wave)      # remove this waveform
@@ -174,7 +177,7 @@ for w, wave in enumerate(waveform_data.waves):
     #
     # Compute results as functions of #s of PCs
     #
-    for n, npcs in enumerate(xrange(1,waveform_data.nwaves+1)):
+    for n, npcs in enumerate(xrange(1,waveform_data.nwaves)):
 
         fd_reconstruction = \
                 pmpca.reconstruct_freqseries(waveform_FD.data,
