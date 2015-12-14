@@ -68,8 +68,8 @@ nTsamples=16384
 low_frequency_cutoff=1000
 fcenter=2710
 deltaF=1.0
-noise_curve="CE2_narrow"
-target_snr=5
+noise_curve="aLIGO"
+target_snr=float(sys.argv[1])
 loo=True
 #loo=False
 
@@ -102,6 +102,10 @@ if viscosity=="all": viscosity=None
 # Create the list of dictionaries which comprises our catalogue
 #
 waveform_data = pdata.WaveData(eos=eos,viscosity=viscosity, mass=mass)
+if loo==True:
+    maxnpcs=waveform_data.nwaves-1
+else:
+    maxnpcs=waveform_data.nwaves
 
 #
 # Create PMNS PCA instance for the full catalogue
@@ -119,13 +123,13 @@ print "Setting up match and Fisher analysis"
 # Exact matches (include test waveform in training data)
 #
 
-matches=np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
-magnitude_euclidean=np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
-phase_euclidean=np.zeros(shape=(waveform_data.nwaves, waveform_data.nwaves))
+matches=np.zeros(shape=(waveform_data.nwaves, maxnpcs))
+magnitude_euclidean=np.zeros(shape=(waveform_data.nwaves, maxnpcs))
+phase_euclidean=np.zeros(shape=(waveform_data.nwaves, maxnpcs))
 
 # Fisher error estimates
-delta_fpeak  = np.zeros(shape=(waveform_data.nwaves,waveform_data.nwaves))
-delta_R16 = np.zeros(shape=(waveform_data.nwaves,waveform_data.nwaves))
+delta_fpeak  = np.zeros(shape=(waveform_data.nwaves,maxnpcs))
+delta_R16 = np.zeros(shape=(waveform_data.nwaves,maxnpcs))
 
 for w, wave in enumerate(waveform_data.waves):
 
@@ -187,7 +191,6 @@ for w, wave in enumerate(waveform_data.waves):
         #
 
         # Reconstruction fidelity
-        #matches[w,n]=fd_reconstruction['match_aligo']
         matches[w,n]=pycbc.filter.match(fd_reconstruction['recon_spectrum'],
                 waveform_FD, psd=psd,
                 low_frequency_cutoff=low_frequency_cutoff)[0]
@@ -212,6 +215,8 @@ for w, wave in enumerate(waveform_data.waves):
         delta_fpeak[w,n] = abs(fpeak2-fpeak1) / diffSNR
         delta_R16[w,n] = propagate_deltaF(target_fpeak/1e3,
                 delta_fpeak[w,n]/1e3)
+
+        sys.exit()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save results for plotting seperately

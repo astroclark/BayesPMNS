@@ -61,8 +61,6 @@ def perform_TFpca(aligned_maps):
     global_mean = maps.mean(axis=0)
     maps_centered = maps - global_mean
 
-    # local centering
-    #maps_centered -= maps_centered.mean(axis=1).reshape(n_samples, -1)
 
     #
     # PCA
@@ -78,19 +76,10 @@ def perform_pca(magnitudes, phases):
     Do PCA with magnitude and phase parts of the complex waveforms in complex_catalogue
     """
 
-
-    magnitude_spectra_centered, magnitude_mean, magnitude_std = \
-            condition_magnitude(magnitudes)
-
-    phase_spectra_centered, phase_mean, phase_std, phase_trend, pfits = \
-            condition_phase(phases)
-
     mag_pca = PCA()
-    #mag_pca.fit(magnitude_spectra_centered)
     mag_pca.fit(magnitudes)
 
     phase_pca = PCA()
-    #phase_pca.fit(phase_spectra_centered)
     phase_pca.fit(phases)
 
     pcs_magphase={}
@@ -99,73 +88,7 @@ def perform_pca(magnitudes, phases):
     pcs_magphase['phase_pca'] = phase_pca
 
 
-    pcs_magphase['magnitude_mean'] = magnitude_mean
-    pcs_magphase['phase_mean'] = phase_mean
-
-    pcs_magphase['magnitude_std'] = magnitude_std
-    pcs_magphase['phase_std'] = phase_std
-
-    pcs_magphase['phase_trend'] = phase_trend
-    pcs_magphase['phase_fits'] = pfits
-
     return pcs_magphase
-
-
-def condition_magnitude(magnitude_spectra):
-
-    magnitude_spectra_centered = np.copy(magnitude_spectra)
-
-    # --- Centering
-    magnitude_mean = np.mean(magnitude_spectra, axis=0)
-    for w in xrange(np.shape(magnitude_spectra)[0]):
-        magnitude_spectra_centered[w,:] -= magnitude_mean
-
-    # --- Scaling
-    magnitude_std = np.std(magnitude_spectra, axis=0)
-
-    #for w in xrange(np.shape(magnitude_spectra)[0]):
-        #magnitude_spectra_centered[w,:] /= \
-        #        magnitude_spectra_centered[w,:].max()
-        #magnitude_spectra_centered[w,:] /= \
-        #        np.linalg.norm(magnitude_spectra_centered[w,:])
-
-    return magnitude_spectra_centered, magnitude_mean, magnitude_std
-
-
-def condition_phase(phase_spectra, freqs=None, fmin=1000., fmax=4000.):
-    """
-    Center and scale the phase spectrum with optional trend removal
-    """
-
-    phase_spectra_centered = np.copy(phase_spectra)
-
-    # --- Phase fits
-
-    if freqs is None:
-        freqs = np.arange(0,8192+16,16)
-
-    fitidx = (freqs>fmin) * (freqs<fmax)
-
-    x = np.arange(len(phase_spectra[0,:]))
-    pfits = np.zeros(shape=np.shape(phase_spectra))
-    for w in xrange(np.shape(pfits)[0]):
-        y = phase_spectra[w,:]
-        pfits[w,:] = poly4(x, y, fitidx)
-
-    phase_trend = np.mean(pfits,axis=0)
-
-    # --- Centering
-    phase_mean = np.mean(phase_spectra_centered, axis=0)
-    for w in xrange(np.shape(phase_spectra)[0]):
-        phase_spectra_centered[w,:] -= phase_mean
-
-    # --- Scaling
-    phase_std = np.std(phase_spectra_centered, axis=0)
-    phase_std[0] = 1.0
-    for w in xrange(np.shape(phase_spectra)[0]):
-        phase_spectra_centered[w,1:] /= phase_std[1:]
-
-    return phase_spectra_centered, phase_mean, phase_std, phase_trend, pfits
 
 
 def complex_to_polar(catalogue):
@@ -231,10 +154,6 @@ def build_catalogues(waveform_data, fshift_center, nTsamples=16384,
                 viscosity=wave['viscosity'])
         waveform.reproject_waveform()
 
-        # apply window
-        #window = lal.CreateTukeyREAL8Window(len(waveform.hplus), 0.2)
-        #waveform.hplus.data *= window.data.data
-
         # Waveform conditioning
         original_spectrum, fpeaks[w], timeseries = \
                 condition_spectrum(waveform.hplus.data, nsamples=nTsamples)
@@ -259,12 +178,6 @@ def build_catalogues(waveform_data, fshift_center, nTsamples=16384,
         # Add to catalogue
         original_frequencies = np.copy(original_spectrum.sample_frequencies)
         original_cat[w,:] = np.copy(original_spectrum.data)
-
-        # Feature alignment
-        aligned_spectrum = shift_vec(original_spectrum.data, original_frequencies,
-                fpeaks[w], fshift_center)
-
-        # Populate catalogue with normalised aligned spectrum
 
     return (sample_times, original_frequencies, timedomain_cat,
             original_cat, fpeaks, original_image_cat, align_image_cat, times,
@@ -307,18 +220,6 @@ def condition_spectrum(waveform_timeseries, delta_t=1./16384, nsamples=16384):
     
     return freqseries, fpeak, timeseries
 
-def poly4(x, y, idx=None):
-    """
-    helper func for 4th order polyfit for phase conditioning
-    """
-
-    # 4th order polyfit to phase for trend removal
-    if idx is None:
-        p = np.polyfit(x, y, 4)
-    else:
-        p = np.polyfit(x[idx], y[idx], 4)
-
-    return  p[0]*x**4 + p[1]*x**3 + p[2]*x**2 + p[3]*x**1 + p[4]
 
 def unit_hrss(data, delta, domain):
     """
@@ -366,32 +267,6 @@ def complex_interp(ordinate, abscissa_interp, abscissa):
             np.imag(ordinate))
 
     return ordinate_interp_real + 1j*ordinate_interp_imag
-
-def fine_phase_spectrum(complex_spectrum, sample_frequencies, gamma=0.01):
-    """
-    Return the unwrapped phase spectrum of the complex Fourier spectrum in
-    complex_spectrum.
-
-    This function interpolates the complex spectrum to a frequency axis, which is
-    gamma times denser than the original frequencies, prior to unwrapping.  This
-    permits a much smoother unwrapping.
-
-    Finally, the interpolated spectrum is re-interpolated back to the original
-    frequencies
-    """
-
-    delta_f = np.diff(sample_frequencies)[0]
-    fine_frequencies = np.arange(sample_frequencies.min(),
-            sample_frequencies.max() + delta_f, delta_f * gamma)
-
-    complex_spectrum_interp = complex_interp(complex_spectrum, fine_frequencies,
-            sample_frequencies)
-
-    phase_spectrum = phase_of(complex_spectrum)
-    phase_spectrum_fine = phase_of(complex_spectrum_interp)
-
-    return np.interp(sample_frequencies, fine_frequencies, phase_spectrum_fine)
-
 
 def wrap_phase(phase):
     """
@@ -536,22 +411,20 @@ class pmnsPCA:
         self.magnitude_align = np.zeros(np.shape(self.magnitude))
         self.phase_align = np.zeros(np.shape(self.phase))
         for i in xrange(np.shape(self.magnitude)[0]):
+
             self.magnitude_align[i,:] = shift_vec(self.magnitude[i,:],
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
 
-#            m = self.magnitude_align[i,self.sample_frequencies>1000].max()
-#            self.magnitude_align[i,:] /= m
 
             self.phase_align[i,:] = shift_vec(self.phase[i,:],
                     self.sample_frequencies, self.fpeaks[i], self.fcenter).real
 
-#        self.magnitude_align[:,self.sample_frequencies<1000] = 0.0
-#        self.phase_align[:,self.sample_frequencies<1000] = 0.0
 
         # -- Do PCA
         print "Performing Spectral PCA"
         t0 = time.time()
         self.pca = perform_pca(self.magnitude_align, self.phase_align)
+        #self.pca = perform_pca(self.magnitude_align, self.phase)
         train_time = (time.time() - t0)
         print("...done in %0.3fs" % train_time)
 
@@ -593,12 +466,6 @@ class pmnsPCA:
         projection['freqseries'] = np.copy(freqseries)
 
         # Align test spectrum
-        freqseries_align = shift_vec(freqseries, self.sample_frequencies,
-                fcenter=self.fcenter, fpeak=this_fpeak)
-        
-        # Normalise test spectrum
-        freqseries_align = unit_hrss(freqseries_align, delta=self.delta_f,
-                domain='frequency')
 
         # Complex to polar
         testwav_magnitude, testwav_phase = complex_to_polar(freqseries)
@@ -612,15 +479,10 @@ class pmnsPCA:
         # Center & scale test spectrum
         #
         magnitude_cent = np.copy(testwav_magnitude_align)
-        #magnitude_cent -= self.pca['magnitude_mean']
-
         projection['magnitude_cent'] = magnitude_cent
 
-        #phase_cent = np.copy(testwav_phase)
         phase_cent = np.copy(testwav_phase_align)
-        #phase_cent -= self.pca['phase_mean']
-        #phase_cent /= self.pca['phase_std']
-
+        #phase_cent = np.copy(testwav_phase)
         projection['phase_cent'] = phase_cent
 
         #
@@ -669,20 +531,13 @@ class pmnsPCA:
         # Original Waveforms
         #
         orimag = abs(freqseries)
-        oriphi = phase_of(freqseries) - phase_of(freqseries)[0]
-        #oriphi = self.pca['phase_fits'][wfnum,:]
-
-        phase_fit = poly4(np.arange(len(oriphi)), oriphi)
+        oriphi = phase_of(freqseries)# - phase_of(freqseries)[0]
 
         orispec = orimag*np.exp(1j*oriphi)
 
         fd_reconstruction['original_spectrum'] = unit_hrss(orispec,
                 delta=self.delta_f, domain='frequency')
 
-        freqseries_align = shift_vec(freqseries, self.sample_frequencies,
-                fcenter=self.fcenter, fpeak=this_fpeak)
-        fd_reconstruction['original_spectrum_align'] = unit_hrss(freqseries_align,
-                delta=self.delta_f, domain='frequency')
 
         fd_reconstruction['sample_frequencies'] = np.copy(self.sample_frequencies)
 
@@ -711,11 +566,7 @@ class pmnsPCA:
         # De-center the reconstruction
         #
 
-#       recmag += self.pca['magnitude_mean']
         recmag += self.pca['magnitude_pca'].mean_
-#
-#       recphi = recphi * self.pca['phase_std']
-#       recphi += self.pca['phase_mean']
         recphi += self.pca['phase_pca'].mean_
 
         # --- Raw reconstruction quality
@@ -728,9 +579,6 @@ class pmnsPCA:
         fd_reconstruction['phase_euclidean_raw'] = \
                 euclidean_distance(recphi[idx], fd_projection['phase_cent'][idx])
 
-
-
-        #recphi = phase_fit
 
         #
         # Move the spectrum back to where it should be

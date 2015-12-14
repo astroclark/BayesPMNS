@@ -60,6 +60,12 @@ waveform.compute_characteristics()
 hplus = pycbc.types.TimeSeries(np.zeros(16384),
         delta_t=waveform.hplus.delta_t)
 hplus.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+#
+#   hplus, _ = pycbc.waveform.get_sgburst_waveform(q=100,frequency=waveform.fpeak,
+#           delta_t=1./16384, amplitude=1,hrss=1)
+#   hplus.resize(16384)
+#   hplus = pycbc.types.TimeSeries(hplus.data, delta_t=1./16384)
+
 Hplus = hplus.to_frequencyseries()
 
 #
@@ -71,7 +77,7 @@ psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
 #
 # Compute Full SNR
 #
-target_sigma = float(sys.argv[1])
+target_sigma = float(sys.argv[2])
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -83,7 +89,7 @@ Hplus.data *= target_sigma/full_snr
 # Get the fisher estimate
 #
 _, _, _, _, delta_fpeak, _= \
-        pickle.load(open("matches_LOO_aLIGO_targetsnr-%s.00_eos-all_mass-all_viscosity-lessvisc_reduced.pickle"%sys.argv[1], "rb"))
+        pickle.load(open(sys.argv[1], "rb"))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -93,7 +99,7 @@ _, _, _, _, delta_fpeak, _= \
 #
 # Create PMNS PCA instance for the reduced catalogue
 #
-waveform_data = pdata.WaveData(viscosity='lessvisc')
+waveform_data = pdata.WaveData(viscosity='lessvisc', mass='135135')
 
 # Remove testwave_name from the catalogue:
 reduced_waveform_data = waveform_data.copy() # make a copy
@@ -106,28 +112,31 @@ delta_fpeak_fisher=delta_fpeak[0][waveidx]
 
 reduced_waveform_data.remove_wave(waveform_data.waves[waveidx])
 
-pmpca = ppca.pmnsPCA(reduced_waveform_data,
-        low_frequency_cutoff=1000.0, fcenter=2710,
-        nTsamples=16384)
+if 1:
+    pmpca = ppca.pmnsPCA(reduced_waveform_data,
+            low_frequency_cutoff=1000.0, fcenter=2710,
+            nTsamples=16384)
 
 
-# Process signal for projection
-# Standardise
-waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
-        waveform.hplus.data, nsamples=16384)
+    # Process signal for projection
+    # Standardise
+    waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
+            waveform.hplus.data, nsamples=16384)
 
-# Normalise
-waveform_FD = ppca.unit_hrss(waveform_FD.data,
-        delta=waveform_FD.delta_f, domain='frequency')
+    # Normalise
+    waveform_FD = ppca.unit_hrss(waveform_FD.data,
+            delta=waveform_FD.delta_f, domain='frequency')
 
 # XXX: Begin Loop over noise realisations
 fig, ax = pl.subplots(nrows=1)
 
-fpeaks = np.arange(fmin,4000, 5) 
-sigma=np.zeros(shape=(10,len(fpeaks)))
-for n in xrange(10):
+#fpeaks = np.arange(fmin,4000, 5) 
+fpeaks = np.arange(2000, 3000, 1)
+nnoise = 5
+sigma=np.zeros(shape=(nnoise,len(fpeaks)))
+for n in xrange(nnoise):
 
-    print 'noise realisation %d of %d'%(n+1, 10)
+    print 'noise realisation %d of %d'%(n+1, nnoise)
 
     #
     # Generate Noise
@@ -139,30 +148,42 @@ for n in xrange(10):
     # XXX: BEGIN LOOP OVER FPEAKS
     for f,this_fpeak in enumerate(fpeaks):
 
-        fd_reconstruction = \
-                pmpca.reconstruct_freqseries(waveform_FD.data, npcs=1,
-                        this_fpeak=this_fpeak)
+        fd_reconstruction = pmpca.reconstruct_freqseries(waveform_FD.data,
+                npcs=1, this_fpeak=this_fpeak)
+
+#       td_tmplt, _ = \
+#               pycbc.waveform.get_sgburst_waveform(q=100,frequency=this_fpeak,
+#                       delta_t=1./16384, amplitude=1,hrss=1)
+#       td_tmplt.resize(16384)
+#       td_tmplt = pycbc.types.TimeSeries(td_tmplt.data, delta_t=1./16384)
+#       fd_tmplt = td_tmplt.to_frequencyseries()
 
         fd_tmplt=fd_reconstruction['recon_spectrum'] 
+
         tmplt_snr=pycbc.filter.sigma(fd_tmplt, psd=psd,
                 low_frequency_cutoff=fmin)
         fd_tmplt.data *= target_sigma/tmplt_snr
 
 
-#        snr, corr, snr_norm = pycbc.filter.matched_filter_core(fd_tmplt,
-#                noisy_data, psd=psd, low_frequency_cutoff=1000)
-                #Hplus, psd=psd, low_frequency_cutoff=1000)
-#        maxsnr, max_id = snr.abs_max_loc()
+        sh_inner = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
+               low_frequency_cutoff=fmin, normalized=False))
 
-        sigma[n,f]=pycbc.filter.overlap(fd_tmplt, noisy_data, psd=psd,
-                low_frequency_cutoff=fmin)
+        hh_inner = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, fd_tmplt, psd=psd,
+               low_frequency_cutoff=fmin, normalized=False))
 
-    ax.plot(fpeaks, np.exp(sigma[n,:]), color='grey')
+        ss_inner = 2*np.real(pycbc.filter.overlap_cplx(noisy_data, noisy_data, psd=psd,
+               low_frequency_cutoff=fmin, normalized=False))
+
+
+        sigma[n,f]=sh_inner - 0.5*ss_inner + 0.5*hh_inner
+
+    ax.plot(fpeaks, np.exp(sigma[n,:]-max(sigma[n,:])), color='grey')
 
 ax.axvline(waveform.fpeak,color='r')
 ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--')
 ax.axvline(waveform.fpeak+delta_fpeak_fisher, color='r', linestyle='--')
 
+#ax.set_xlim(waveform.fpeak-1.1*delta_fpeak_fisher, waveform.fpeak+1.1*delta_fpeak_fisher)
 fig.tight_layout()
 
 
