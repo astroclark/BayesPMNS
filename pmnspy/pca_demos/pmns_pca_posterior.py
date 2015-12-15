@@ -50,6 +50,7 @@ mass='135135'
 eos='shen'
 
 fmin=1000.0
+
 #
 # Create test waveform
 #
@@ -88,9 +89,8 @@ Hplus.data *= target_sigma/full_snr
 #
 # Get the fisher estimate
 #
-_, _, _, _, delta_fpeak, _= \
+_, _, _,matches, delta_fpeak, _= \
         pickle.load(open(sys.argv[1], "rb"))
-
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
@@ -110,10 +110,11 @@ for w,wave in enumerate(waveform_data.waves):
         waveidx=w
 delta_fpeak_fisher=delta_fpeak[0][waveidx]
 
-reduced_waveform_data.remove_wave(waveform_data.waves[waveidx])
+#reduced_waveform_data.remove_wave(waveform_data.waves[waveidx])
 
 if 1:
-    pmpca = ppca.pmnsPCA(reduced_waveform_data,
+    #pmpca = ppca.pmnsPCA(reduced_waveform_data,
+    pmpca = ppca.pmnsPCA(waveform_data,
             low_frequency_cutoff=1000.0, fcenter=2710,
             nTsamples=16384)
 
@@ -127,17 +128,26 @@ if 1:
     waveform_FD = ppca.unit_hrss(waveform_FD.data,
             delta=waveform_FD.delta_f, domain='frequency')
 
+#   waveform_FD_real = np.real(waveform_FD.data)
+#   waveform_FD_imag = np.imag(waveform_FD.data)
+#
+#   waveform_phase = ppca.phase_of(waveform_FD.data)
+#   waveform_mag = abs(waveform_FD.data)
+#
+#   waveform_FD_new = pycbc.types.FrequencySeries(waveform_mag *
+#           np.exp(1j*waveform_phase), delta_f=waveform_FD.delta_f)
+
 # XXX: Begin Loop over noise realisations
-fig, ax = pl.subplots(nrows=1)
 
 #fpeaks = np.arange(fmin,4000, 5) 
-fpeaks = np.arange(2000, 3000, 1)
-nnoise = 5
+fpeaks = np.arange(2100, 2500, 0.5)
+nnoise = 1
 sigma=np.zeros(shape=(nnoise,len(fpeaks)))
 
 sh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
 hh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
 ss_inner=np.zeros(shape=(nnoise,len(fpeaks)))
+
 for n in xrange(nnoise):
 
     print 'noise realisation %d of %d'%(n+1, nnoise)
@@ -147,7 +157,6 @@ for n in xrange(nnoise):
     #
     noise=pycbc.noise.gaussian.frequency_noise_from_psd(psd, seed=n)
     noisy_data = noise + Hplus
-
 
     # XXX: BEGIN LOOP OVER FPEAKS
     for f,this_fpeak in enumerate(fpeaks):
@@ -163,11 +172,14 @@ for n in xrange(nnoise):
 #       fd_tmplt = td_tmplt.to_frequencyseries()
 
         fd_tmplt=fd_reconstruction['recon_spectrum'] 
+        #fd_tmplt=pycbc.types.FrequencySeries(
+        #        -1*np.real(fd_tmplt.data)+ -1*np.imag(fd_tmplt.data),
+        #    delta_f=fd_tmplt.delta_f)
+
 
         tmplt_snr=pycbc.filter.sigma(fd_tmplt, psd=psd,
                 low_frequency_cutoff=fmin)
         fd_tmplt.data *= target_sigma/tmplt_snr
-
 
         sh_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
                low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
@@ -179,9 +191,12 @@ for n in xrange(nnoise):
                low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
 
 
-        sigma[n,f]=sh_inner[n,f] - 0.5*ss_inner[n,f] - 0.5*hh_inner[n,f]
+        sigma[n,f]=sh_inner[n,f] - 0.5*ss_inner[n,f] + 0.5*hh_inner[n,f]
 
-    ax.plot(fpeaks, np.exp((sigma[n,:]-max(sigma[n,:]))), color='grey')
+fig, ax = pl.subplots(nrows=1)
+
+for n in xrange(nnoise):
+    ax.plot(fpeaks, np.exp(sigma[n,:]-max(sigma[n,:])).T, color='grey')
 
 ax.axvline(waveform.fpeak,color='r')
 ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--')
@@ -194,26 +209,52 @@ fig.tight_layout()
 pl.show()
 
 
+# XXX Pick the ffirst of the posteriors and see what the max-L waveform actually
+# looks like...
+fpeak_maxL = fpeaks[np.argmax(sh_inner[0,:])]
+fpeak_true = waveform.fpeak
 
 
 
+fd_reconstruction_maxL = pmpca.reconstruct_freqseries(waveform_FD.data, npcs=1,
+        this_fpeak=fpeak_maxL)
+fd_reconstruction_true = pmpca.reconstruct_freqseries(waveform_FD.data, npcs=9,
+        this_fpeak=fpeak_true)
 
 
 
+f, ax = pl.subplots(nrows=4, sharex=True)
+ax[0].plot(waveform_FD.sample_frequencies, abs(waveform_FD), label='Input')
+ax[0].plot(fd_reconstruction_true['sample_frequencies'],
+        abs(fd_reconstruction_true['recon_spectrum']), label='full rec.')
+ax[0].plot(fd_reconstruction_true['sample_frequencies'],
+        abs(fd_reconstruction_maxL['recon_spectrum']), label='maxL rec.')
+ax[0].set_ylabel('|H(f)|')
+ax[0].set_xlim(1000, 4000)
 
+ax[1].plot(waveform_FD.sample_frequencies, np.real(waveform_FD), label='Input')
+ax[1].plot(fd_reconstruction_true['sample_frequencies'],
+        np.real(fd_reconstruction_true['recon_spectrum']), label='full rec.')
+ax[1].plot(fd_reconstruction_true['sample_frequencies'],
+        np.real(fd_reconstruction_maxL['recon_spectrum']), label='maxL rec.')
+ax[1].set_ylabel('real [H(f)]')
+ax[1].set_xlim(1000, 4000)
 
+ax[2].plot(waveform_FD.sample_frequencies, np.imag(waveform_FD), label='Input')
+ax[2].plot(fd_reconstruction_true['sample_frequencies'],
+        np.imag(fd_reconstruction_true['recon_spectrum']), label='full rec.')
+ax[2].plot(fd_reconstruction_true['sample_frequencies'],
+        np.imag(fd_reconstruction_maxL['recon_spectrum']), label='maxL rec.')
+ax[2].set_ylabel('imag [H(f)]')
+ax[2].set_xlim(1000, 4000)
 
+ax[3].plot(waveform_FD.sample_frequencies, ppca.phase_of(waveform_FD), label='Input')
+ax[3].plot(fd_reconstruction_true['sample_frequencies'],
+        ppca.phase_of(fd_reconstruction_true['recon_spectrum']), label='full rec.')
+ax[3].plot(fd_reconstruction_true['sample_frequencies'],
+        ppca.phase_of(fd_reconstruction_maxL['recon_spectrum']), label='maxL rec.')
+ax[3].set_ylabel('arg [H(f)]')
+ax[3].set_xlim(1000, 4000)
 
-
-
-
-
-
-
-
-
-
-
-
-
+pl.show()
 

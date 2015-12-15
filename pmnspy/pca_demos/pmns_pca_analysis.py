@@ -70,8 +70,8 @@ fcenter=2710
 deltaF=0.5
 noise_curve="aLIGO"
 target_snr=float(sys.argv[1])
-loo=True
-#loo=False
+#loo=True
+loo=False
 
 eos="all"
 mass="135135"
