@@ -134,6 +134,10 @@ fig, ax = pl.subplots(nrows=1)
 fpeaks = np.arange(2000, 3000, 1)
 nnoise = 5
 sigma=np.zeros(shape=(nnoise,len(fpeaks)))
+
+sh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
+hh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
+ss_inner=np.zeros(shape=(nnoise,len(fpeaks)))
 for n in xrange(nnoise):
 
     print 'noise realisation %d of %d'%(n+1, nnoise)
@@ -165,19 +169,19 @@ for n in xrange(nnoise):
         fd_tmplt.data *= target_sigma/tmplt_snr
 
 
-        sh_inner = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
-               low_frequency_cutoff=fmin, normalized=False))
+        sh_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
+               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
 
-        hh_inner = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, fd_tmplt, psd=psd,
-               low_frequency_cutoff=fmin, normalized=False))
+        hh_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, fd_tmplt, psd=psd,
+               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
 
-        ss_inner = 2*np.real(pycbc.filter.overlap_cplx(noisy_data, noisy_data, psd=psd,
-               low_frequency_cutoff=fmin, normalized=False))
+        ss_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(noisy_data, noisy_data, psd=psd,
+               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
 
 
-        sigma[n,f]=sh_inner - 0.5*ss_inner + 0.5*hh_inner
+        sigma[n,f]=sh_inner[n,f] - 0.5*ss_inner[n,f] - 0.5*hh_inner[n,f]
 
-    ax.plot(fpeaks, np.exp(sigma[n,:]-max(sigma[n,:])), color='grey')
+    ax.plot(fpeaks, np.exp((sigma[n,:]-max(sigma[n,:]))), color='grey')
 
 ax.axvline(waveform.fpeak,color='r')
 ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--')
