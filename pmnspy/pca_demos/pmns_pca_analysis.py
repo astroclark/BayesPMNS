@@ -67,11 +67,11 @@ def propagate_deltaF(f, delta_f, a=1.099, b=-8.574, c=28.07):
 nTsamples=16384
 low_frequency_cutoff=1000
 fcenter=2710
-deltaF=0.5
+deltaF=1
 noise_curve="aLIGO"
 target_snr=float(sys.argv[1])
-#loo=True
-loo=False
+loo=True
+#loo=False
 
 eos="all"
 mass="135135"
@@ -215,6 +215,7 @@ for w, wave in enumerate(waveform_data.waves):
         delta_fpeak[w,n] = abs(fpeak2-fpeak1) / diffSNR
         delta_R16[w,n] = propagate_deltaF(target_fpeak/1e3,
                 delta_fpeak[w,n]/1e3)
+
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
