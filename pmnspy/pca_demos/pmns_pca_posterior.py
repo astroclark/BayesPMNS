@@ -47,10 +47,10 @@ from pmns_utils import pmns_pca as ppca
 # Create the list of dictionaries which comprises our catalogue
 #
 mass='135135'
-eos='sfho'
+eos=sys.argv[2]
 
-NPCs=9
-fmin=1000.0
+NPCs=1
+fmin=1500.0
 
 #
 # Create test waveform
@@ -80,7 +80,7 @@ psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
 #
 # Compute Full SNR
 #
-target_sigma = float(sys.argv[2])
+target_sigma = 5#float(sys.argv[2])
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -104,21 +104,21 @@ _, _, _,matches, delta_fpeak, _= \
 waveform_data = pdata.WaveData(viscosity='lessvisc', mass='135135')
 
 # Remove testwave_name from the catalogue:
-#reduced_waveform_data = waveform_data.copy() # make a copy
+reduced_waveform_data = waveform_data.copy() # make a copy
 
 # Grab the mass-eos waveform we want to study
 for w,wave in enumerate(waveform_data.waves):
     if wave['mass']==mass and wave['eos']==eos:
         waveidx=w
-delta_fpeak_fisher=delta_fpeak[0][waveidx]
+delta_fpeak_fisher=delta_fpeak[NPCs-1][waveidx]
 
-if 0:
+if 1:
     reduced_waveform_data.remove_wave(waveform_data.waves[waveidx])
 
 if 1:
-    #pmpca = ppca.pmnsPCA(reduced_waveform_data,
-    pmpca = ppca.pmnsPCA(waveform_data,
-            low_frequency_cutoff=1000.0, fcenter=2710,
+    #pmpca = ppca.pmnsPCA(waveform_data,
+    pmpca = ppca.pmnsPCA(reduced_waveform_data,
+            low_frequency_cutoff=fmin, fcenter=2710,
             nTsamples=16384)
 
 
@@ -144,8 +144,8 @@ if 1:
 
 #fpeaks = np.arange(fmin,4000, 5) 
 #fpeaks = np.arange(2000, 2500, 0.5)
-fpeaks = np.arange(waveform.fpeak-250, waveform.fpeak+250, 0.5)
-nnoise = 1
+fpeaks = np.arange(waveform.fpeak-50, waveform.fpeak+50, 0.5)
+nnoise = 10
 sigma=np.zeros(shape=(nnoise,len(fpeaks)))
 
 sh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
@@ -160,7 +160,7 @@ for n in xrange(nnoise):
     # Generate Noise
     #
     noise=pycbc.noise.gaussian.frequency_noise_from_psd(psd, seed=n)
-    #noisy_data = noise + Hplus
+    noisy_data = noise + Hplus
 
     # XXX: BEGIN LOOP OVER FPEAKS
     for f,this_fpeak in enumerate(fpeaks):
@@ -168,16 +168,8 @@ for n in xrange(nnoise):
         fd_reconstruction = pmpca.reconstruct_freqseries(waveform_FD.data,
                 npcs=NPCs, this_fpeak=this_fpeak)
 
-#       td_tmplt, _ = \
-#               pycbc.waveform.get_sgburst_waveform(q=100,frequency=this_fpeak,
-#                       delta_t=1./16384, amplitude=1,hrss=1)
-#       td_tmplt.resize(16384)
-#       td_tmplt = pycbc.types.TimeSeries(td_tmplt.data, delta_t=1./16384)
-#       fd_tmplt = td_tmplt.to_frequencyseries()
-
         fd_tmplt=fd_reconstruction['recon_spectrum'] 
 
-        noisy_data = noise + fd_reconstruction['original_spectrum'] 
 
         tmplt_snr=pycbc.filter.sigma(fd_tmplt, psd=psd,
                 low_frequency_cutoff=fmin)
@@ -198,38 +190,56 @@ for n in xrange(nnoise):
 fig, ax = pl.subplots(nrows=1)
 
 for n in xrange(nnoise):
-    #ax.plot(fpeaks, np.exp(sigma[n,:]-max(sigma[n,:])).T, color='grey')
-    ax.plot(fpeaks, sh_inner.T, color='grey')
+    y = np.exp(sigma[n,:]-max(sigma[n,:]))
+    norm = np.trapz(y, fpeaks)
+    y /= norm
+    ax.plot(fpeaks, y, color='grey')
 
 
-# XXX Pick the ffirst of the posteriors and see what the max-L waveform actually
-# looks like...
-fpeak_maxL = fpeaks[np.argmax(sh_inner[0,:])]
-fpeak_true = waveform.fpeak
-
-ax.axvline(waveform.fpeak,color='r')
-ax.axvline(fpeak_maxL,color='g')
-ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--')
+ax.axvline(waveform.fpeak,color='r', label='Target')
+ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--',
+        label='Fisher Uncertainty')
 ax.axvline(waveform.fpeak+delta_fpeak_fisher, color='r', linestyle='--')
 
-
-fd_reconstruction_maxL = pmpca.reconstruct_freqseries(waveform_FD.data,
-        npcs=NPCs, this_fpeak=fpeak_maxL)
-
-
 fd_reconstruction_true = pmpca.reconstruct_freqseries(waveform_FD.data,
-        npcs=NPCs, this_fpeak=fpeak_true)
+        npcs=NPCs, this_fpeak=waveform.fpeak)
+
+overlap_true = pycbc.filter.overlap_cplx(Hplus,
+        fd_reconstruction_true['recon_spectrum'], psd=psd,
+        low_frequency_cutoff=fmin)
+
+match_true = pycbc.filter.match(Hplus,
+        fd_reconstruction_true['recon_spectrum'], psd=psd,
+        low_frequency_cutoff=fmin)
+
+overlap_maxL=np.zeros(nnoise, dtype=complex)
+match_maxL=np.zeros(nnoise)
+fpeak_maxL=np.zeros(nnoise)
+
+for n in xrange(nnoise):
+
+    fpeak_maxL[n]=fpeaks[np.argmax(sigma[n,:])]
+
+    fd_reconstruction_maxL = pmpca.reconstruct_freqseries(waveform_FD.data,
+            npcs=NPCs, this_fpeak=fpeak_maxL[n])
+
+    overlap_maxL[n] = pycbc.filter.overlap_cplx(fd_reconstruction_maxL['original_spectrum'],
+            fd_reconstruction_maxL['recon_spectrum'], psd=psd,
+            low_frequency_cutoff=fmin)
 
 
-overlap_true = pycbc.filter.overlap_cplx(fd_reconstruction_true['original_spectrum'],
-        fd_reconstruction_true['recon_spectrum'], psd=psd)
-overlap_maxL = pycbc.filter.overlap_cplx(fd_reconstruction_maxL['original_spectrum'],
-        fd_reconstruction_maxL['recon_spectrum'], psd=psd)
+    match_maxL[n] = pycbc.filter.match(fd_reconstruction_maxL['original_spectrum'],
+            fd_reconstruction_maxL['recon_spectrum'], psd=psd,
+            low_frequency_cutoff=fmin)[0]
 
-print overlap_true
-print overlap_maxL
+
+print fpeak_maxL
+print overlap_true, match_true
+print overlap_maxL, match_maxL
 
 pl.show()
+
+sys.exit()
 
 f, ax = pl.subplots(nrows=3, sharex=True)
 

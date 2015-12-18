@@ -65,7 +65,7 @@ def propagate_deltaF(f, delta_f, a=1.099, b=-8.574, c=28.07):
 
 # XXX: Hardcoding
 nTsamples=16384
-low_frequency_cutoff=1000
+low_frequency_cutoff=1500
 fcenter=2710
 deltaF=1
 noise_curve="aLIGO"
