@@ -99,11 +99,11 @@ def complex_to_polar(catalogue):
     magnitudes = np.zeros(shape=np.shape(catalogue))
     phases = np.zeros(shape=np.shape(catalogue))
     if len(np.shape(catalogue))==1:
-        return abs(catalogue), phase_of(catalogue) - phase_of(catalogue)[0]
+        return abs(catalogue), phase_of(catalogue) #- phase_of(catalogue)[0]
 
     for c in xrange(np.shape(catalogue)[0]):
         magnitudes[c,:] = abs(catalogue[c,:])
-        phases[c,:] = phase_of(catalogue[c,:]) - phase_of(catalogue[c,:])[0]
+        phases[c,:] = phase_of(catalogue[c,:]) #- phase_of(catalogue[c,:])[0]
 
     return magnitudes, phases
 
@@ -534,6 +534,7 @@ class pmnsPCA:
         oriphi = phase_of(freqseries)# - phase_of(freqseries)[0]
 
         orispec = orimag*np.exp(1j*oriphi)
+
 
         fd_reconstruction['original_spectrum'] = unit_hrss(orispec,
                 delta=self.delta_f, domain='frequency')
