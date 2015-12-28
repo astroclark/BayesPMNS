@@ -42,19 +42,16 @@ from pmns_utils import pmns_pca as ppca
 # Generate Signal
 #
 
+#
+# Build the injected waveform
+#
 
-#
-# Create the list of dictionaries which comprises our catalogue
-#
 mass='135135'
 eos=sys.argv[2]
 
 NPCs=1
-fmin=1500.0
+fmin=float(sys.argv[4])
 
-#
-# Create test waveform
-#
 waveform = pwave.Waveform(eos=eos, mass=mass, viscosity='lessvisc')
 waveform.reproject_waveform()
 waveform.compute_characteristics()
@@ -62,6 +59,7 @@ waveform.compute_characteristics()
 hplus = pycbc.types.TimeSeries(np.zeros(16384),
         delta_t=waveform.hplus.delta_t)
 hplus.data[:len(waveform.hplus)] = np.copy(waveform.hplus.data)
+
 #
 #   hplus, _ = pycbc.waveform.get_sgburst_waveform(q=100,frequency=waveform.fpeak,
 #           delta_t=1./16384, amplitude=1,hrss=1)
@@ -75,12 +73,11 @@ Hplus = hplus.to_frequencyseries()
 #
 psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
         delta_f=Hplus.delta_f, noise_curve='aLIGO')
-#psd.data = np.ones(len(psd))
 
 #
 # Compute Full SNR
 #
-target_sigma = 5#float(sys.argv[2])
+target_sigma = float(sys.argv[3])
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -91,7 +88,7 @@ Hplus.data *= target_sigma/full_snr
 #
 # Get the fisher estimate
 #
-_, _, _,matches, delta_fpeak, _= \
+_, _, _, matches, delta_fpeak, _= \
         pickle.load(open(sys.argv[1], "rb"))
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -101,7 +98,7 @@ _, _, _,matches, delta_fpeak, _= \
 #
 # Create PMNS PCA instance for the reduced catalogue
 #
-waveform_data = pdata.WaveData(viscosity='lessvisc', mass='135135')
+waveform_data = pdata.WaveData(viscosity='lessvisc')
 
 # Remove testwave_name from the catalogue:
 reduced_waveform_data = waveform_data.copy() # make a copy
@@ -110,6 +107,7 @@ reduced_waveform_data = waveform_data.copy() # make a copy
 for w,wave in enumerate(waveform_data.waves):
     if wave['mass']==mass and wave['eos']==eos:
         waveidx=w
+
 delta_fpeak_fisher=delta_fpeak[NPCs-1][waveidx]
 
 if 1:
@@ -131,21 +129,10 @@ if 1:
     waveform_FD = ppca.unit_hrss(waveform_FD.data,
             delta=waveform_FD.delta_f, domain='frequency')
 
-#   waveform_FD_real = np.real(waveform_FD.data)
-#   waveform_FD_imag = np.imag(waveform_FD.data)
-#
-#   waveform_phase = ppca.phase_of(waveform_FD.data)
-#   waveform_mag = abs(waveform_FD.data)
-#
-#   waveform_FD_new = pycbc.types.FrequencySeries(waveform_mag *
-#           np.exp(1j*waveform_phase), delta_f=waveform_FD.delta_f)
-
 # XXX: Begin Loop over noise realisations
 
-#fpeaks = np.arange(fmin,4000, 5) 
-#fpeaks = np.arange(2000, 2500, 0.5)
-fpeaks = np.arange(waveform.fpeak-50, waveform.fpeak+50, 0.5)
-nnoise = 10
+fpeaks = np.arange(waveform.fpeak-50, waveform.fpeak+50, 1)
+nnoise = 5
 sigma=np.zeros(shape=(nnoise,len(fpeaks)))
 
 sh_inner=np.zeros(shape=(nnoise,len(fpeaks)))

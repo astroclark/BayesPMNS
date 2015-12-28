@@ -74,7 +74,7 @@ loo=True
 #loo=False
 
 eos="all"
-mass="135135"
+mass="all"
 viscosity="lessvisc"
 
 #
