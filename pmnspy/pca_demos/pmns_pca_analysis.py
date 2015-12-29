@@ -70,8 +70,8 @@ fcenter=2710
 deltaF=1
 noise_curve="aLIGO"
 target_snr=float(sys.argv[1])
-loo=True
-#loo=False
+#loo=True
+loo=False
 
 eos="all"
 mass="all"
@@ -212,9 +212,9 @@ for w, wave in enumerate(waveform_data.waves):
         diffSNR = compute_inner(reconstruction1, reconstruction2,
                 target_snr=target_snr, psd=psd, flow=low_frequency_cutoff)
 
-        #delta_fpeak[w,n] = abs(fpeak2-fpeak1) / diffSNR
+        delta_fpeak[w,n] = abs(fpeak2-fpeak1) / diffSNR
 
-        delta_fpeak[w,n] = np.sqrt( (fpeak2-fpeak1)**2 / diffSNR )
+        #delta_fpeak[w,n] = np.sqrt( (fpeak2-fpeak1)**2 / diffSNR )
 
 
         delta_R16[w,n] = propagate_deltaF(target_fpeak/1e3,

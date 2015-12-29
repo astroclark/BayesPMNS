@@ -49,7 +49,7 @@ from pmns_utils import pmns_pca as ppca
 mass='135135'
 eos=sys.argv[2]
 
-NPCs=1
+NPCs=48
 fmin=float(sys.argv[4])
 
 waveform = pwave.Waveform(eos=eos, mass=mass, viscosity='lessvisc')
@@ -133,11 +133,8 @@ if 1:
 
 fpeaks = np.arange(waveform.fpeak-50, waveform.fpeak+50, 1)
 nnoise = 5
-sigma=np.zeros(shape=(nnoise,len(fpeaks)))
-
-sh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
-hh_inner=np.zeros(shape=(nnoise,len(fpeaks)))
-ss_inner=np.zeros(shape=(nnoise,len(fpeaks)))
+sigma=np.zeros(shape=(nnoise,len(fpeaks)), dtype=complex)
+sigma_target=np.zeros(nnoise, dtype=complex)
 
 for n in xrange(nnoise):
 
@@ -162,18 +159,45 @@ for n in xrange(nnoise):
                 low_frequency_cutoff=fmin)
         fd_tmplt.data *= target_sigma/tmplt_snr
 
-        sh_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
-               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
+        sh_inner = pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
+               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False)
 
-        hh_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(fd_tmplt, fd_tmplt, psd=psd,
-               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
+        hh_inner = pycbc.filter.overlap_cplx(fd_tmplt, fd_tmplt, psd=psd,
+               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False)
 
-        ss_inner[n,f] = 2*np.real(pycbc.filter.overlap_cplx(noisy_data, noisy_data, psd=psd,
-               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False))
+        ss_inner = pycbc.filter.overlap_cplx(noisy_data, noisy_data, psd=psd,
+               low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False)
 
 
-        sigma[n,f]=sh_inner[n,f] - 0.5*ss_inner[n,f] + 0.5*hh_inner[n,f]
+        sigma[n,f]=pycbc.types.complex128(sh_inner - 0.5*ss_inner +
+                0.5*hh_inner)
 
+
+    # Get the likelihood for a waveform with the correct fpeak
+    fd_reconstruction = pmpca.reconstruct_freqseries(waveform_FD.data,
+            npcs=NPCs, this_fpeak=waveform.fpeak)
+
+    fd_tmplt=fd_reconstruction['recon_spectrum'] 
+
+    tmplt_snr=pycbc.filter.sigma(fd_tmplt, psd=psd,
+            low_frequency_cutoff=fmin)
+    fd_tmplt.data *= target_sigma/tmplt_snr
+
+    sh_inner = pycbc.filter.overlap_cplx(fd_tmplt, noisy_data, psd=psd,
+           low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False)
+
+    hh_inner = pycbc.filter.overlap_cplx(fd_tmplt, fd_tmplt, psd=psd,
+           low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False)
+
+    ss_inner = pycbc.filter.overlap_cplx(noisy_data, noisy_data, psd=psd,
+           low_frequency_cutoff=fmin, high_frequency_cutoff=4000., normalized=False)
+
+    sigma_target[n]=pycbc.types.complex128(sh_inner - 0.5*ss_inner +
+            0.5*hh_inner)
+
+
+
+sigma = sigma.real
 fig, ax = pl.subplots(nrows=1)
 
 for n in xrange(nnoise):
@@ -199,6 +223,9 @@ match_true = pycbc.filter.match(Hplus,
         fd_reconstruction_true['recon_spectrum'], psd=psd,
         low_frequency_cutoff=fmin)
 
+pl.show()
+sys.exit()
+
 overlap_maxL=np.zeros(nnoise, dtype=complex)
 match_maxL=np.zeros(nnoise)
 fpeak_maxL=np.zeros(nnoise)
@@ -218,6 +245,47 @@ for n in xrange(nnoise):
     match_maxL[n] = pycbc.filter.match(fd_reconstruction_maxL['original_spectrum'],
             fd_reconstruction_maxL['recon_spectrum'], psd=psd,
             low_frequency_cutoff=fmin)[0]
+
+
+
+    f, ax = pl.subplots(nrows=2, sharex=True)
+
+
+    ax[0].plot(Hplus.sample_frequencies,
+            np.real(Hplus)*max(np.real(fd_reconstruction_true['original_spectrum']))/max(np.real(Hplus)), 
+            label='Injected')
+    
+
+    ax[0].plot(fd_reconstruction_true['sample_frequencies'],
+            np.real(fd_reconstruction_true['original_spectrum']), label='fpeak rec')
+
+    ax[0].plot(fd_reconstruction_true['sample_frequencies'],
+            np.real(fd_reconstruction_maxL['recon_spectrum']), label='maxL rec.')
+
+    ax[0].set_ylabel('real [H(f)]')
+    ax[0].axvline(waveform.fpeak,color='r')
+    ax[0].set_xlim(1000, 4000)
+    ax[0].axvline(fpeak_maxL[n],color='g')
+
+
+    ax[1].plot(Hplus.sample_frequencies,
+            np.imag(Hplus)*max(np.imag(fd_reconstruction_true['original_spectrum']))/max(np.imag(Hplus)), 
+            label='Injected')
+
+
+    ax[1].plot(fd_reconstruction_true['sample_frequencies'],
+            np.imag(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
+
+    ax[1].plot(fd_reconstruction_true['sample_frequencies'],
+            np.imag(fd_reconstruction_maxL['recon_spectrum']), label='maxL rec.')
+
+    ax[1].set_ylabel('imag [H(f)]')
+    ax[1].axvline(waveform.fpeak,color='r')
+    ax[1].axvline(fpeak_maxL[n],color='g')
+    ax[1].set_xlim(1000, 4000)
+    ax[1].legend(loc='lower left')
+
+
 
 
 print fpeak_maxL
