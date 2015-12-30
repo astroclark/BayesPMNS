@@ -38,6 +38,21 @@ from pmns_utils import pmns_pca as ppca
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Input 
+
+#fisher_filename=sys.argv[2]
+
+mass='135135'
+eos='shen' 
+
+NPCs=int(sys.argv[1]) #48
+fmin=1000 
+
+if sys.argv[2]=="LOO":
+    LOO=True
+else:LOO=False
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # Generate Signal
 #
@@ -46,11 +61,6 @@ from pmns_utils import pmns_pca as ppca
 # Build the injected waveform
 #
 
-mass='135135'
-eos=sys.argv[2]
-
-NPCs=48
-fmin=float(sys.argv[4])
 
 waveform = pwave.Waveform(eos=eos, mass=mass, viscosity='lessvisc')
 waveform.reproject_waveform()
@@ -77,7 +87,7 @@ psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
 #
 # Compute Full SNR
 #
-target_sigma = float(sys.argv[3])
+target_sigma = 5.0#float(sys.argv[3])
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -88,8 +98,12 @@ Hplus.data *= target_sigma/full_snr
 #
 # Get the fisher estimate
 #
-_, _, _, matches, delta_fpeak, _= \
-        pickle.load(open(sys.argv[1], "rb"))
+#_, _, _, matches, delta_fpeak, _= \
+#        pickle.load(open(fisher_filename, "rb"))
+
+#LOO=False
+#if fisher_filename.find('LOO')>0:
+#    LOO=True
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
@@ -108,26 +122,23 @@ for w,wave in enumerate(waveform_data.waves):
     if wave['mass']==mass and wave['eos']==eos:
         waveidx=w
 
-delta_fpeak_fisher=delta_fpeak[NPCs-1][waveidx]
+#delta_fpeak_fisher=delta_fpeak[NPCs-1][waveidx]
 
-if 1:
+if LOO:
     reduced_waveform_data.remove_wave(waveform_data.waves[waveidx])
 
-if 1:
-    #pmpca = ppca.pmnsPCA(waveform_data,
-    pmpca = ppca.pmnsPCA(reduced_waveform_data,
-            low_frequency_cutoff=fmin, fcenter=2710,
-            nTsamples=16384)
+pmpca = ppca.pmnsPCA(reduced_waveform_data,
+        low_frequency_cutoff=fmin, fcenter=2710,
+        nTsamples=16384)
 
+# Process signal for projection
+# Standardise
+waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
+        waveform.hplus.data, nsamples=16384)
 
-    # Process signal for projection
-    # Standardise
-    waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
-            waveform.hplus.data, nsamples=16384)
-
-    # Normalise
-    waveform_FD = ppca.unit_hrss(waveform_FD.data,
-            delta=waveform_FD.delta_f, domain='frequency')
+# Normalise
+waveform_FD = ppca.unit_hrss(waveform_FD.data,
+        delta=waveform_FD.delta_f, domain='frequency')
 
 # XXX: Begin Loop over noise realisations
 
@@ -208,9 +219,9 @@ for n in xrange(nnoise):
 
 
 ax.axvline(waveform.fpeak,color='r', label='Target')
-ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--',
-        label='Fisher Uncertainty')
-ax.axvline(waveform.fpeak+delta_fpeak_fisher, color='r', linestyle='--')
+#ax.axvline(waveform.fpeak-delta_fpeak_fisher, color='r', linestyle='--',
+#        label='Fisher Uncertainty')
+#ax.axvline(waveform.fpeak+delta_fpeak_fisher, color='r', linestyle='--')
 
 fd_reconstruction_true = pmpca.reconstruct_freqseries(waveform_FD.data,
         npcs=NPCs, this_fpeak=waveform.fpeak)
