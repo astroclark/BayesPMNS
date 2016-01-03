@@ -423,8 +423,8 @@ class pmnsPCA:
         # -- Do PCA
         print "Performing Spectral PCA"
         t0 = time.time()
-        self.pca = perform_pca(self.magnitude_align, self.phase_align)
-        #self.pca = perform_pca(self.magnitude_align, self.phase)
+        #self.pca = perform_pca(self.magnitude_align, self.phase_align)
+        self.pca = perform_pca(self.magnitude_align, self.phase)
         train_time = (time.time() - t0)
         print("...done in %0.3fs" % train_time)
 
@@ -472,8 +472,9 @@ class pmnsPCA:
 
         testwav_magnitude_align = shift_vec(testwav_magnitude,
                 self.sample_frequencies, this_fpeak, self.fcenter).real
-        testwav_phase_align = shift_vec(testwav_phase,
-                self.sample_frequencies, this_fpeak, self.fcenter).real
+        #testwav_phase_align = shift_vec(testwav_phase,
+        #        self.sample_frequencies, this_fpeak, self.fcenter).real
+        testwav_phase_align = testwav_phase
 
         #
         # Center & scale test spectrum
@@ -586,8 +587,8 @@ class pmnsPCA:
         #
         recmag = shift_vec(recmag, self.sample_frequencies,
                 fcenter=this_fpeak, fpeak=self.fcenter).real
-        recphi = shift_vec(recphi, self.sample_frequencies,
-                fcenter=this_fpeak, fpeak=self.fcenter).real
+        #recphi = shift_vec(recphi, self.sample_frequencies,
+        #        fcenter=this_fpeak, fpeak=self.fcenter).real
 
         fd_reconstruction['recon_mag'] = np.copy(recmag)
         fd_reconstruction['recon_phi'] = np.copy(recphi)

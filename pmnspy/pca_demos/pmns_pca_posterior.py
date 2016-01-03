@@ -43,7 +43,7 @@ from pmns_utils import pmns_pca as ppca
 #fisher_filename=sys.argv[2]
 
 mass='135135'
-eos='shen' 
+eos='dd2' 
 
 NPCs=int(sys.argv[1]) #48
 fmin=1000 
@@ -60,7 +60,6 @@ else:LOO=False
 #
 # Build the injected waveform
 #
-
 
 waveform = pwave.Waveform(eos=eos, mass=mass, viscosity='lessvisc')
 waveform.reproject_waveform()
@@ -140,12 +139,78 @@ waveform_FD, target_fpeak, _ = ppca.condition_spectrum(
 waveform_FD = ppca.unit_hrss(waveform_FD.data,
         delta=waveform_FD.delta_f, domain='frequency')
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Check nominal reconstruction fidelity
+
+fd_reconstruction_true = pmpca.reconstruct_freqseries(waveform_FD.data,
+        npcs=NPCs, this_fpeak=waveform.fpeak)
+
+overlap_true = pycbc.filter.overlap_cplx(Hplus,
+        fd_reconstruction_true['recon_spectrum'], psd=psd,
+        low_frequency_cutoff=fmin)
+
+match_true = pycbc.filter.match(Hplus,
+        fd_reconstruction_true['recon_spectrum'], psd=psd,
+        low_frequency_cutoff=fmin)
+
+
+f, ax = pl.subplots(nrows=3, sharex=True)
+
+
+ax[0].plot(Hplus.sample_frequencies,
+        np.real(Hplus)*max(np.real(fd_reconstruction_true['original_spectrum']))/max(np.real(Hplus)), 
+        label='Injected')
+ax[0].plot(fd_reconstruction_true['sample_frequencies'],
+        np.real(fd_reconstruction_true['original_spectrum']), label='fpeak rec')
+ax[0].set_ylabel('real [H(f)]')
+ax[0].axvline(waveform.fpeak,color='r')
+ax[0].set_xlim(1000, 4000)
+
+
+ax[1].plot(Hplus.sample_frequencies,
+        np.imag(Hplus)*max(np.imag(fd_reconstruction_true['original_spectrum']))/max(np.imag(Hplus)), 
+        label='Injected')
+ax[1].plot(fd_reconstruction_true['sample_frequencies'],
+        np.imag(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
+ax[1].set_ylabel('imag [H(f)]')
+ax[1].axvline(waveform.fpeak,color='r')
+ax[1].set_xlim(1000, 4000)
+ax[1].legend(loc='lower left')
+
+ax[2].plot(Hplus.sample_frequencies,
+        abs(Hplus)*max(abs(fd_reconstruction_true['original_spectrum']))/max(np.abs(Hplus)), 
+        label='Injected')
+ax[2].plot(fd_reconstruction_true['sample_frequencies'],
+        abs(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
+
+ax[2].plot(fd_reconstruction_true['sample_frequencies'],
+        abs(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
+
+ax[2].set_ylabel('abs [H(f)]')
+ax[2].axvline(waveform.fpeak,color='r')
+ax[2].set_xlim(1000, 4000)
+ax[2].legend(loc='lower left')
+
+
+
+pl.show()
+sys.exit()
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# NOISE REALISATIONS
+
 # XXX: Begin Loop over noise realisations
 
 fpeaks = np.arange(waveform.fpeak-50, waveform.fpeak+50, 1)
 nnoise = 5
 sigma=np.zeros(shape=(nnoise,len(fpeaks)), dtype=complex)
 sigma_target=np.zeros(nnoise, dtype=complex)
+
+def make_imag_zero(freqseries):
+
+    data = np.real(freqseries)
+    new_series = pycbc.types.FrequencySeries(data, delta_f=freqseries.delta_f)
+
+    return new_series
 
 for n in xrange(nnoise):
 
@@ -154,6 +219,8 @@ for n in xrange(nnoise):
     #
     # Generate Noise
     #
+    #Hplus = make_imag_zero(Hplus)
+
     noise=pycbc.noise.gaussian.frequency_noise_from_psd(psd, seed=n)
     noisy_data = noise + Hplus
 
@@ -165,6 +232,7 @@ for n in xrange(nnoise):
 
         fd_tmplt=fd_reconstruction['recon_spectrum'] 
 
+#        fd_tmplt = make_imag_zero(fd_tmplt)
 
         tmplt_snr=pycbc.filter.sigma(fd_tmplt, psd=psd,
                 low_frequency_cutoff=fmin)
@@ -223,20 +291,6 @@ ax.axvline(waveform.fpeak,color='r', label='Target')
 #        label='Fisher Uncertainty')
 #ax.axvline(waveform.fpeak+delta_fpeak_fisher, color='r', linestyle='--')
 
-fd_reconstruction_true = pmpca.reconstruct_freqseries(waveform_FD.data,
-        npcs=NPCs, this_fpeak=waveform.fpeak)
-
-overlap_true = pycbc.filter.overlap_cplx(Hplus,
-        fd_reconstruction_true['recon_spectrum'], psd=psd,
-        low_frequency_cutoff=fmin)
-
-match_true = pycbc.filter.match(Hplus,
-        fd_reconstruction_true['recon_spectrum'], psd=psd,
-        low_frequency_cutoff=fmin)
-
-pl.show()
-sys.exit()
-
 overlap_maxL=np.zeros(nnoise, dtype=complex)
 match_maxL=np.zeros(nnoise)
 fpeak_maxL=np.zeros(nnoise)
@@ -266,7 +320,6 @@ for n in xrange(nnoise):
             np.real(Hplus)*max(np.real(fd_reconstruction_true['original_spectrum']))/max(np.real(Hplus)), 
             label='Injected')
     
-
     ax[0].plot(fd_reconstruction_true['sample_frequencies'],
             np.real(fd_reconstruction_true['original_spectrum']), label='fpeak rec')
 
@@ -282,7 +335,6 @@ for n in xrange(nnoise):
     ax[1].plot(Hplus.sample_frequencies,
             np.imag(Hplus)*max(np.imag(fd_reconstruction_true['original_spectrum']))/max(np.imag(Hplus)), 
             label='Injected')
-
 
     ax[1].plot(fd_reconstruction_true['sample_frequencies'],
             np.imag(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
