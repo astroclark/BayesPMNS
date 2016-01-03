@@ -532,7 +532,7 @@ class pmnsPCA:
         # Original Waveforms
         #
         orimag = abs(freqseries)
-        oriphi = phase_of(freqseries)# - phase_of(freqseries)[0]
+        oriphi = phase_of(freqseries)
 
         orispec = orimag*np.exp(1j*oriphi)
 
