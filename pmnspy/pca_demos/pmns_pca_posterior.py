@@ -110,7 +110,7 @@ psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
 #
 # Compute Full SNR
 #
-target_sigma = 5.0
+target_sigma = 10.0
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -135,7 +135,7 @@ for w,wave in enumerate(waveform_data.waves):
     if wave['mass']==mass and wave['eos']==eos:
         waveidx=w
 
-#delta_fpeak_fisher=delta_fpeak[NPCs-1][waveidx]
+#sigma_fpeak_fisher=sigma_fpeak[NPCs-1][waveidx]
 
 if LOO:
     reduced_waveform_data.remove_wave(waveform_data.waves[waveidx])
@@ -199,19 +199,20 @@ reconstruction2_sigma = pycbc.filter.sigma(reconstruction2, psd=psd,
         low_frequency_cutoff=fmin)
 reconstruction2.data *= target_sigma/reconstruction2_sigma
 
-diff = reconstruction1 - reconstruction2
-rhodiff = pycbc.filter.match(diff, diff, psd=psd, low_frequency_cutoff=fmin,
+diff = reconstruction2 - reconstruction1
+inner_diff = pycbc.filter.match(diff, diff, psd=psd, low_frequency_cutoff=fmin,
         v1_norm=1.0, v2_norm=1.0)[0]
+#inner_diff = pycbc.filter.overlap(diff, diff, psd=psd, low_frequency_cutoff=fmin,
+#        normalized=False)
 
-delta_fpeak = abs(fpeak2-fpeak1) / np.sqrt(rhodiff)
+sigma_fpeak = abs(fpeak2-fpeak1) / np.sqrt(inner_diff)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # NOISE REALISATIONS
 
-nnoise = 100
+nnoise = 500
 sigma=np.zeros(shape=nnoise)
 fpeak_maxL=np.zeros(shape=nnoise)
-
 
 for n in xrange(nnoise):
 
@@ -244,8 +245,8 @@ ax.set_xlabel('Max-likelihood f$_{\mathrm{peak}}$')
 ax.set_ylabel('Normalised count')
 
 ax.axvline(waveform.fpeak, label='Target Value', color='r')
-ax.axvline(waveform.fpeak+2*delta_fpeak, label='Fisher', color='r', linestyle='--')
-ax.axvline(waveform.fpeak-2*delta_fpeak, color='r', linestyle='--')
+ax.axvline(waveform.fpeak+sigma_fpeak, label='Fisher', color='r', linestyle='--')
+ax.axvline(waveform.fpeak-sigma_fpeak, color='r', linestyle='--')
 
 ax.axvline(np.median(fpeak_maxL), color='g', label='mean')
 ax.axvline(np.mean(fpeak_maxL)+np.std(fpeak_maxL), color='g', label='1$\sigma$',
