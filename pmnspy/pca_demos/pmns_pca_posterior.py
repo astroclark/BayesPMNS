@@ -110,7 +110,7 @@ psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
 #
 # Compute Full SNR
 #
-target_sigma = 5.0
+target_sigma = 10.0
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -239,7 +239,7 @@ for n in xrange(nnoise):
 # Save results
 outfile = 'maxLfpeak'+'_'+eos+'_'+mass+'_'+'SNR-'+str(int(target_sigma))
 np.savez(outfile, fpeak_maxL=fpeak_maxL, sigma=sigma, SNR=target_sigma, eos=eos,
-        mass=mass)
+        mass=mass, sigma_fpeak=sigma_fpeak, target_fpeak=waveform.fpeak)
 
 sys.exit()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
