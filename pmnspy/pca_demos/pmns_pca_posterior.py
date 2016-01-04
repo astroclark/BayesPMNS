@@ -67,7 +67,7 @@ def neglogL(fpeak):#, signal_data=None):
 #fisher_filename=sys.argv[2]
 
 mass='135135'
-eos='apr' 
+eos='dd2' 
 
 NPCs=int(sys.argv[1]) #48
 fmin=1000 
@@ -181,7 +181,7 @@ nominal_reconstruction_snr = pycbc.filter.sigma(
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Compute The Fisher Estimate For fpeak Uncertainty
 
-deltaF = 1.0
+deltaF = 1
 fpeak1 = target_fpeak+0.5*deltaF
 fpeak2 = target_fpeak-0.5*deltaF
 
@@ -200,15 +200,17 @@ reconstruction2_sigma = pycbc.filter.sigma(reconstruction2, psd=psd,
 reconstruction2.data *= target_sigma/reconstruction2_sigma
 
 diff = reconstruction1 - reconstruction2
-rhodiff = pycbc.filter.match(diff, diff, psd=psd, low_frequency_cutoff=fmin,
-        v1_norm=1.0, v2_norm=1.0)[0]
+
+rhodiff = pycbc.filter.overlap(diff, diff, psd=psd, low_frequency_cutoff=fmin,
+        normalized=False)
 
 delta_fpeak = abs(fpeak2-fpeak1) / np.sqrt(rhodiff)
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # NOISE REALISATIONS
 
-nnoise = 100
+nnoise = 50
 sigma=np.zeros(shape=nnoise)
 fpeak_maxL=np.zeros(shape=nnoise)
 
@@ -247,7 +249,7 @@ ax.axvline(waveform.fpeak, label='Target Value', color='r')
 ax.axvline(waveform.fpeak+2*delta_fpeak, label='Fisher', color='r', linestyle='--')
 ax.axvline(waveform.fpeak-2*delta_fpeak, color='r', linestyle='--')
 
-ax.axvline(np.median(fpeak_maxL), color='g', label='mean')
+ax.axvline(np.mean(fpeak_maxL), color='g', label='mean')
 ax.axvline(np.mean(fpeak_maxL)+np.std(fpeak_maxL), color='g', label='1$\sigma$',
         linestyle='--')
 ax.axvline(np.mean(fpeak_maxL)-np.std(fpeak_maxL), color='g',
