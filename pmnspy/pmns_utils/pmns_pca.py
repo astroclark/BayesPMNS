@@ -39,7 +39,7 @@ import pycbc.types
 import pycbc.filter
 from pycbc.psd import aLIGOZeroDetHighPower
 
-from IPython.core.debugger import Tracer; debug_here = Tracer()
+#from IPython.core.debugger import Tracer; debug_here = Tracer()
 
 import time
 import cwt
