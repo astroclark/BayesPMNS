@@ -66,15 +66,18 @@ def neglogL(fpeak):#, signal_data=None):
 
 #fisher_filename=sys.argv[2]
 
-mass='135135'
-eos='dd2' 
+noise_curve=sys.argv[1]
+eos=sys.argv[2]#'ls375' 
+mass=sys.argv[3]#'1215'
 
-NPCs=int(sys.argv[1]) #48
+
+NPCs=1#int(sys.argv[1]) #48
 fmin=1000 
 
-if sys.argv[2]=="LOO":
-    LOO=True
-else:LOO=False
+#   if sys.argv[2]=="LOO":
+#       LOO=True
+#   else:LOO=False
+LOO=True
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
@@ -105,12 +108,12 @@ Hplus = hplus.to_frequencyseries()
 # Construct PSD
 #
 psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
-        delta_f=Hplus.delta_f, noise_curve='aLIGO')
+        delta_f=Hplus.delta_f, noise_curve=noise_curve)
 
 #
 # Compute Full SNR
 #
-target_sigma = 10.0
+target_sigma = 5.0
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -181,6 +184,11 @@ nominal_reconstruction_snr = pycbc.filter.sigma(
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Compute The Fisher Estimate For fpeak Uncertainty
 
+#   deltaFs = np.arange(1, 3000, 50)
+#   #deltaFs = np.arange(9.001, 10, 0.01)
+#   delta=np.zeros(len(deltaFs))
+#   for d,deltaF in enumerate(deltaFs):
+
 deltaF = 1
 fpeak1 = target_fpeak+0.5*deltaF
 fpeak2 = target_fpeak-0.5*deltaF
@@ -188,16 +196,22 @@ fpeak2 = target_fpeak-0.5*deltaF
 fd_reconstruction1 = pmpca.reconstruct_freqseries(waveform_FD.data,
         npcs=NPCs, this_fpeak=fpeak1)
 reconstruction1 = fd_reconstruction1['recon_spectrum'] 
-reconstruction1_sigma = pycbc.filter.sigma(reconstruction1, psd=psd,
+#reconstruction1_sigma = pycbc.filter.sigma(reconstruction1, psd=psd,
+#        low_frequency_cutoff=fmin)
+#reconstruction1.data *= target_sigma/reconstruction1_sigma
+reconstruction1_energy = pycbc.filter.sigmasq(reconstruction1, psd=None,
         low_frequency_cutoff=fmin)
-reconstruction1.data *= target_sigma/reconstruction1_sigma
+reconstruction1.data *= np.sqrt(signal_energy/reconstruction1_energy)
 
 fd_reconstruction2 = pmpca.reconstruct_freqseries(waveform_FD.data,
         npcs=NPCs, this_fpeak=fpeak2)
 reconstruction2 = fd_reconstruction2['recon_spectrum'] 
-reconstruction2_sigma = pycbc.filter.sigma(reconstruction2, psd=psd,
+#reconstruction2_sigma = pycbc.filter.sigma(reconstruction2, psd=psd,
+#        low_frequency_cutoff=fmin)
+#reconstruction2.data *= target_sigma/reconstruction2_sigma
+reconstruction2_energy = pycbc.filter.sigmasq(reconstruction2, psd=None,
         low_frequency_cutoff=fmin)
-reconstruction2.data *= target_sigma/reconstruction2_sigma
+reconstruction2.data *= np.sqrt(signal_energy/reconstruction2_energy)
 
 diff = reconstruction2 - reconstruction1
 inner_diff = pycbc.filter.match(diff, diff, psd=psd, low_frequency_cutoff=fmin,
@@ -207,6 +221,14 @@ inner_diff = pycbc.filter.match(diff, diff, psd=psd, low_frequency_cutoff=fmin,
 
 sigma_fpeak = abs(fpeak2-fpeak1) / np.sqrt(inner_diff)
 
+#delta[d] = sigma_fpeak
+#print sigma_fpeak
+
+#   pl.figure()
+#   pl.plot(deltaFs, delta)
+#   pl.show()
+#
+#   sys.exit()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # NOISE REALISATIONS
@@ -214,6 +236,7 @@ sigma_fpeak = abs(fpeak2-fpeak1) / np.sqrt(inner_diff)
 nnoise = 500
 sigma=np.zeros(shape=nnoise)
 fpeak_maxL=np.zeros(shape=nnoise)
+matches=np.zeros(shape=nnoise)
 
 for n in xrange(nnoise):
 
@@ -234,116 +257,25 @@ for n in xrange(nnoise):
 
     fpeak_maxL[n] = result[0]
     sigma[n] = result[1]
+
+
+    # Now compute and record the optimised, normalised match
+    fd_reconstruction = pmpca.reconstruct_freqseries(waveform_FD.data,
+            npcs=NPCs, this_fpeak=fpeak_maxL[n])
+
+    recovered_wave=fd_reconstruction['recon_spectrum'] 
+
+    matches[n] = pycbc.filter.match(recovered_wave, Hplus,
+            low_frequency_cutoff=fmin, psd=psd)[0]
+
+    print "Match for recovery: %.2f"%matches[n]
+
+
     
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save results
-outfile = 'maxLfpeak'+'_'+eos+'_'+mass+'_'+'SNR-'+str(int(target_sigma))
+outfile = 'maxLfpeak'+'_'+noise_curve+'_'+eos+'_'+mass+'_'+'SNR-'+str(int(target_sigma))
 np.savez(outfile, fpeak_maxL=fpeak_maxL, sigma=sigma, SNR=target_sigma, eos=eos,
-        mass=mass, sigma_fpeak=sigma_fpeak, target_fpeak=waveform.fpeak)
-
-sys.exit()
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Show distribution of max-likelihood fpeaks
-
-f, ax = pl.subplots()
-#bins = np.arange(1000, 4000, 25)
-bins = 25
-ax.hist(fpeak_maxL, bins=bins, normed=True, histtype='stepfilled', alpha=0.5)
-ax.set_xlabel('Max-likelihood f$_{\mathrm{peak}}$')
-ax.set_ylabel('Normalised count')
-
-ax.axvline(waveform.fpeak, label='Target Value', color='r')
-ax.axvline(waveform.fpeak+sigma_fpeak, label='Fisher', color='r', linestyle='--')
-ax.axvline(waveform.fpeak-sigma_fpeak, color='r', linestyle='--')
-
-ax.axvline(np.mean(fpeak_maxL), color='g', label='mean')
-ax.axvline(np.mean(fpeak_maxL)+np.std(fpeak_maxL), color='g', label='1$\sigma$',
-        linestyle='--')
-ax.axvline(np.mean(fpeak_maxL)-np.std(fpeak_maxL), color='g',
-        linestyle='--')
-
-ax.legend(loc='upper left')
-ax.minorticks_on()
-
-ax.set_xlim(1000, 4000)
-
-
-pl.show()
-
-sys.exit()
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Plot reconstructions
-
-
-f, ax = pl.subplots(nrows=3, sharex=True)
-
-
-ax[0].plot(Hplus.sample_frequencies, np.real(Hplus), label='Injected')
-ax[0].plot(fd_reconstruction_true['sample_frequencies'],
-        np.real(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
-
-ax[1].plot(Hplus.sample_frequencies, np.imag(Hplus), label='Injected')
-ax[1].plot(fd_reconstruction_true['sample_frequencies'],
-        np.imag(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
-
-ax[2].plot(Hplus.sample_frequencies, abs(Hplus), label='Injected')
-ax[2].plot(fd_reconstruction_true['sample_frequencies'],
-        abs(fd_reconstruction_true['recon_spectrum']), label='fpeak rec')
-
-
-
-#f, ax = pl.subplots(nrows=3, sharex=True)
-
-for n in xrange(nnoise):
-
-    fpeak_maxL[n]=fpeaks[np.argmax(sigma[n,:])]
-
-    fd_reconstruction_maxL = pmpca.reconstruct_freqseries(waveform_FD.data,
-            npcs=NPCs, this_fpeak=fpeak_maxL[n])
-
-    tmplt_energy=pycbc.filter.sigmasq(fd_reconstruction_maxL['recon_spectrum'], low_frequency_cutoff=fmin)
-    fd_reconstruction_maxL['recon_spectrum'].data *= np.sqrt(signal_energy/tmplt_energy)
-
-    # XXX
-    #fd_reconstruction_maxL['recon_spectrum'].data *= np.exp(1j*np.pi)
-
-    overlap_maxL[n] = pycbc.filter.overlap_cplx(fd_reconstruction_maxL['original_spectrum'],
-            fd_reconstruction_maxL['recon_spectrum'], psd=psd,
-            low_frequency_cutoff=fmin)
-
-
-    match_maxL[n] = pycbc.filter.match(fd_reconstruction_maxL['original_spectrum'],
-            fd_reconstruction_maxL['recon_spectrum'], psd=psd,
-            low_frequency_cutoff=fmin)[0]
-
-
-
-    ax[0].plot(Hplus.sample_frequencies,
-            np.real(fd_reconstruction_maxL['recon_spectrum']),
-            label='fpeak maxL')
-
-    ax[1].plot(Hplus.sample_frequencies,
-            np.imag(fd_reconstruction_maxL['recon_spectrum']), 
-            label='fpeak maxL')
-
-    ax[2].plot(Hplus.sample_frequencies,
-            abs(fd_reconstruction_maxL['recon_spectrum']),
-            label='fpeak_maxL')
-
-ax[0].set_ylabel('real [H(f)]')
-ax[0].axvline(waveform.fpeak,color='r')
-ax[0].set_xlim(1000, 4000)
-ax[0].legend(loc='lower right')
-ax[1].set_ylabel('imag [H(f)]')
-ax[1].axvline(waveform.fpeak,color='r')
-ax[1].set_xlim(1000, 4000)
-ax[1].legend(loc='lower right')
-ax[2].set_ylabel('abs [H(f)]')
-ax[2].axvline(waveform.fpeak,color='r')
-ax[2].set_xlim(1000, 4000)
-ax[2].legend(loc='lower right')
-
-
-
-pl.show()
+        mass=mass, sigma_fpeak=sigma_fpeak, target_fpeak=waveform.fpeak,
+        matches=matches)
 
