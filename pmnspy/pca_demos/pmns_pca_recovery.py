@@ -178,6 +178,8 @@ match_true = pycbc.filter.match(Hplus,
         fd_reconstruction_true['recon_spectrum'], psd=psd,
         low_frequency_cutoff=fmin)
 
+print match_true
+sys.exit()
 
 nominal_reconstruction_snr = pycbc.filter.sigma(
         fd_reconstruction_true['recon_spectrum'], psd=psd,

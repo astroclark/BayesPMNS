@@ -73,7 +73,7 @@ def deltafpeak_to_deltaR16(fpeak, delta_fpeak, mass_string):
         # No relationship
         return np.nan, np.nan
 
-    deltaR16_statistical = a*fpeak_kHz**2 + b*fpeak_kHz + c
+    #deltaR16_statistical = a*fpeak_kHz**2 + b*fpeak_kHz + c
 
     deltaR16_statistical = abs(2.0*a*fpeak_kHz+b)*delta_fpeak_kHz
 
@@ -86,11 +86,16 @@ def deltafpeak_to_deltaR16(fpeak, delta_fpeak, mass_string):
 ifo = sys.argv[1]
 results_files = glob.glob("maxLfpeak_%s*SNR*npz"%ifo)
 
+match_modes = np.zeros(len(results_files))
+match_std = np.zeros(len(results_files))
+match_interquartiles = np.zeros(len(results_files))
+
 fpeak_modes = np.zeros(len(results_files))
 fpeak_std = np.zeros(len(results_files))
 fpeak_interquartiles = np.zeros(len(results_files))
 fpeak_targets = np.zeros(len(results_files))
 fpeak_fisher = np.zeros(len(results_files))
+
 deltaR16_statistical = np.zeros(len(results_files))
 deltaR16_bias = np.zeros(len(results_files))
 deltaR16_systematic = np.zeros(len(results_files))
@@ -99,6 +104,7 @@ for r, result in enumerate(results_files):
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Load Results
+    #
 
     data = np.load(result)
 
@@ -112,28 +118,43 @@ for r, result in enumerate(results_files):
     target_fpeak=data['target_fpeak']
 
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Radius Calculations 
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # KDE for distribution of recovered matches and fpeaks
 
-    deltaR16_statistical[r], deltaR16_systematic[r] = \
-            deltafpeak_to_deltaR16(target_fpeak, np.std(fpeak_maxL), str(mass))
+    try:
+        matches=data['matches']
+    except KeyError:
+        continue
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Show distribution of max-likelihood fpeaks
+    match_grid = np.arange(0,1+0.01,0.001)
+    match_pdf = kde_sklearn(matches, match_grid, bandwidth=0.01)
+    match_mode = match_grid[np.argmax(match_pdf)]
 
     fpeak_grid = np.arange(1000, 4000, 0.1)
     fpeak_pdf = kde_sklearn(fpeak_maxL, fpeak_grid, bandwidth=50)
     fpeak_mode = fpeak_grid[np.argmax(fpeak_pdf)]
 
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Radius Calculations 
+    #
+
+    deltaR16_statistical[r], deltaR16_systematic[r] = \
+            deltafpeak_to_deltaR16(target_fpeak, np.std(fpeak_maxL), str(mass))
+
     deltaR16_bias[r], _ = deltafpeak_to_deltaR16(target_fpeak,
             target_fpeak-fpeak_mode, str(mass))
 
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Plotting
+
+    #
+    # Recovered fpeak distribution
+    #
 
     f, ax = pl.subplots()
-    #bins = np.arange(1000, 4000, 25)
     bins = 25
     ax.hist(fpeak_maxL, bins=bins, normed=True, histtype='stepfilled', alpha=0.5)
-    ax.set_xlabel('Max-likelihood f$_{\mathrm{peak}}$')
+    ax.set_xlabel('Recovered f$_{\mathrm{peak}}$')
     ax.set_ylabel('Normalised count')
 
     ax.axvline(target_fpeak, label='Target Value=%.2f'%target_fpeak, color='r')
@@ -147,8 +168,6 @@ for r, result in enumerate(results_files):
     upp = np.percentile(fpeak_maxL, 75)
     low = np.percentile(fpeak_maxL, 25)
 
-    #upp = np.mean(fpeak_maxL)+np.std(fpeak_maxL)
-    #low = np.mean(fpeak_maxL)-np.std(fpeak_maxL)
 
     ax.axvline(upp, color='g', label='Interquartile width=%.2f'%(upp-low),
             linestyle='--', linewidth=2)
@@ -161,29 +180,64 @@ for r, result in enumerate(results_files):
 
     ax.set_xlim(500, 4000)
 
+    ax.set_title("Systematic: %.2f\nInterquartile Width: %.2f"%(target_fpeak -
+        fpeak_mode, upp-low))
+
+    pl.tight_layout()
+
+    pl.savefig('fpeakdist_'+sys.argv[1].replace('npz','png'))
+
+
+    #
+    # Recovered match distribution
+    #
+
+    f, ax = pl.subplots()
+    bins = 25
+    ax.hist(matches, bins=bins, normed=True, histtype='stepfilled', alpha=0.5)
+    ax.set_xlabel('Recovered Match')
+    ax.set_ylabel('Normalised count')
+
+    ax.axvline(match_mode, color='g',
+            label='mode=%.2f'%(match_mode))
+
+    match_upp = np.percentile(matches, 75)
+    match_low = np.percentile(matches, 25)
+
+    ax.axvline(match_upp, color='g', label='Interquartile width=%.2f'%(match_upp-match_low),
+            linestyle='--', linewidth=2)
+    ax.axvline(match_low, color='g', linestyle='--', linewidth=2)
+
+    ax.plot(match_grid, match_pdf, color='k', linewidth=2, label='KDE')
+
+    ax.legend(loc='upper left')
+    ax.minorticks_on()
+
+    pl.tight_layout()
+
+    pl.savefig('matchdist_'+sys.argv[1].replace('npz','png'))
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Verbose output
+
     print '---'
-    #print "Empirical std / Fisher = %.2f"%(np.std(fpeak_maxL) / sigma_fpeak)
-    #print "Empirical std / Fisher = %.2f"%(0.5*(upp-low) / sigma_fpeak)
+    print "Matches:"
+    print "Mode: %.2f"%match_mode
+    print "Interquartile Range: %.2f"%(match_upp-match_low)
+    print ""
+
+    print "Frequency Recovery:"
+    print "Systematic: %.2f"%(target_fpeak - fpeak_mode)
 
     print "Interquartile Range: %.2f"%(upp-low)
     print "Empirical std: %.2f"%np.std(fpeak_maxL)
     print "Fisher: %.2f"%sigma_fpeak
 
-    #print "Systematic: %.2f"%(target_fpeak - np.median(fpeak_maxL))
-    print "Systematic: %.2f"%(target_fpeak - fpeak_mode)
 
     print "Statistical Radius Error: %.2f"%deltaR16_statistical[r]
     print "Radius Bias: %.2f"%deltaR16_bias[r]
     print "Systematic Radius Error: %.2f"%deltaR16_systematic[r]
 
-
-    ax.set_title("Systematic: %.2f\nInterquartile Width: %.2f"%(target_fpeak -
-        fpeak_mode, upp-low))
-
-
-    pl.tight_layout()
-
-    pl.savefig(sys.argv[1].replace('npz','png'))
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Append and save results
@@ -194,10 +248,19 @@ for r, result in enumerate(results_files):
     fpeak_targets[r] = target_fpeak
     fpeak_fisher[r]  = sigma_fpeak
 
-outfile="maxLfpeak_%s"%ifo
+    match_modes[r] = match_mode
+    match_std[r] = np.std(matches)
+    match_interquartiles[r] = match_upp-match_low
+
+
+outfile="%s_montecarlo-recovery"%ifo
+
 np.savez(outfile, fpeak_modes=fpeak_modes, fpeak_std=fpeak_std,
         fpeak_interquartiles=fpeak_interquartiles, fpeak_targets=fpeak_targets,
-        fpeak_fisher=fpeak_fisher)
+        fpeak_fisher=fpeak_fisher, match_modes=match_modes, match_std=match_std,
+        match_interquartiles=match_interquartiles,
+        deltaR16_statistical=deltaR16_statistical,
+        deltaR16_systematic=deltaR16_systematic)
 
 
 

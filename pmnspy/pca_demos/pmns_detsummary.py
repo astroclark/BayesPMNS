@@ -23,7 +23,6 @@ summarise match and parameter estimation results for the different detectors
 
 from __future__ import division
 import os,sys
-import cPickle as pickle
 import numpy as np
 
 from matplotlib import pyplot as pl
@@ -35,13 +34,13 @@ pl.rcParams.update({'xtick.labelsize':18})
 pl.rcParams.update({'ytick.labelsize':18})
 pl.rcParams.update({'legend.fontsize':18})
 
-def detector_names(picklefile):
+def detector_names(npzfile):
     """
-    Parse the detector name from the pickle file name and return string for plot
+    Parse the detector name from the npz file name and return string for plot
     labels
     """
 
-    IFO = picklefile.split('_')[2]
+    IFO = npzfile.split('_')[0]
 
     labels=dict()
     labels['aLIGO'] = 'aLIGO'
@@ -59,7 +58,10 @@ def bar_summary(data, labels, ylims=None, ylabel=None):
     median, error bars show 10th, 90th percentiles
     """
 
-    low_val, height, upp_val = np.percentile(data, [10, 50, 90], axis=1)
+    print np.shape(np.percentile(data, [10, 50, 90], axis=1))
+    print np.shape(np.nanpercentile(data, [10, 50, 90], axis=1))
+
+    low_val, height, upp_val = np.nanpercentile(data, [10, 50, 90], axis=1).T
 
     bar_width = 0.4
     index = np.arange(len(labels))
@@ -83,55 +85,59 @@ def bar_summary(data, labels, ylims=None, ylabel=None):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load Results
 #
-pickle_files = sys.argv[1].split(',')
+npz_files = sys.argv[1].split(',')
 
-# redundant load just to get the number of waveforms for pre-allocation:
-waveform_data, _, _, _, _, _ = pickle.load(open(pickle_files[0], "rb"))
+# Load first file to get number of waveforms for preallocation
+data = np.load(npz_files[0])
+nwaves = len(data['match_modes'])
 
 instrument_labels=[]
-all_delta_fpeaks=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
-all_delta_R16=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
-all_delta_R16_total=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
-all_matches=np.zeros(shape=(len(pickle_files), waveform_data.nwaves))
 
-for p, pickle_file in enumerate(pickle_files):
+all_delta_fpeaks=np.zeros(shape=(len(npz_files), nwaves))
+all_delta_R16=np.zeros(shape=(len(npz_files), nwaves))
+all_delta_R16_total=np.zeros(shape=(len(npz_files), nwaves))
+all_matches=np.zeros(shape=(len(npz_files), nwaves))
 
-    instrument_labels.append(detector_names(pickle_file))
+for p, npz_file in enumerate(npz_files):
 
-    _, _, _, matches, delta_fpeak, delta_R16 = pickle.load(open(pickle_file, "rb"))
+    instrument_labels.append(detector_names(npz_file))
 
-    # matches is (nwaveforms, npcs); use 1st PC only
-    all_matches[p, :] = matches[:,0]
-    all_delta_fpeaks[p, :] = delta_fpeak[:,0]
-    all_delta_R16[p, :] = 1000*delta_R16[:,0]
+    data = np.load(npz_files[p])
+
+    all_matches[p,:] = data['match_modes']
+    #all_delta_fpeaks[p,:] = abs(data['fpeak_targets'] - data['fpeak_modes'])
+    all_delta_fpeaks[p,:] = data['fpeak_std']
+    all_delta_R16[p,:] = 1000*data['deltaR16_statistical']
 
     for r in xrange(len(all_delta_R16[p, :])):
-        all_delta_R16_total[p, r] = np.sqrt(all_delta_R16[p,r]**2 + 175**2)
+        all_delta_R16_total[p, r] = np.sqrt(all_delta_R16[p,r]**2 +
+                (1000*data['deltaR16_systematic'][r])**2)
 
     
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Plot Results
 
 # Match
 f, ax = bar_summary(all_matches, instrument_labels, ylims=(.8,1),
         ylabel=r'Match')
-f.savefig('multidet_match_summary.eps')
+#f.savefig('multidet_match_summary.eps')
 
 # Delta fpeak
 f, ax = bar_summary(all_delta_fpeaks, instrument_labels, ylims=None,
         ylabel=r'Frequency Error [Hz]')
-f.savefig('multidet_deltaFpeak_summary.eps')
+#f.savefig('multidet_deltaFpeak_summary.eps')
 
 # Delta R16 statistical
 f, ax = bar_summary(all_delta_R16, instrument_labels, ylims=None,
         ylabel=r'Radius Error [m]')
-f.savefig('multidet_deltaR16statistical_summary.eps')
+#f.savefig('multidet_deltaR16statistical_summary.eps')
 
 # Delta R16
 f, ax = bar_summary(all_delta_R16_total, instrument_labels, ylims=None,
         ylabel=r'Radius Error [m]')
-f.savefig('multidet_deltaR16_summary.eps')
+#f.savefig('multidet_deltaR16_summary.eps')
+
+pl.show()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Print Results
@@ -140,28 +146,32 @@ print "------------------------"
 print "Matches"
 print "10, 50, 90 percentiles:"
 for d, det in enumerate(instrument_labels):
-    low_val, height, upp_val = np.percentile(all_matches, [10, 50, 90], axis=1)
+    low_val, height, upp_val = np.nanpercentile(all_matches, [10, 50, 90],
+            axis=1).T
     print "%s: %.2f %.2f %.2f"%(det, low_val[d], height[d], upp_val[d])
 
 print "------------------------"
 print "delta fpeak"
 print "10, 50, 90 percentiles:"
 for d, det in enumerate(instrument_labels):
-    low_val, height, upp_val = np.percentile(all_delta_fpeaks, [10, 50, 90], axis=1)
+    low_val, height, upp_val = np.nanpercentile(all_delta_fpeaks, [10, 50, 90],
+            axis=1).T
     print "%s: %.1f %.1f %.1f"%(det, low_val[d], height[d], upp_val[d])
 
 print "------------------------"
 print "delta R16 Statistical"
 print "10, 50, 90 percentiles:"
 for d, det in enumerate(instrument_labels):
-    low_val, height, upp_val = np.percentile(all_delta_R16, [10, 50, 90], axis=1)
+    low_val, height, upp_val = np.nanpercentile(all_delta_R16, [10, 50, 90],
+            axis=1).T
     print "%s: %.1f %.1f %.1f"%(det, low_val[d], height[d], upp_val[d])
 
 print "------------------------"
 print "delta R16"
 print "10, 50, 90 percentiles:"
 for d, det in enumerate(instrument_labels):
-    low_val, height, upp_val = np.percentile(all_delta_R16_total, [10, 50, 90], axis=1)
+    low_val, height, upp_val = np.nanpercentile(all_delta_R16_total, [10, 50,
+        90], axis=1).T
     print "%s: %.1f %.1f %.1f"%(det, low_val[d], height[d], upp_val[d])
 
 
