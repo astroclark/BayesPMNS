@@ -22,10 +22,9 @@ computes the matches when the test waveform is removed from the training data
 (leave-one-out strategy)
 """
 
+from __future__ import division
 import matplotlib
 matplotlib.use("Agg")
-
-from __future__ import division
 import os,sys
 import cPickle as pickle
 import numpy as np
