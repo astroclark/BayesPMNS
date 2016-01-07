@@ -271,6 +271,9 @@ for n in xrange(nnoise):
             low_frequency_cutoff=fmin, psd=psd)[0]
 
     print "Match for recovery: %.2f"%matches[n]
+    print "Recovered fpeak: %.2f"%fpeak_maxL[n]
+    print "target fpeak: %.2f"%target_fpeak
+    print "error: %.2f"%(target_fpeak-fpeak_maxL[n])
 
 
     
