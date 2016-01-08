@@ -120,22 +120,26 @@ for p, npz_file in enumerate(npz_files):
 # Match
 f, ax = bar_summary(all_matches, instrument_labels, ylims=(.8,1),
         ylabel=r'Match')
-#f.savefig('multidet_match_summary.eps')
+f.savefig('multidet_match_summary.eps')
+f.savefig('multidet_match_summary.png')
 
 # Delta fpeak
 f, ax = bar_summary(all_delta_fpeaks, instrument_labels, ylims=None,
         ylabel=r'Frequency Error [Hz]')
-#f.savefig('multidet_deltaFpeak_summary.eps')
+f.savefig('multidet_deltaFpeak_summary.eps')
+f.savefig('multidet_deltaFpeak_summary.png')
 
 # Delta R16 statistical
 f, ax = bar_summary(all_delta_R16, instrument_labels, ylims=None,
         ylabel=r'Radius Error [m]')
-#f.savefig('multidet_deltaR16statistical_summary.eps')
+f.savefig('multidet_deltaR16statistical_summary.eps')
+f.savefig('multidet_deltaR16statistical_summary.png')
 
 # Delta R16
 f, ax = bar_summary(all_delta_R16_total, instrument_labels, ylims=None,
         ylabel=r'Radius Error [m]')
-#f.savefig('multidet_deltaR16_summary.eps')
+f.savefig('multidet_deltaR16_summary.eps')
+f.savefig('multidet_deltaR16_summary.png')
 
 pl.show()
 

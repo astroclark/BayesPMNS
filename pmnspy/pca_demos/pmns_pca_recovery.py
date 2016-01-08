@@ -62,24 +62,21 @@ def neglogL(fpeak):#, signal_data=None):
     return -2*sigma
 
 
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Input 
-
-#fisher_filename=sys.argv[2]
 
 noise_curve=sys.argv[1]
 eos=sys.argv[2]#'ls375' 
 mass=sys.argv[3]#'1215'
 
 
-NPCs=1#int(sys.argv[1]) #48
+NPCs=int(sys.argv[4]) #48
 fmin=1000 
 
-#   if sys.argv[2]=="LOO":
-#       LOO=True
-#   else:LOO=False
-LOO=True
+if sys.argv[5]=="LOO":
+    LOO=True
+else:LOO=False
+#LOO=True
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
@@ -279,7 +276,16 @@ for n in xrange(nnoise):
     
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save results
-outfile = 'maxLfpeak'+'_'+noise_curve+'_'+eos+'_'+mass+'_'+'SNR-'+str(int(target_sigma))
+#outfile='maxLfpeak'+'_'+noise_curve+'_'+eos+'_'+mass+'_'+'SNR-'+str(int(target_sigma))+'_'+'npc'
+
+if LOO:
+    outfile='PCMCrecovery_{ifo}_{eos}_{mass}_{npc}_LOO_{snr}'.format(
+            ifo=noise_curve, eos=eos, mass=mass, npc=NPCs)
+else:
+    outfile='PCMCrecovery_{ifo}_{eos}_{mass}_{npc}_ALL_{snr}'.format(
+            ifo=noise_curve, eos=eos, mass=mass, npc=NPCs)
+
+
 np.savez(outfile, fpeak_maxL=fpeak_maxL, sigma=sigma, SNR=target_sigma, eos=eos,
         mass=mass, sigma_fpeak=sigma_fpeak, target_fpeak=waveform.fpeak,
         matches=matches)

@@ -217,6 +217,8 @@ for r, result in enumerate(results_files):
 
     pl.savefig('matchdist_'+sys.argv[1].replace('npz','png'))
 
+    pl.close('all')
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Verbose output
 
