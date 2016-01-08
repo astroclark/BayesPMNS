@@ -1,19 +1,20 @@
-executable="/home/jclark308/Projects/BayesPMNS/pmnspy/pca_demos/pmns_pca_recovery.py"
-eos_mass_file="/home/jclark308/Projects/BayesPMNS/pmnspy/pca_demos/eos_mass_pairs.txt"
+executable="/home/jclark/Projects/BayesPMNS/pmnspy/pca_demos/pmns_pca_recovery.py"
+eos_mass_file="/home/jclark/Projects/BayesPMNS/pmnspy/pca_demos/eos_mass_pairs.txt"
 
 npcs=${1}
-dir_tag="montecarlo_matchbyNpc_LOO"
-subfile="${dir_tag}.sub"
-LOO=true
+LOO=false
 accounting="ligo.sim.o1.burst.explore.test "
 
 
 if [ "${LOO}" = true ]
 then
     NPCseq=`seq 1 48`
+    dir_tag="montecarlo_matchbyNpc_LOO"
 else
     NPCseq=`seq 1 49`
+    dir_tag="montecarlo_matchbyNpc_ALL"
 fi
+subfile="${dir_tag}.sub"
 
 mkdir ${dir_tag}
 pushd ${dir_tag}
