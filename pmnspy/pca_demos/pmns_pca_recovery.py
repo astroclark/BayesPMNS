@@ -78,6 +78,17 @@ if sys.argv[5]=="LOO":
 else:LOO=False
 #LOO=True
 
+target_sigma = 5.0
+
+
+if LOO:
+    outfile='PCMCrecovery_{ifo}_{eos}_{mass}_{npc}_LOO_{snr}'.format(
+            ifo=noise_curve, eos=eos, mass=mass, npc=NPCs, snr=target_sigma)
+else:
+    outfile='PCMCrecovery_{ifo}_{eos}_{mass}_{npc}_ALL_{snr}'.format(
+            ifo=noise_curve, eos=eos, mass=mass, npc=NPCs, snr=target_sigma)
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # Generate Signal
@@ -112,7 +123,6 @@ psd = pwave.make_noise_curve(fmax=Hplus.sample_frequencies.max(),
 #
 # Compute Full SNR
 #
-target_sigma = 5.0
 full_snr = pycbc.filter.sigma(Hplus, psd=psd, low_frequency_cutoff=fmin)
 Hplus.data *= target_sigma/full_snr
 
@@ -277,13 +287,6 @@ for n in xrange(nnoise):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save results
 #outfile='maxLfpeak'+'_'+noise_curve+'_'+eos+'_'+mass+'_'+'SNR-'+str(int(target_sigma))+'_'+'npc'
-
-if LOO:
-    outfile='PCMCrecovery_{ifo}_{eos}_{mass}_{npc}_LOO_{snr}'.format(
-            ifo=noise_curve, eos=eos, mass=mass, npc=NPCs)
-else:
-    outfile='PCMCrecovery_{ifo}_{eos}_{mass}_{npc}_ALL_{snr}'.format(
-            ifo=noise_curve, eos=eos, mass=mass, npc=NPCs)
 
 
 np.savez(outfile, fpeak_maxL=fpeak_maxL, sigma=sigma, SNR=target_sigma, eos=eos,
