@@ -5,6 +5,7 @@ npcs=${1}
 dir_tag="montecarlo_matchbyNpc_LOO"
 subfile="${dir_tag}.sub"
 LOO=true
+accounting="ligo.sim.o1.burst.explore.test "
 
 
 if [ "${LOO}" = true ]
@@ -22,6 +23,7 @@ echo '
 executable='${executable}'
 universe=vanilla
 getenv=True
+accounting_group='${accounting}'
 ' > ${subfile}
 
 
