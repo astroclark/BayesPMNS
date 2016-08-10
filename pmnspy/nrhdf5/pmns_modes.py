@@ -34,7 +34,8 @@ from pmns_utils import pmns_waveform as pwave
 from pmns_utils import pmns_waveform_data as pdata
 
 import h5py
-import romspline as romSpline
+#import romspline as romSpline
+import romSpline
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -101,8 +102,8 @@ with h5py.File(eos+'_'+mass+'.h5','w') as fd:
             HlmAmp   = wfutils.amplitude_from_polarizations(hplus, hcross).data
             HlmPhase = wfutils.phase_from_polarizations(hplus, hcross).data
 
-        sAmph = romSpline.ReducedOrderSpline(times, HlmAmp, verbose=False)
-        sPhaseh = romSpline.ReducedOrderSpline(times, HlmPhase, verbose=False)
+        sAmph = romSpline.ReducedOrderSpline(times_M, HlmAmp, verbose=False)
+        sPhaseh = romSpline.ReducedOrderSpline(times_M, HlmPhase, verbose=False)
       
         gramp = fd.create_group('amp_l%d_m%d' %(l,m))
         sAmph.write(gramp)
