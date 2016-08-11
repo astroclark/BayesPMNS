@@ -22,12 +22,14 @@ Script to plot and analyse f-domain pmns signals
 
 from __future__ import division
 import os,sys
+import hashlib
 import numpy as np
 
 from matplotlib import pyplot as pl
 
 import pycbc.types
 from pycbc.waveform import utils as wfutils
+from pycbc import pnutils
 import lal
 
 from pmns_utils import pmns_waveform as pwave
@@ -44,9 +46,13 @@ import romspline as romSpline
 eos="tm1"
 mass="135135"
 total_mass=2*1.35
+mass1=1.35
+mass2=1.35
 
 # Hardcoded, fixed delta_t is fine for Bauswein et al:
 delta_t = 1./16384
+f_lower = 1000.0 # waveform not valid below here really; could put this on the
+                 # pipeline to handle...
 
 #
 # Create waveform catalog (EOS, mass & file path)
@@ -64,28 +70,39 @@ quadrupole_data = pwave.get_quadrupole_data(waveform_data.waves[0]['data'])
 
 Hlm = pwave.construct_Hlm(*quadrupole_data[1:])
 
-# ROMspline usage:
-#    spline = romSpline.ReducedOrderSpline(time_data, amplitude/phase_data,
-#            verbose=False)
-
-# XXX: next steps
-# 1) fix / understand units/normalisation
-
-# 2) use romspline module to make... rom splines:
-# https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/Waveforms/NR/InjectionInfrastructure
-
-# 3) use examples in lalapps_nest2pos to make hdf5 groups for output files:
-# https://github.com/johnveitch/lalsuite/blob/h5utils/lalapps/src/inspiral/posterior/lalapps_nest2pos.py#L155
 
 wavelen=len(Hlm['l=2, m=2'])
 times=np.arange(0, wavelen*delta_t, delta_t)
 times_M = times / (lal.MTSUN_SI * total_mass)
+# GEOMETERIZE  HLM (might be already!) see line 241+ of pmns_waveform.py
 
-
-# GEOMETERIZE TIMES AND HLM
 
 l=2
 with h5py.File(eos+'_'+mass+'.h5','w') as fd:
+
+    #
+    # Set metadata
+    #
+
+    mchirp, eta = pnutils.mass1_mass2_to_mchirp_eta(mass1, mass2)
+    fd.attrs.create('NR_group', 'Bauswein')
+    fd.attrs.create('name', 'Bauswein:BNS:%s' %
+            (waveform_data.eos+'_'+waveform_data.mass+'_'+waveform_data.viscosity))
+    hashtag = hashlib.md5()
+    hashtag.update(fd.attrs['name'])
+    fd.attrs.create('hashtag', hashtag.digest())
+    fd.attrs.create('f_lower_at_1MSUN', f_lower / lal.TWOPI * lal.MTSUN_SI)
+    fd.attrs.create('eta', eta)
+    fd.attrs.create('spin1x', 0.0)
+    fd.attrs.create('spin1y', 0.0)
+    fd.attrs.create('spin1z', 0.0)
+    fd.attrs.create('spin2x', 0.0)
+    fd.attrs.create('spin2y', 0.0)
+    fd.attrs.create('spin2z', 0.0)
+    fd.attrs.create('coa_phase', 0.0)
+    fd.attrs.create('mass1', mass1/total_mass)
+    fd.attrs.create('mass2', mass2/total_mass)
+
 
     for m in range(-l,l+1):
 
@@ -110,7 +127,6 @@ with h5py.File(eos+'_'+mass+'.h5','w') as fd:
         grphase = fd.create_group('phase_l%d_m%d' %(l,m))
         sPhaseh.write(grphase)
 
-#    <some syntax for closing / writing the hdf5 file with fd>
 
 
 
