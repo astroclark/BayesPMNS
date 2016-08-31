@@ -52,13 +52,16 @@ mass2=1.35
 
 # Hardcoded, fixed delta_t is fine for Bauswein et al:
 delta_t = 1./16384
-f_lower = 1000.0 # waveform not valid below here really; could put this on the
+f_lower_hz = 1000.0 # waveform not valid below here really; could put this on the
                  # pipeline to handle...
+#startFreqHz = startFreq / (lal.TWOPI * massTotal * lal.MTSUN_SI)
+f_lower = f_lower_hz * (lal.TWOPI * total_mass * lal.MTSUN_SI)
 
 #
 # Create waveform catalog (EOS, mass & file path)
 #
 waveform_data = pdata.WaveData(eos=eos, mass=mass, viscosity='lessvisc')
+
 
 #
 # Pull out quadrupole data
@@ -70,6 +73,7 @@ quadrupole_data = pwave.get_quadrupole_data(waveform_data.waves[0]['data'])
 #
 
 Hlm = pwave.construct_Hlm(*quadrupole_data[1:])
+
 
 
 wavelen=len(Hlm['l=2, m=2'])
@@ -92,7 +96,7 @@ with h5py.File(eos+'_'+mass+'.h5','w') as fd:
     hashtag = hashlib.md5()
     hashtag.update(fd.attrs['name'])
     fd.attrs.create('hashtag', hashtag.digest())
-    fd.attrs.create('f_lower_at_1MSUN', f_lower / lal.TWOPI * lal.MTSUN_SI)
+    fd.attrs.create('f_lower_at_1MSUN', f_lower)
     fd.attrs.create('eta', eta)
     fd.attrs.create('spin1x', 0.0)
     fd.attrs.create('spin1y', 0.0)
@@ -116,8 +120,9 @@ with h5py.File(eos+'_'+mass+'.h5','w') as fd:
             hplus  = pycbc.types.TimeSeries(np.real(Hlm[key]), delta_t=delta_t)
             hcross = pycbc.types.TimeSeries(-1*np.imag(Hlm[key]), delta_t=delta_t)
 
-            HlmAmp   = wfutils.amplitude_from_polarizations(hplus, hcross).data
-            HlmPhase = wfutils.phase_from_polarizations(hplus, hcross).data
+            massMpc =  total_mass * lal.MRSUN_SI / (  20.0e6)
+            HlmAmp   = massMpc*wfutils.amplitude_from_polarizations(hplus, hcross).data
+            HlmPhase = wfutils.phase_from_polarizations(hplus, hcross).data 
 
         sAmph = romSpline.ReducedOrderSpline(times_M, HlmAmp, verbose=False)
         sPhaseh = romSpline.ReducedOrderSpline(times_M, HlmPhase, verbose=False)
