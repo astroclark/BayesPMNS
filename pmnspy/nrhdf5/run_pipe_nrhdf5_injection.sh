@@ -18,7 +18,7 @@ source ~jclark/etc/source_master.sh
 #
 source ~jclark/etc/bayeswave_ldg-user-env.sh
 
-bwb_pipe.py cbc_nrhdf5_injection.ini \
-    --workdir cbc_nrhdf5_injection  \
-    -I HL-INJECTIONS_1156676448-1126256640-4096.xml \
+bwb_pipe.py flow_1024-srate_8192_seglen-0.25.ini \
+    --workdir flow_1024-srate_8192_seglen-0.25  \
+    -I HL-INJECTIONS_1234-1126256640-4096.xml\
     --sim-data
