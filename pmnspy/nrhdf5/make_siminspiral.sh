@@ -22,7 +22,7 @@ lalapps_inspinj \
     --m-distr nrwaves --disable-spin \
     --min-mtotal ${totalmass} --max-mtotal ${totalmass}\
     --taper-injection start  \
-    --dchirp-distr uniform  --min-distance 5000 --max-distance 5000 --verbose #\
+    --dchirp-distr uniform  --min-distance 2500 --max-distance 2500 --verbose #\
 #       --snr-distr volume \
 #       --min-snr 15 --max-snr 15 \
 #       --ligo-psd aligopsd.txt \
