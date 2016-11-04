@@ -4,7 +4,7 @@
 totalmass=2.7
 
 
-seed=`lalapps_tconvert now`
+seed=1234 #`lalapps_tconvert now`
 gpsstart=1126256640 # first CO2 frame for O1
 gpsend=`python -c "print ${gpsstart} + 4096"`
 
