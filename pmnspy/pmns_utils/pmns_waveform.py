@@ -238,7 +238,7 @@ class Waveform:
 #
 
 
-def get_quadrupole_data(waveform_path):
+def get_quadrupole_data(waveform_path, geom=False):
     """
     Retrieve the original secderive quadruopole data and scale into SI units
     """
@@ -248,21 +248,22 @@ def get_quadrupole_data(waveform_path):
             np.loadtxt(waveform_path, unpack=True)
 
 
-    # Convert to SI
-    times *= lal.MTSUN_SI
+    if not geom:
+        # Convert to SI
+        times *= lal.MTSUN_SI
 
-    fac = lal.MRSUN_SI * 1/(lal.G_SI / lal.C_SI**4)
+        fac = lal.MRSUN_SI * 1/(lal.G_SI / lal.C_SI**4)
 
-    Ixx *= fac
-    Ixy *= fac
-    Ixz *= fac
-    Iyy *= fac
-    Iyz *= fac
-    Izz *= fac
+        Ixx *= fac
+        Ixy *= fac
+        Ixz *= fac
+        Iyy *= fac
+        Iyz *= fac
+        Izz *= fac
 
     return times, Ixx, Ixy, Ixz, Iyy, Iyz, Izz
 
-def construct_Hlm(Ixx, Ixy, Ixz, Iyy, Iyz, Izz, l=2, abs_m=2):
+def construct_Hlm(Ixx, Ixy, Ixz, Iyy, Iyz, Izz, l=2, abs_m=2, geom=False):
     """
     Construct the expansion parameters Hlm from T1000553.  Returns the expansion
     parameters for l, m= +/- abs_m as a dictionary with key names for the
@@ -280,8 +281,17 @@ def construct_Hlm(Ixx, Ixy, Ixz, Iyy, Iyz, Izz, l=2, abs_m=2):
         sys.exit()
 
     if abs_m==2:
-        H2n2 = np.sqrt(4.0*lal.PI/5.0) * lal.G_SI / lal.C_SI**4 * (Ixx - Iyy + 2*1j*Ixy)
-        H2p2 = np.sqrt(4.0*lal.PI/5.0) * lal.G_SI / lal.C_SI**4 * (Ixx - Iyy - 2*1j*Ixy)
+        #H2n2 = np.sqrt(4.0*lal.PI/5.0) * (Ixx - Iyy + 2*1j*Ixy)
+        #H2p2 = np.sqrt(4.0*lal.PI/5.0) * (Ixx - Iyy - 2*1j*Ixy)
+
+        fac = 1/lal.SpinWeightedSphericalHarmonic(0, 0, -2, 2, 2).real
+
+        H2n2 = fac * (Ixx - Iyy + 2*1j*Ixy)
+        H2p2 = fac * (Ixx - Iyy - 2*1j*Ixy)
+
+        if geom==False:
+            H2n2 *= lal.G_SI / lal.C_SI**4
+            H2p2 *= lal.G_SI / lal.C_SI**4
 
     return {'l=2, m=-2':H2n2,'l=2, m=2':H2p2}
 
@@ -292,7 +302,6 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
 
     Returns hplus, hcross for a given theta, phi
 
-    Note: Bauswein data is at 20 Mpc
     """
 
     colatitude_indices=[2]
@@ -301,12 +310,29 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
     hplus=0.0
     hcross=0.0
 
+    h = np.zeros(len(Hlm['l=2, m=2']), dtype=complex)
+
+    # See e.g., pycbc/waveform/nr_waveform.py
     for l in colatitude_indices:
         for m in azimuth_indices:
 
+
             sYlm = lal.SpinWeightedSphericalHarmonic(theta, phi, -2, l, m)
-            hplus  += np.real( sYlm*Hlm['l=%i, m=%i'%(l, m)] )
-            hcross += -1.0*np.imag( sYlm*Hlm['l=%i, m=%i'%(l, m)] ) # Scale by distance
+            curr_Hlm = Hlm['l=%i, m=%i'%(l, m)]
+
+#            h+=curr_Hlm * sYlm
+
+            curr_hp = curr_Hlm.real * sYlm.real - curr_Hlm.imag * sYlm.imag
+            curr_hc = -curr_Hlm.real*sYlm.imag - curr_Hlm.imag * sYlm.real
+ 
+            hplus  += curr_hp
+            hcross += curr_hc 
+
+#    hplus = h.real
+#    hcross = -1*h.imag
+    
+    # Scale by distance
+
 
     distance*=1e6*lal.PC_SI
     hplus /= distance
@@ -320,8 +346,8 @@ def project_waveform(Hlm, theta, phi, distance=20.0):
     #hcross = taper_start(hcross)
     # Window:
     window = lal.CreateTukeyREAL8Window(len(hplus), 0.1)
-    hplus *= window.data.data
-    hcross *= window.data.data
+    #hplus *= window.data.data
+    #hcross *= window.data.data
 
     hplus  = pycbc.types.TimeSeries(initial_array=hplus,  delta_t = 1.0/16384)
     hcross = pycbc.types.TimeSeries(initial_array=hcross, delta_t = 1.0/16384)
@@ -649,39 +675,37 @@ def make_noise_curve(fmax=8192, delta_f=0.5, noise_curve='aLIGO'):
      'ET-B',
      'CE2_wide',
      'ET-D',
-     'CE1']
+     'CE1',
+     'quantumGEO1'
+     'quantumGEO2']
     """
 
     try:
-        noisedata_path = os.environ['PMNSPY_PREFIX'] + "/noise_curves/curves.mat"
+        #noisedata_path = os.environ['PMNSPY_PREFIX'] + "/noise_curves/curves.mat"
+        noisedata_path = os.environ['PMNSPY_PREFIX'] + \
+                "/noise_curves/ADE_noise_curves.pickle"
     except KeyError:
         print >> sys.stderr, "PMNSPY_PREFIX environment variable not" \
                 " set, please check env"
 
     # Load PSD data from mat file at LIGO-T1500293
-    mat_data = sio.loadmat(noisedata_path)
+    #mat_data = sio.loadmat(noisedata_path)
+    # Load it from a pickle to get the dictionary directly.  Makes updating
+    # easier
 
-    ncurves = len(mat_data['lgnd'][0])
-    # Turn the data into a more useful dictionary
-    noise_data=dict()
-    for i in xrange(ncurves):
-        key = str(mat_data['lgnd'][0][i][0]).replace(" ", "_")
-        noise_data[key] = mat_data['h'][i,:] 
-    sample_frequencies = mat_data['f'][0]
+    import cPickle as pickle
+    noise_data = pickle.load(open(noisedata_path))
 
     if noise_curve not in noise_data.keys():
         print >> sys.stderr, "%s not supported, available noise curves are:"%noise_curve
         print >> sys.stderr, noise_data.keys()
         sys.exit()
 
-    # Select out noise curve
-    noise_asd = noise_data[noise_curve]
-
     # Interpolate to desired target frequencies
     target_frequencies = np.arange(0.0, 8192.0+delta_f, delta_f)
 
-    noise_asd_interp = np.interp(target_frequencies, sample_frequencies,
-            noise_asd)
+    noise_asd_interp = np.interp(target_frequencies,
+            noise_data['sample_frequencies'], noise_data[noise_curve])
 
     # Return a pycbc.types.frequencyseries() with this data
     return pycbc.types.FrequencySeries(noise_asd_interp**2, delta_f=delta_f)
