@@ -66,11 +66,10 @@ def parser():
 
     # --- cmd line
     parser = OptionParser()
-    parser.add_option("-H", "--hanford-waves", default=None, type=str)
-    parser.add_option("-L", "--livingston-waves", default=None, type=str)
-    parser.add_option("-V", "--virgo-waves", default=None, type=str)
+    parser.add_option("-W", "--waveforms", default=None, type=str)
     parser.add_option("-s", "--srate", default=8192., type=float)
     parser.add_option("-m", "--min-dist", default=100., type=float)
+    parser.add_option("-v", "--verbose", default=False, action="store_true")
 
     (opts,args) = parser.parse_args()
     
@@ -84,42 +83,63 @@ opts, args = parser()
 #
 # Load data
 #
-if opts.hanford_waves is not None:
-    hanford_waves = np.loadtxt(opts.hanford_waves)
+waves = np.loadtxt(opts.waveforms)
 
 ## XXX: work with median waveform for testing
-#hanford_waves = [np.median(hanford_waves, axis=0)]
+#waves = [np.median(waves, axis=0)]
 
-h_peak_freqs = []
+peak_freqs = []
 
-fpeak = np.zeros(len(hanford_waves))
-fspiral = np.zeros(len(hanford_waves))
-f20 = np.zeros(len(hanford_waves))
+fpeak = np.zeros(len(waves))
+fspiral = np.zeros(len(waves))
+f20 = np.zeros(len(waves))
 
-for w in xrange(len(hanford_waves)):
-    print >> sys.stdout, "Finding peaks for H waveform %d/%d"%(
-            w, len(hanford_waves))
+for w in xrange(len(waves)):
+    if opts.verbose:
+        print >> sys.stdout, "Finding peaks for waveform %d/%d"%(
+                w, len(waves))
 
-    h_psd = wave_psd(hanford_waves[w])
+    psd = wave_psd(waves[w])
 
     #
     # Peak detection
     #
-    h_peak_indices = peakutils.indexes(h_psd.data, min_dist=opts.min_dist,
+    peak_indices = peakutils.indexes(psd.data, min_dist=opts.min_dist,
             thres=0.5)
-    h_peak_freqs.append(h_psd.sample_frequencies[h_peak_indices])
+    peak_freqs.append(psd.sample_frequencies[peak_indices])
 
-    fpeak[w], fspiral[w], f20[w] = identify_peaks(h_peak_freqs[w])
+    #
+    # Peak identification
+    #
+    fpeak[w], fspiral[w], f20[w] = identify_peaks(peak_freqs[w])
 
-    if len(hanford_waves)==1:
+    if len(waves)==1:
         f, ax = pl.subplots()
-        ax.semilogy(h_psd.sample_frequencies, h_psd)
-        ax.semilogy(h_psd.sample_frequencies[h_peak_indices], h_psd[h_peak_indices], 'ro')
+        ax.semilogy(psd.sample_frequencies, psd)
+        ax.semilogy(psd.sample_frequencies[peak_indices], psd[peak_indices], 'ro')
         ax.set_xlim(999, 4096)
  
         pl.show()
 
-# Concatenate to get posterior on peak locations
-h_peak_freqs = np.concatenate(h_peak_freqs)
+#
+# Remove nans
+#
+fpeak = fpeak[~np.isnan(fpeak)]
+fspiral = fspiral[~np.isnan(fspiral)]
+f20 = f20[~np.isnan(f20)]
+
+#
+# Write results txt
+#
+f=open(opts.waveforms.replace('waveform','waveform_FreqPeaks'),'w')
+f.writelines('# fpeak_mean fpeak_std fspiral_mean fspiral_std f20_mean f20_std\n')
+f.writelines('%f %f %f %f %f %f\n'%(
+    np.mean(fpeak), np.std(fpeak),
+    np.mean(fspiral), np.std(fspiral),
+    np.mean(f20), np.std(f20)))
+f.close()
+
+
+
 
 
