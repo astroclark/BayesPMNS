@@ -84,6 +84,9 @@ opts, args = parser()
 # Load data
 #
 waves = np.loadtxt(opts.waveforms)
+if len(np.shape(waves))==1:
+    waves = [waves]
+
 
 ## XXX: work with median waveform for testing
 #waves = [np.median(waves, axis=0)]
@@ -113,13 +116,13 @@ for w in xrange(len(waves)):
     #
     fpeak[w], fspiral[w], f20[w] = identify_peaks(peak_freqs[w])
 
-    if len(waves)==1:
-        f, ax = pl.subplots()
-        ax.semilogy(psd.sample_frequencies, psd)
-        ax.semilogy(psd.sample_frequencies[peak_indices], psd[peak_indices], 'ro')
-        ax.set_xlim(999, 4096)
- 
-        pl.show()
+#   if len(waves)==1:
+#       f, ax = pl.subplots()
+#       ax.semilogy(psd.sample_frequencies, psd)
+#       ax.semilogy(psd.sample_frequencies[peak_indices], psd[peak_indices], 'ro')
+#       ax.set_xlim(999, 4096)
+#
+#       pl.show()
 
 #
 # Remove nans
