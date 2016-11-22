@@ -68,8 +68,9 @@ def parser():
     parser = OptionParser()
     parser.add_option("-W", "--waveforms", default=None, type=str)
     parser.add_option("-s", "--srate", default=8192., type=float)
-    parser.add_option("-m", "--min-dist", default=100., type=float)
+    parser.add_option("-m", "--min-dist", default=50., type=float)
     parser.add_option("-v", "--verbose", default=False, action="store_true")
+    parser.add_option("-T", "--peak-threshold", default=0.3, type=float)
 
     (opts,args) = parser.parse_args()
     
@@ -108,7 +109,7 @@ for w in xrange(len(waves)):
     # Peak detection
     #
     peak_indices = peakutils.indexes(psd.data, min_dist=opts.min_dist,
-            thres=0.5)
+            thres=opts.peak_threshold)
     peak_freqs.append(psd.sample_frequencies[peak_indices])
 
     #
