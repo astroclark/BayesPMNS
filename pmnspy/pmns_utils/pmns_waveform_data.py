@@ -30,7 +30,7 @@ class WaveData:
     Object with details of available waveforms, locations, names etc
     """
 
-    def __init__(self, eos=None, mass=None, viscosity=None):
+    def __init__(self, eos=None, mass=None, viscosity=None, wavedata_path=None):
         """
         Initialise to get all available EOS, masses.  User can then query the
         ojbect to retrieve pertinent information on any waveform, specified by
@@ -45,11 +45,12 @@ class WaveData:
         # Get the waveform data location
         #
 
-        try:
-            wavedata_path = os.environ['PMNSPY_PREFIX'] + "/waveform_data"
-        except KeyError:
-            print >> sys.stderr, "PMNSPATH environment variable not" \
-                    " set, please check env"
+        if wavedata_path is None:
+            try:
+                wavedata_path = os.environ['PMNSPY_PREFIX'] + "/waveform_data"
+            except KeyError:
+                print >> sys.stderr, "PMNSPATH environment variable not" \
+                        " set, please check env"
 
         # All the data files (NOTE that this will exclude the special cases due
         # to the directory structure):
